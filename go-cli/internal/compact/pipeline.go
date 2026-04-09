@@ -35,6 +35,12 @@ type Summarizer interface {
 	Summarize(ctx context.Context, messages []api.Message) (string, error)
 }
 
+// PromptSummarizer supports alternate compaction prompts such as partial
+// compaction over only the recent portion of the conversation.
+type PromptSummarizer interface {
+	SummarizeWithPrompt(ctx context.Context, messages []api.Message, prompt string) (string, error)
+}
+
 // NewPipeline creates a compaction pipeline.
 func NewPipeline(contextWindow int, summarizer Summarizer) *Pipeline {
 	return &Pipeline{
@@ -62,12 +68,18 @@ func (p *Pipeline) Compact(ctx context.Context, messages []api.Message, reason s
 		return result, nil
 	}
 
+	if partialResult, ok, err := p.compactRecentWindow(ctx, result.Messages); err != nil {
+		return CompactResult{}, err
+	} else if ok {
+		return partialResult, nil
+	}
+
 	toSummarize, retained := SplitMessagesForSummary(result.Messages)
 	if len(toSummarize) == 0 {
 		return result, nil
 	}
 
-	summary, err := p.summarizer.Summarize(ctx, toSummarize)
+	summary, err := p.summarize(ctx, toSummarize, CompactionPromptTemplate)
 	if err != nil {
 		return CompactResult{}, err
 	}
@@ -79,10 +91,37 @@ func (p *Pipeline) Compact(ctx context.Context, messages []api.Message, reason s
 	result.Strategy = StrategySummarize
 	result.TokensAfter = EstimateConversationTokens(result.Messages)
 
-	// Strategy C: Partial compaction (if summarization insufficient)
-	// TODO: implement partial compaction scoped to recent messages
-
 	return result, nil
+}
+
+func (p *Pipeline) compactRecentWindow(ctx context.Context, messages []api.Message) (CompactResult, bool, error) {
+	window, ok := SelectPartialWindow(messages)
+	if !ok {
+		return CompactResult{}, false, nil
+	}
+
+	summary, err := p.summarize(ctx, window.ToSummarize, PartialCompactionPromptTemplate)
+	if err != nil {
+		return CompactResult{}, false, err
+	}
+	if strings.TrimSpace(summary) == "" {
+		return CompactResult{}, false, nil
+	}
+
+	compacted := BuildSummaryMessagesWithPrefix(window.Prefix, summary, window.RetainedTail)
+	return CompactResult{
+		Messages:     compacted,
+		Strategy:     StrategyPartial,
+		TokensBefore: EstimateConversationTokens(messages),
+		TokensAfter:  EstimateConversationTokens(compacted),
+	}, true, nil
+}
+
+func (p *Pipeline) summarize(ctx context.Context, messages []api.Message, prompt string) (string, error) {
+	if promptSummarizer, ok := p.summarizer.(PromptSummarizer); ok {
+		return promptSummarizer.SummarizeWithPrompt(ctx, messages, prompt)
+	}
+	return p.summarizer.Summarize(ctx, messages)
 }
 
 func shouldRunSummary(reason string, tokensBefore, tokensAfter, contextWindow int) bool {

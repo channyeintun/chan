@@ -13,13 +13,14 @@ import (
 
 // QueryRequest holds everything needed to start a query.
 type QueryRequest struct {
-	Messages     []api.Message
-	SystemPrompt string
-	Mode         ExecutionMode
-	SessionID    string
-	Skills       []skillspkg.Skill
-	Tools        []api.ToolDefinition
-	MaxTokens    int
+	Messages      []api.Message
+	SystemPrompt  string
+	Mode          ExecutionMode
+	SessionID     string
+	Skills        []skillspkg.Skill
+	Tools         []api.ToolDefinition
+	ContextWindow int
+	MaxTokens     int
 }
 
 // CompactReason indicates why compaction was triggered.
@@ -44,20 +45,22 @@ type QueryDeps struct {
 
 // QueryState tracks iteration state within a query.
 type QueryState struct {
-	Messages      []api.Message
-	BasePrompt    string
-	SystemPrompt  string
-	SystemContext SystemContext
-	TurnContext   TurnContext
-	Mode          ExecutionMode
-	Profile       ExecutionProfile
-	Skills        []skillspkg.Skill
-	Tools         []api.ToolDefinition
-	MaxTokens     int
-	TurnCount     int
-	MaxTurns      int
-	StopRequested bool
-	Continuation  ContinuationTracker
+	Messages            []api.Message
+	BasePrompt          string
+	SystemPrompt        string
+	SystemContext       SystemContext
+	TurnContext         TurnContext
+	Mode                ExecutionMode
+	Profile             ExecutionProfile
+	Skills              []skillspkg.Skill
+	Tools               []api.ToolDefinition
+	ContextWindow       int
+	MaxTokens           int
+	TurnCount           int
+	MaxTurns            int
+	StopRequested       bool
+	AutoCompactFailures int
+	Continuation        ContinuationTracker
 }
 
 // NewQueryState creates initial state from a request.
@@ -71,6 +74,7 @@ func NewQueryState(req QueryRequest) *QueryState {
 		Profile:       ProfileForMode(req.Mode),
 		Skills:        req.Skills,
 		Tools:         req.Tools,
+		ContextWindow: req.ContextWindow,
 		MaxTokens:     req.MaxTokens,
 		MaxTurns:      50,
 	}

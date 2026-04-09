@@ -309,13 +309,14 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			}
 
 			stream := agent.QueryStream(ctx, agent.QueryRequest{
-				Messages:     messages,
-				SystemPrompt: systemPromptForMode(mode),
-				Mode:         mode,
-				SessionID:    sessionID,
-				Skills:       availableSkills,
-				Tools:        registry.Definitions(),
-				MaxTokens:    client.Capabilities().MaxOutputTokens,
+				Messages:      messages,
+				SystemPrompt:  systemPromptForMode(mode),
+				Mode:          mode,
+				SessionID:     sessionID,
+				Skills:        availableSkills,
+				Tools:         registry.Definitions(),
+				ContextWindow: client.Capabilities().MaxContextWindow,
+				MaxTokens:     client.Capabilities().MaxOutputTokens,
 			}, deps)
 
 			queryFailed := false
@@ -1199,7 +1200,11 @@ func newCompactionPipeline(bridge *ipc.Bridge, tracker *costpkg.Tracker, client 
 }
 
 func (s compactionSummarizer) Summarize(ctx context.Context, messages []api.Message) (string, error) {
-	if summary, usedLocal, err := s.summarizeWithLocal(messages); usedLocal {
+	return s.SummarizeWithPrompt(ctx, messages, compact.CompactionPromptTemplate)
+}
+
+func (s compactionSummarizer) SummarizeWithPrompt(ctx context.Context, messages []api.Message, prompt string) (string, error) {
+	if summary, usedLocal, err := s.summarizeWithLocal(prompt, messages); usedLocal {
 		if err == nil && strings.TrimSpace(summary) != "" {
 			return compact.NormalizeSummary(summary), nil
 		}
@@ -1207,7 +1212,7 @@ func (s compactionSummarizer) Summarize(ctx context.Context, messages []api.Mess
 
 	stream, err := s.client.Stream(ctx, api.ModelRequest{
 		Messages:     messages,
-		SystemPrompt: compact.CompactionPromptTemplate,
+		SystemPrompt: prompt,
 		MaxTokens:    2048,
 	})
 	if err != nil {
@@ -1248,12 +1253,12 @@ func (s compactionSummarizer) Summarize(ctx context.Context, messages []api.Mess
 	return compact.NormalizeSummary(builder.String()), nil
 }
 
-func (s compactionSummarizer) summarizeWithLocal(messages []api.Message) (string, bool, error) {
+func (s compactionSummarizer) summarizeWithLocal(prompt string, messages []api.Message) (string, bool, error) {
 	if s.router == nil {
 		return "", false, nil
 	}
 
-	prompt := renderCompactionPrompt(messages)
+	prompt = renderCompactionPrompt(prompt, messages)
 	if strings.TrimSpace(prompt) == "" {
 		return "", false, nil
 	}
@@ -1261,9 +1266,9 @@ func (s compactionSummarizer) summarizeWithLocal(messages []api.Message) (string
 	return s.router.TryLocal(localmodel.TaskCompaction, prompt, 2048)
 }
 
-func renderCompactionPrompt(messages []api.Message) string {
+func renderCompactionPrompt(promptTemplate string, messages []api.Message) string {
 	var builder strings.Builder
-	builder.WriteString(compact.CompactionPromptTemplate)
+	builder.WriteString(promptTemplate)
 	builder.WriteString("\n\nConversation:\n")
 
 	for _, message := range messages {

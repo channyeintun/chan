@@ -16,7 +16,28 @@ const (
 
 	// MaxConsecutiveFailures is the circuit breaker for auto-compaction.
 	MaxConsecutiveFailures = 3
+
+	// MaxReservedOutputTokens mirrors the reference implementation's reserve so
+	// compaction can still produce output before the context window is exhausted.
+	MaxReservedOutputTokens = 20_000
 )
+
+// EffectiveContextWindow reserves room for model output before applying any
+// warning or compaction thresholds.
+func EffectiveContextWindow(contextWindow, maxOutputTokens int) int {
+	reserved := maxOutputTokens
+	if reserved < 0 {
+		reserved = 0
+	}
+	if reserved > MaxReservedOutputTokens {
+		reserved = MaxReservedOutputTokens
+	}
+	effective := contextWindow - reserved
+	if effective < 0 {
+		return 0
+	}
+	return effective
+}
 
 // AutocompactThreshold returns the token count that triggers auto-compaction.
 func AutocompactThreshold(contextWindow int) int {

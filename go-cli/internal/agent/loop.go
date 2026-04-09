@@ -40,6 +40,10 @@ func runIteration(
 		state.Messages = deps.ApplyResultBudget(state.Messages)
 	}
 
+	if err := runProactiveCompaction(ctx, state, deps, yield); err != nil {
+		return err
+	}
+
 	turn, err := invokeModelWithRecovery(ctx, state, deps, yield)
 	if err != nil {
 		return err
@@ -118,6 +122,7 @@ func invokeModelWithRecovery(
 			return modelTurn{}, fmt.Errorf("compact prompt: %w", compactErr)
 		}
 		state.Messages = compacted
+		state.AutoCompactFailures = 0
 
 		after := compact.EstimateConversationTokens(state.Messages)
 		if !yield(newEvent(ipc.EventCompactEnd, ipc.CompactEndPayload{TokensAfter: after}), nil) {
@@ -174,6 +179,60 @@ func streamModelTurn(
 	}
 
 	return turn, nil
+}
+
+func runProactiveCompaction(
+	ctx context.Context,
+	state *QueryState,
+	deps QueryDeps,
+	yield func(ipc.StreamEvent, error) bool,
+) error {
+	if deps.CompactMessages == nil || state.ContextWindow <= 0 {
+		return nil
+	}
+	if state.AutoCompactFailures >= compact.MaxConsecutiveFailures {
+		return nil
+	}
+
+	effectiveWindow := compact.EffectiveContextWindow(state.ContextWindow, state.MaxTokens)
+	threshold := compact.AutocompactThreshold(effectiveWindow)
+	if threshold <= 0 {
+		return nil
+	}
+
+	tokensBefore := compact.EstimateConversationTokens(state.Messages)
+	if tokensBefore < threshold {
+		return nil
+	}
+
+	if !yield(newEvent(ipc.EventCompactStart, ipc.CompactStartPayload{
+		Strategy:     string(CompactAuto),
+		TokensBefore: tokensBefore,
+	}), nil) {
+		return context.Canceled
+	}
+
+	compacted, err := deps.CompactMessages(ctx, state.Messages, CompactAuto)
+	if err != nil {
+		state.AutoCompactFailures++
+		if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
+			Message:     fmt.Sprintf("auto compact failed: %v", err),
+			Recoverable: true,
+		}), nil) {
+			return context.Canceled
+		}
+		return nil
+	}
+
+	state.AutoCompactFailures = 0
+	state.Messages = compacted
+
+	tokensAfter := compact.EstimateConversationTokens(state.Messages)
+	if !yield(newEvent(ipc.EventCompactEnd, ipc.CompactEndPayload{TokensAfter: tokensAfter}), nil) {
+		return context.Canceled
+	}
+
+	return nil
 }
 
 func normalizeStopReason(reason string) string {
