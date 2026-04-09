@@ -5,7 +5,7 @@ interface PermissionPromptProps {
   tool: string;
   command: string;
   risk: string;
-  onRespond: (decision: "allow" | "deny" | "always_allow") => void;
+  onRespond: (decision: "allow" | "deny" | "always_allow" | "allow_all_session") => void;
 }
 
 const PermissionPrompt: FC<PermissionPromptProps> = ({ tool, command, risk, onRespond }) => {
@@ -19,6 +19,9 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({ tool, command, risk, onRe
         break;
       case "a":
         onRespond("always_allow");
+        break;
+      case "s":
+        onRespond("allow_all_session");
         break;
     }
   });
@@ -40,7 +43,8 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({ tool, command, risk, onRe
         <Text>
           <Text bold color="green">[y]</Text> Allow  
           <Text bold color="red">[n]</Text> Deny  
-          <Text bold color="blue">[a]</Text> Always Allow
+          <Text bold color="blue">[a]</Text> Always Allow  
+          <Text bold color="magenta">[s]</Text> Allow All (This Session)
         </Text>
       </Box>
     </Box>

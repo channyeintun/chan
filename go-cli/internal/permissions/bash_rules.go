@@ -9,7 +9,7 @@ var DangerousZshCommands = regexp.MustCompile(
 
 // Command substitution patterns to reject.
 var DangerousSubstitution = regexp.MustCompile(
-	`\$\(|\$\{[^}]*\}|<\(|>\(|=[a-zA-Z]`,
+	`\$\(|\$\{[^}]*\}|<\(|>\(`,
 )
 
 // IFS injection.

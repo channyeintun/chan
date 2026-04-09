@@ -683,6 +683,9 @@ func authorizeToolCall(
 				}
 			}
 			return true, "", nil
+		case "allow_all_session":
+			permissionCtx.SessionAllowAll = true
+			return true, "", nil
 		default:
 			return false, toolPermissionMessage("denied", pending, "user denied permission request"), nil
 		}

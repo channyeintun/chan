@@ -14,6 +14,14 @@ type Bridge struct {
 	reader  *bufio.Scanner
 	writer  io.Writer
 	writeMu sync.Mutex
+
+	readMu sync.Mutex
+	readCh chan readResult
+}
+
+type readResult struct {
+	msg ClientMessage
+	err error
 }
 
 // NewBridge creates a Bridge reading from r and writing to w.
@@ -27,34 +35,40 @@ func NewBridge(r io.Reader, w io.Writer) *Bridge {
 }
 
 // ReadMessage blocks until the next ClientMessage arrives or context is cancelled.
+// It reuses a pending read goroutine if one is already blocked on Scan().
 func (b *Bridge) ReadMessage(ctx context.Context) (ClientMessage, error) {
-	type result struct {
-		msg ClientMessage
-		err error
-	}
-	ch := make(chan result, 1)
+	b.readMu.Lock()
+	if b.readCh == nil {
+		ch := make(chan readResult, 1)
+		b.readCh = ch
 
-	go func() {
-		if b.reader.Scan() {
-			var msg ClientMessage
-			if err := json.Unmarshal(b.reader.Bytes(), &msg); err != nil {
-				ch <- result{err: fmt.Errorf("invalid NDJSON: %w", err)}
+		go func() {
+			if b.reader.Scan() {
+				var msg ClientMessage
+				if err := json.Unmarshal(b.reader.Bytes(), &msg); err != nil {
+					ch <- readResult{err: fmt.Errorf("invalid NDJSON: %w", err)}
+					return
+				}
+				ch <- readResult{msg: msg}
 				return
 			}
-			ch <- result{msg: msg}
-			return
-		}
-		if err := b.reader.Err(); err != nil {
-			ch <- result{err: fmt.Errorf("read error: %w", err)}
-		} else {
-			ch <- result{err: io.EOF}
-		}
-	}()
+			if err := b.reader.Err(); err != nil {
+				ch <- readResult{err: fmt.Errorf("read error: %w", err)}
+			} else {
+				ch <- readResult{err: io.EOF}
+			}
+		}()
+	}
+	ch := b.readCh
+	b.readMu.Unlock()
 
 	select {
 	case <-ctx.Done():
 		return ClientMessage{}, ctx.Err()
 	case r := <-ch:
+		b.readMu.Lock()
+		b.readCh = nil
+		b.readMu.Unlock()
 		return r.msg, r.err
 	}
 }

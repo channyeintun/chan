@@ -102,6 +102,7 @@ func (e *StreamingExecutor) Wait(ctx context.Context) ([]IndexedResult, error) {
 
 		select {
 		case <-ctx.Done():
+			e.cancel()
 			return nil, ctx.Err()
 		case <-e.ctx.Done():
 			if ready := e.Completed(); len(ready) > 0 {

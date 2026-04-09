@@ -66,10 +66,14 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     stderrRl.on("line", (line) => {
       const message = line.trim();
       if (!message) return;
-      setState((prev) => ({
-        ...prev,
-        error: prev.error ?? message,
-      }));
+      // Only treat lines starting with "error" or "fatal" as real errors.
+      // Other stderr output is diagnostic (debug logs, warnings).
+      if (/^(error|fatal)/i.test(message)) {
+        setState((prev) => ({
+          ...prev,
+          error: prev.error ?? message,
+        }));
+      }
     });
 
     proc.on("exit", (code) => {
@@ -93,8 +97,15 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
         }
       }, 250);
 
+      const forceKillTimer = setTimeout(() => {
+        if (!proc.killed) {
+          proc.kill("SIGKILL");
+        }
+      }, 1000);
+
       proc.once("close", () => {
         clearTimeout(killTimer);
+        clearTimeout(forceKillTimer);
       });
     };
   }, [enginePath, options.mode, options.model]);
@@ -122,7 +133,7 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
   const sendShutdown = useCallback(() => send(createMessage("shutdown")), [send]);
 
   const sendPermissionResponse = useCallback(
-    (requestId: string, decision: "allow" | "deny" | "always_allow") =>
+    (requestId: string, decision: "allow" | "deny" | "always_allow" | "allow_all_session") =>
       send(createMessage("permission_response", { request_id: requestId, decision })),
     [send]
   );

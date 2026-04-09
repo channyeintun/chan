@@ -47,7 +47,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   };
 
   const handlePermissionResponse = (
-    decision: "allow" | "deny" | "always_allow",
+    decision: "allow" | "deny" | "always_allow" | "allow_all_session",
   ) => {
     if (uiState.pendingPermission) {
       engine.sendPermissionResponse(

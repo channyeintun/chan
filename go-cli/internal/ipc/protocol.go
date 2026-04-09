@@ -168,5 +168,5 @@ type SlashCommandPayload struct {
 
 type PermissionResponsePayload struct {
 	RequestID string `json:"request_id"`
-	Decision  string `json:"decision"` // "allow", "deny", "always_allow"
+	Decision  string `json:"decision"` // "allow", "deny", "always_allow", "allow_all_session"
 }

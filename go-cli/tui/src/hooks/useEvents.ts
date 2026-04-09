@@ -194,15 +194,22 @@ export function useEvents(initialModel: string, initialMode: string) {
       }
       case "artifact_updated": {
         const p = event.payload as ArtifactUpdatedPayload;
-        setUIState((s) => ({
-          ...s,
-          artifacts: upsertArtifact(s.artifacts, {
-            id: p.id,
-            kind: findArtifactField(s.artifacts, p.id, "kind", "artifact"),
-            title: findArtifactField(s.artifacts, p.id, "title", "Artifact"),
-            content: p.content,
-          }),
-        }));
+        setUIState((s) => {
+          const existing = s.artifacts.find((a) => a.id === p.id);
+          if (!existing) {
+            // Ignore updates for artifacts that haven't been created yet
+            return s;
+          }
+          return {
+            ...s,
+            artifacts: upsertArtifact(s.artifacts, {
+              id: p.id,
+              kind: existing.kind,
+              title: existing.title,
+              content: p.content,
+            }),
+          };
+        });
         break;
       }
       case "session_restored": {
