@@ -25,7 +25,7 @@
 - [x] `modes.go` — ExecutionMode (plan/fast), ExecutionProfile with ProfileForMode
 - [x] `token_budget.go` — ContinuationTracker with diminishing returns logic
 - [x] `context_inject.go` — SystemContext (session-stable) + TurnContext (per-turn refresh)
-- [ ] `loop.go` — Wire real model calls into the 5-phase iteration
+- [x] `loop.go` — Wire real model calls into the 5-phase iteration
 - [ ] `planner.go` — Plan creation + enforcement before writes
 
 ### `internal/tools/` — Tool Execution
@@ -91,7 +91,7 @@
 
 ### `cmd/go-cli/`
 - [x] `main.go` — Cobra entrypoint, `--stdio`/`--model`/`--mode` flags, NDJSON event loop
-- [ ] Wire query engine into the event loop (replace stub response)
+- [x] Wire query engine into the event loop (replace stub response)
 - [ ] Slash command dispatch (`/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/resume`)
 
 ### `internal/config/`
@@ -183,4 +183,4 @@
 | Ink TUI | ✅ | ❌ (not built/tested) |
 | CLI Entrypoint | ✅ | ✅ (stub responses) |
 
-**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The default tool registry now includes those built-ins. The next concrete tooling task is wiring the query loop and permissions around the tool layer.
+**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The stdio engine now runs real model turns through the query loop and executes requested tools. The next concrete task is wiring permissions, then layering planner/artifact behavior on top of the live loop.

@@ -8,7 +8,6 @@ import (
 
 	"github.com/channyeintun/go-cli/internal/api"
 	"github.com/channyeintun/go-cli/internal/ipc"
-	"github.com/channyeintun/go-cli/internal/tools"
 )
 
 // QueryRequest holds everything needed to start a query.
@@ -17,11 +16,8 @@ type QueryRequest struct {
 	SystemPrompt string
 	Mode         ExecutionMode
 	SessionID    string
-}
-
-// ToolBatch is a set of tool calls from one model turn.
-type ToolBatch struct {
-	Calls []tools.PendingCall
+	Tools        []api.ToolDefinition
+	MaxTokens    int
 }
 
 // CompactReason indicates why compaction was triggered.
@@ -35,10 +31,11 @@ const (
 // QueryDeps injects all side effects into the query engine.
 type QueryDeps struct {
 	CallModel         func(context.Context, api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error)
-	ExecuteToolBatch  func(context.Context, ToolBatch) ([]api.ToolResult, error)
+	ExecuteToolBatch  func(context.Context, []api.ToolCall) ([]api.ToolResult, error)
 	CompactMessages   func(context.Context, []api.Message, CompactReason) ([]api.Message, error)
 	ApplyResultBudget func([]api.Message) []api.Message
 	EmitTelemetry     func(ipc.StreamEvent)
+	PersistMessages   func([]api.Message)
 	Cleanup           func()
 	Clock             func() time.Time
 }
@@ -52,6 +49,8 @@ type QueryState struct {
 	TurnContext   TurnContext
 	Mode          ExecutionMode
 	Profile       ExecutionProfile
+	Tools         []api.ToolDefinition
+	MaxTokens     int
 	TurnCount     int
 	MaxTurns      int
 	StopRequested bool
@@ -67,6 +66,8 @@ func NewQueryState(req QueryRequest) *QueryState {
 		SystemContext: LoadSystemContext(),
 		Mode:          req.Mode,
 		Profile:       ProfileForMode(req.Mode),
+		Tools:         req.Tools,
+		MaxTokens:     req.MaxTokens,
 		MaxTurns:      50,
 	}
 }
@@ -95,49 +96,21 @@ func QueryStream(ctx context.Context, req QueryRequest, deps QueryDeps) iter.Seq
 		for state.ShouldContinue() {
 			select {
 			case <-ctx.Done():
+				persistMessages(state.Messages, deps.PersistMessages)
 				yield(ipc.StreamEvent{}, ctx.Err())
 				return
 			default:
 			}
 
 			if err := runIteration(ctx, state, deps, yield); err != nil {
+				persistMessages(state.Messages, deps.PersistMessages)
 				yield(ipc.StreamEvent{}, err)
 				return
 			}
+
+			persistMessages(state.Messages, deps.PersistMessages)
 		}
 	}
-}
-
-// runIteration executes one iteration of the five-phase query loop.
-// Phases: Setup → Model invocation → Recovery → Tool execution → Continuation
-func runIteration(
-	ctx context.Context,
-	state *QueryState,
-	deps QueryDeps,
-	yield func(ipc.StreamEvent, error) bool,
-) error {
-	state.TurnCount++
-	state.TurnContext = LoadTurnContext()
-	state.SystemPrompt = composeSystemPrompt(state.BasePrompt, state.SystemContext, state.TurnContext)
-
-	// Phase 1: Setup — apply result budgets, compact if needed
-	if deps.ApplyResultBudget != nil {
-		state.Messages = deps.ApplyResultBudget(state.Messages)
-	}
-
-	// Phase 2: Model invocation — stream tokens and tool calls
-	// (implementation will call deps.CallModel and yield events)
-
-	// Phase 3: Recovery — handle API errors (prompt_too_long → compact, etc.)
-	// (implementation will wrap Phase 2 with retry logic)
-
-	// Phase 4: Tool execution — execute any tool calls from the model
-	// (implementation will call deps.ExecuteToolBatch and append results)
-
-	// Phase 5: Continuation — decide whether to loop
-	// (check stop_reason, continuation tracker, mode policy)
-
-	return nil
 }
 
 func composeSystemPrompt(basePrompt string, sys SystemContext, turn TurnContext) string {
@@ -150,4 +123,12 @@ func composeSystemPrompt(basePrompt string, sys SystemContext, turn TurnContext)
 		return basePrompt
 	}
 	return basePrompt + "\n\n" + contextPrompt
+}
+
+func persistMessages(messages []api.Message, persist func([]api.Message)) {
+	if persist == nil {
+		return
+	}
+	cloned := append([]api.Message(nil), messages...)
+	persist(cloned)
 }

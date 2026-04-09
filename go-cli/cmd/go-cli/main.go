@@ -2,15 +2,24 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"iter"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/channyeintun/go-cli/internal/agent"
+	"github.com/channyeintun/go-cli/internal/api"
+	"github.com/channyeintun/go-cli/internal/compact"
 	"github.com/channyeintun/go-cli/internal/config"
 	"github.com/channyeintun/go-cli/internal/ipc"
+	toolpkg "github.com/channyeintun/go-cli/internal/tools"
 )
 
 var (
@@ -89,15 +98,19 @@ func runEngine(modelFlag, modeFlag string, stdioMode bool) error {
 
 func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	bridge := ipc.NewBridge(os.Stdin, os.Stdout)
+	registry := toolpkg.NewRegistry()
+	provider, model := config.ParseModel(cfg.Model)
+	client, err := newLLMClient(provider, model, cfg)
+	if err != nil {
+		return err
+	}
+	messages := make([]api.Message, 0, 32)
+	mode := parseExecutionMode(cfg.DefaultMode)
 
 	// Emit ready event
 	if err := bridge.EmitReady(); err != nil {
 		return fmt.Errorf("emit ready: %w", err)
 	}
-
-	provider, model := config.ParseModel(cfg.Model)
-	_ = provider
-	_ = model
 
 	// Main event loop: read client messages and dispatch
 	for {
@@ -116,26 +129,215 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			// TODO: cancel in-flight query
 			continue
 		case ipc.MsgUserInput:
-			// TODO: dispatch to query engine
-			if err := bridge.Emit(ipc.EventTokenDelta, ipc.TokenDeltaPayload{
-				Text: "Engine received your message. Query engine not yet implemented.\n",
-			}); err != nil {
-				return err
+			var payload ipc.UserInputPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return fmt.Errorf("decode user input: %w", err)
 			}
-			if err := bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{
-				StopReason: "end_turn",
-			}); err != nil {
-				return err
+			if strings.TrimSpace(payload.Text) == "" {
+				continue
+			}
+
+			messages = append(messages, api.Message{
+				Role:    api.RoleUser,
+				Content: payload.Text,
+			})
+
+			deps := agent.QueryDeps{
+				CallModel: func(callCtx context.Context, req api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
+					return client.Stream(callCtx, req)
+				},
+				ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
+					return executeToolCalls(callCtx, bridge, registry, calls)
+				},
+				CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
+					pipeline := compact.NewPipeline(client.Capabilities().MaxContextWindow, nil)
+					result, err := pipeline.Compact(callCtx, current, string(reason))
+					if err != nil {
+						return nil, err
+					}
+					return result.Messages, nil
+				},
+				ApplyResultBudget: func(current []api.Message) []api.Message {
+					return current
+				},
+				PersistMessages: func(updated []api.Message) {
+					messages = updated
+				},
+				Clock: time.Now,
+			}
+
+			stream := agent.QueryStream(ctx, agent.QueryRequest{
+				Messages:     messages,
+				SystemPrompt: defaultSystemPrompt(),
+				Mode:         mode,
+				Tools:        registry.Definitions(),
+				MaxTokens:    client.Capabilities().MaxOutputTokens,
+			}, deps)
+
+			for event, streamErr := range stream {
+				if streamErr != nil {
+					if emitErr := bridge.EmitError(streamErr.Error(), false); emitErr != nil {
+						return emitErr
+					}
+					break
+				}
+				if err := bridge.EmitEvent(event); err != nil {
+					return err
+				}
 			}
 		case ipc.MsgSlashCommand:
 			// TODO: dispatch slash commands
 			continue
 		case ipc.MsgModeToggle:
-			// TODO: toggle mode
+			if mode == agent.ModePlan {
+				mode = agent.ModeFast
+			} else {
+				mode = agent.ModePlan
+			}
+			if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
+				return err
+			}
 			continue
 		case ipc.MsgPermissionResponse:
 			// TODO: resolve pending permission request
 			continue
 		}
 	}
+}
+
+func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
+	if provider == "" {
+		provider = "anthropic"
+	}
+
+	baseURL := cfg.BaseURL
+	switch api.Presets[provider].ClientType {
+	case api.AnthropicAPI:
+		return api.NewAnthropicClient(model, cfg.APIKey, baseURL)
+	case api.GeminiAPI:
+		return api.NewGeminiClient(model, cfg.APIKey, baseURL)
+	case api.OpenAICompatAPI:
+		return api.NewOpenAICompatClient(provider, model, cfg.APIKey, baseURL)
+	case api.OllamaAPI:
+		return api.NewOllamaClient(model, cfg.APIKey, baseURL)
+	default:
+		return nil, fmt.Errorf("unsupported provider %q", provider)
+	}
+}
+
+func parseExecutionMode(mode string) agent.ExecutionMode {
+	if strings.EqualFold(mode, string(agent.ModeFast)) {
+		return agent.ModeFast
+	}
+	return agent.ModePlan
+}
+
+func defaultSystemPrompt() string {
+	return "You are Go CLI, a pragmatic coding assistant. Be concise, prefer inspecting files before changing them, and use tools when needed."
+}
+
+func executeToolCalls(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	registry *toolpkg.Registry,
+	calls []api.ToolCall,
+) ([]api.ToolResult, error) {
+	results := make([]api.ToolResult, len(calls))
+	pending := make([]toolpkg.PendingCall, 0, len(calls))
+	budget := toolpkg.DefaultResultBudget(filepath.Join(os.TempDir(), "go-cli-session"))
+
+	for index, call := range calls {
+		if err := bridge.Emit(ipc.EventToolStart, ipc.ToolStartPayload{
+			ToolID: call.ID,
+			Name:   call.Name,
+			Input:  call.Input,
+		}); err != nil {
+			return nil, err
+		}
+
+		tool, err := registry.Get(call.Name)
+		if err != nil {
+			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
+			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: err.Error()}); emitErr != nil {
+				return nil, emitErr
+			}
+			continue
+		}
+
+		input, err := decodeToolInput(call)
+		if err != nil {
+			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
+			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: err.Error()}); emitErr != nil {
+				return nil, emitErr
+			}
+			continue
+		}
+
+		pending = append(pending, toolpkg.PendingCall{Index: index, Tool: tool, Input: input})
+	}
+
+	for _, batch := range toolpkg.PartitionBatches(pending) {
+		for _, result := range toolpkg.ExecuteBatch(ctx, batch) {
+			call := calls[result.Index]
+			toolResult := api.ToolResult{ToolCallID: call.ID}
+
+			if result.Err != nil {
+				toolResult.Output = result.Err.Error()
+				toolResult.IsError = true
+				if err := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: result.Err.Error()}); err != nil {
+					return nil, err
+				}
+				results[result.Index] = toolResult
+				continue
+			}
+
+			output := result.Output.Output
+			spillPath := result.Output.SpillPath
+			truncated := result.Output.Truncated
+			if !result.Output.IsError {
+				budgetedOutput, spill, err := toolpkg.ApplyBudget(budget, call.ID, output)
+				if err == nil {
+					output = budgetedOutput
+					spillPath = spill
+					truncated = truncated || spill != ""
+				}
+			}
+
+			toolResult.Output = output
+			toolResult.IsError = result.Output.IsError
+			results[result.Index] = toolResult
+
+			if result.Output.IsError {
+				if err := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: output}); err != nil {
+					return nil, err
+				}
+				continue
+			}
+
+			if err := bridge.Emit(ipc.EventToolResult, ipc.ToolResultPayload{
+				ToolID:    call.ID,
+				Output:    output,
+				Truncated: truncated || spillPath != "",
+			}); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return results, nil
+}
+
+func decodeToolInput(call api.ToolCall) (toolpkg.ToolInput, error) {
+	params := make(map[string]any)
+	raw := strings.TrimSpace(call.Input)
+	if raw != "" {
+		if err := json.Unmarshal([]byte(raw), &params); err != nil {
+			return toolpkg.ToolInput{}, fmt.Errorf("decode tool input for %q: %w", call.Name, err)
+		}
+	}
+	return toolpkg.ToolInput{
+		Name:   call.Name,
+		Params: params,
+		Raw:    call.Input,
+	}, nil
 }
