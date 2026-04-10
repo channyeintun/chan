@@ -5,6 +5,7 @@ import { useEvents } from "./hooks/useEvents.js";
 import ArtifactView from "./components/ArtifactView.js";
 import Input from "./components/Input.js";
 import PlanPanel from "./components/PlanPanel.js";
+import PromptFooter from "./components/PromptFooter.js";
 import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
 import PermissionPrompt from "./components/PermissionPrompt.js";
@@ -120,6 +121,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     }
   };
 
+  const isPromptDisabled =
+    !uiState.ready || !!engine.error || uiState.pendingPermission !== null;
+
   return (
     <Box flexDirection="column" height="100%">
       <StatusBar
@@ -198,20 +202,24 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           onCancel={() => handlePermissionResponse("deny")}
         />
       ) : (
-        <Input
-          prompt={prompt}
-          mode={uiState.mode}
-          isLoading={uiState.isStreaming}
-          onSubmit={handleSubmit}
-          onImagePaste={handleImagePaste}
-          onModeToggle={engine.sendModeToggle}
-          onCancel={engine.sendCancel}
-          disabled={
-            !uiState.ready ||
-            !!engine.error ||
-            uiState.pendingPermission !== null
-          }
-        />
+        <Box flexDirection="column">
+          <Input
+            prompt={prompt}
+            mode={uiState.mode}
+            isLoading={uiState.isStreaming}
+            onSubmit={handleSubmit}
+            onImagePaste={handleImagePaste}
+            onModeToggle={engine.sendModeToggle}
+            onCancel={engine.sendCancel}
+            disabled={isPromptDisabled}
+          />
+          <PromptFooter
+            mode={uiState.mode}
+            isLoading={uiState.isStreaming}
+            disabled={isPromptDisabled}
+            promptValue={prompt.value}
+          />
+        </Box>
       )}
     </Box>
   );

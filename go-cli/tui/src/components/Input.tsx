@@ -14,47 +14,8 @@ interface InputProps {
   disabled?: boolean;
 }
 
-const INPUT_HINT =
-  "Enter send | Shift+Enter newline | Arrows move | Tab mode | Esc cancel";
-const DISABLED_HINT = "Engine busy | Esc cancel";
-
-function formatModeLabel(mode: string): string {
-  return mode === "plan" ? "PLAN" : mode.toUpperCase();
-}
-
-function getModeColor(mode: string): "blue" | "green" | "yellow" {
-  if (mode === "plan") {
-    return "blue";
-  }
-
-  if (mode === "fast") {
-    return "green";
-  }
-
-  return "yellow";
-}
-
 function getPromptTextColumns(terminalColumns: number): number {
   return Math.max(8, terminalColumns - 7);
-}
-
-function getWrappedLineSegments(value: string, columns: number): string[] {
-  const wrapWidth = Math.max(1, columns - 1);
-  const logicalLines = value.split("\n");
-  const segments: string[] = [];
-
-  for (const line of logicalLines) {
-    if (line.length === 0) {
-      segments.push("");
-      continue;
-    }
-
-    for (let offset = 0; offset < line.length; offset += wrapWidth) {
-      segments.push(line.slice(offset, offset + wrapWidth));
-    }
-  }
-
-  return segments;
 }
 
 function renderInputLines(
@@ -281,19 +242,11 @@ const Input: FC<InputProps> = ({
   });
 
   const showPlaceholder = prompt.value.length === 0;
-  const hint = disabled ? DISABLED_HINT : INPUT_HINT;
   const renderedLines = useMemo(
     () =>
       renderInputLines(prompt.value, prompt.cursorOffset, promptTextColumns),
     [prompt.cursorOffset, prompt.value, promptTextColumns],
   );
-  const wrappedLineCount = useMemo(
-    () => getWrappedLineSegments(prompt.value, promptTextColumns).length,
-    [prompt.value, promptTextColumns],
-  );
-  const footerLayout = terminalColumns < 96 ? "column" : "row";
-  const activityLabel = isLoading ? "running" : disabled ? "blocked" : "ready";
-  const showWrappedIndicator = !showPlaceholder && wrappedLineCount > 1;
 
   return (
     <Box
@@ -321,22 +274,6 @@ const Input: FC<InputProps> = ({
             </Box>
           ))
         )}
-      </Box>
-      <Box
-        paddingLeft={2}
-        marginTop={1}
-        flexDirection={footerLayout}
-        justifyContent="space-between"
-      >
-        <Text dimColor>
-          <Text color={getModeColor(mode)} bold>
-            {formatModeLabel(mode)}
-          </Text>
-          {"  "}
-          <Text>{activityLabel}</Text>
-          {showWrappedIndicator ? `  wrapped:${wrappedLineCount}` : ""}
-        </Text>
-        <Text dimColor>{hint}</Text>
       </Box>
     </Box>
   );
