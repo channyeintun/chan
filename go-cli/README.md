@@ -1,4 +1,4 @@
-# go-cli
+# gocode
 
 An agentic coding CLI powered by LLMs. Think, plan, and execute code changes from your terminal.
 
@@ -10,7 +10,7 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 curl -fsSL https://raw.githubusercontent.com/channyeintun/go-code/main/go-cli/install.sh | sh
 ```
 
-This downloads two binaries (`go-cli` and `go-cli-engine`) to `/usr/local/bin/`. No runtime dependencies — no Node.js, no Go, nothing else needed.
+This downloads two binaries (`gocode` and `gocode-engine`) to `/usr/local/bin/`. No runtime dependencies — no Node.js, no Go, nothing else needed.
 
 ### Manual install
 
@@ -18,17 +18,17 @@ Download the archive for your platform from [Releases](https://github.com/channy
 
 | Platform         | Archive                        |
 |------------------|--------------------------------|
-| macOS Apple Silicon | `go-cli-darwin-arm64.tar.gz` |
-| macOS Intel      | `go-cli-darwin-amd64.tar.gz`   |
-| Linux x86_64     | `go-cli-linux-amd64.tar.gz`    |
-| Linux ARM64      | `go-cli-linux-arm64.tar.gz`    |
+| macOS Apple Silicon | `gocode-darwin-arm64.tar.gz` |
+| macOS Intel      | `gocode-darwin-amd64.tar.gz`   |
+| Linux x86_64     | `gocode-linux-amd64.tar.gz`    |
+| Linux ARM64      | `gocode-linux-arm64.tar.gz`    |
 
 Extract and copy both files to a directory in your `PATH`:
 
 ```bash
-tar -xzf go-cli-darwin-arm64.tar.gz
-cd go-cli-darwin-arm64
-sudo cp go-cli go-cli-engine /usr/local/bin/
+tar -xzf gocode-darwin-arm64.tar.gz
+cd gocode-darwin-arm64
+sudo cp gocode gocode-engine /usr/local/bin/
 ```
 
 ## Setup
@@ -54,7 +54,7 @@ Supported providers and their environment variables:
 ## Usage
 
 ```bash
-go-cli
+gocode
 ```
 
 That's it. You'll see a terminal UI with a prompt. Type your request and press Enter.
@@ -62,10 +62,10 @@ That's it. You'll see a terminal UI with a prompt. Type your request and press E
 ### Options
 
 ```
-go-cli --model openai/gpt-4o        # Use a different model
-go-cli --model ollama/gemma3         # Use a local model via Ollama
-go-cli --mode fast                   # Skip planning, execute directly
-go-cli --help                        # Show help
+gocode --model openai/gpt-4o        # Use a different model
+gocode --model ollama/gemma3         # Use a local model via Ollama
+gocode --mode fast                   # Skip planning, execute directly
+gocode --help                        # Show help
 ```
 
 ### Slash Commands
@@ -142,18 +142,18 @@ Environment variables override the config file:
 
 ```
 ┌──────────────────────────────┐
-│  go-cli (Bun standalone)     │  ← Terminal UI (React Ink)
+│  gocode (Bun standalone)     │  ← Terminal UI (React Ink)
 │    Renders TUI, handles I/O  │
 │         │ stdin/stdout NDJSON │
 │  ┌──────▼────────────────┐   │
-│  │ go-cli-engine (Go)     │   │  ← LLM client, tools, agent loop
+│  │ gocode-engine (Go)     │   │  ← LLM client, tools, agent loop
 │  │  Streams events out    │   │
 │  │  Reads commands in     │   │
 │  └────────────────────────┘   │
 └──────────────────────────────┘
 ```
 
-Both binaries must be in the same directory (or `go-cli-engine` must be in `PATH`).
+Both binaries must be in the same directory (or `gocode-engine` must be in `PATH`).
 
 ## Building from Source
 

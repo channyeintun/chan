@@ -1,5 +1,5 @@
-BINARY_NAME := go-cli
-ENGINE_NAME := go-cli-engine
+BINARY_NAME := gocode
+ENGINE_NAME := gocode-engine
 VERSION     := 0.1.0
 BUILD_DIR   := release
 GO_SRC      := ../cmd/go-cli

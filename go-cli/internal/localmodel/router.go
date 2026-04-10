@@ -1,6 +1,11 @@
 package localmodel
 
-import "github.com/channyeintun/go-cli/internal/api"
+import (
+	"os"
+	"strings"
+
+	"github.com/channyeintun/go-cli/internal/api"
+)
 
 // TaskType classifies internal tasks for model routing.
 type TaskType int
@@ -23,12 +28,22 @@ type Router struct {
 // NewRouter creates a model router.
 func NewRouter(remote api.LLMClient) *Router {
 	r := &Router{remote: remote}
+	if !UseLocalModelEnabled() {
+		return r
+	}
 	local, ok := DetectLocalModel()
 	if ok {
 		r.local = local
 		r.localAvail = true
 	}
 	return r
+}
+
+// UseLocalModelEnabled reports whether local-model routing is enabled.
+// This is opt-in so helper tasks like compaction do not silently switch to Ollama.
+func UseLocalModelEnabled() bool {
+	value := strings.TrimSpace(os.Getenv("USE_LOCAL_MODEL"))
+	return strings.EqualFold(value, "true") || value == "1"
 }
 
 // IsLocalAvailable returns whether a local model is ready.

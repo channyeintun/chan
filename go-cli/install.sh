@@ -1,12 +1,12 @@
 #!/bin/sh
 set -e
 
-# go-cli installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/channyeintun/go-cli/main/install.sh | sh
+# gocode installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/channyeintun/go-code/main/go-cli/install.sh | sh
 
-REPO="channyeintun/go-cli"
-BINARY_NAME="go-cli"
-ENGINE_NAME="go-cli-engine"
+REPO="channyeintun/go-code"
+BINARY_NAME="gocode"
+ENGINE_NAME="gocode-engine"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 # Detect OS and architecture
@@ -53,12 +53,12 @@ fi
 chmod +x "$INSTALL_DIR/$BINARY_NAME" "$INSTALL_DIR/$ENGINE_NAME"
 
 echo ""
-echo "go-cli installed successfully!"
+echo "gocode installed successfully!"
 echo ""
 echo "Set your API key and start:"
 echo "  export ANTHROPIC_API_KEY=\"sk-ant-...\""
-echo "  go-cli"
+echo "  gocode"
 echo ""
 echo "Or use a different provider:"
-echo "  go-cli --model openai/gpt-4o"
-echo "  go-cli --model ollama/gemma3"
+echo "  gocode --model openai/gpt-4o"
+echo "  gocode --model ollama/gemma3"

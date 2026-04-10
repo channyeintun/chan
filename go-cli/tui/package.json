@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "bin": {
-    "go-cli": "bin/go-cli.js"
+	"gocode": "bin/gocode.js"
   },
   "scripts": {
     "build": "tsc",
-    "start": "node bin/go-cli.js",
+	"start": "node bin/gocode.js",
     "dev": "tsc --watch",
-    "install-engine": "cd .. && go build -o tui/engine/go-cli ./cmd/go-cli/",
+	"install-engine": "cd .. && go build -o tui/engine/gocode-engine ./cmd/go-cli/",
     "setup": "npm install && npm run build && npm run install-engine"
   },
   "dependencies": {

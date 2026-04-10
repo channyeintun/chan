@@ -40,7 +40,7 @@ var (
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:     "go-cli",
+		Use:     "gocode",
 		Short:   "An agentic coding CLI powered by Go",
 		Version: fmt.Sprintf("%s (%s)", version, commit),
 	}

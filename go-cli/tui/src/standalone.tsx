@@ -12,14 +12,14 @@ import App from "./App.js";
 // Resolve engine: same directory as this binary, then PATH
 const selfDir = dirname(process.execPath);
 const candidates = [
-  join(selfDir, "go-cli-engine"),
-  join(selfDir, "engine", "go-cli"),
-  "go-cli-engine",
+  join(selfDir, "gocode-engine"),
+  join(selfDir, "engine", "gocode-engine"),
+  "gocode-engine",
 ];
 const enginePath =
   process.env["GOCLI_ENGINE_PATH"] ??
   candidates.find((p) => existsSync(p)) ??
-  "go-cli-engine";
+  "gocode-engine";
 
 let model = "anthropic/claude-sonnet-4-20250514";
 let mode = "plan";
@@ -31,7 +31,7 @@ for (let i = 0; i < args.length; i++) {
   } else if (args[i] === "--mode" && args[i + 1]) {
     mode = args[++i]!;
   } else if (args[i] === "--help" || args[i] === "-h") {
-    console.log(`Usage: go-cli [options]
+    console.log(`Usage: gocode [options]
 
 Options:
   --model, -m <provider/model>  Model to use (default: anthropic/claude-sonnet-4-20250514)

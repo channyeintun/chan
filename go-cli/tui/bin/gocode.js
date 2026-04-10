@@ -3,14 +3,16 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
-import { execFileSync } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 
-// Resolve Go engine binary: check next to the launcher, then in PATH
-const localEngine = join(root, "engine", "go-cli");
-const enginePath = existsSync(localEngine) ? localEngine : "go-cli";
+// Resolve Go engine binary: prefer the packaged engine, then PATH.
+const candidates = [
+  join(root, "engine", "gocode-engine"),
+  "gocode-engine",
+];
+const enginePath = candidates.find((candidate) => candidate.includes("/") ? existsSync(candidate) : true) ?? "gocode-engine";
 
 // Set env so the TUI picks it up
 process.env["GOCLI_ENGINE_PATH"] = enginePath;
@@ -23,7 +25,7 @@ for (let i = 0; i < args.length; i++) {
   } else if ((args[i] === "--mode") && args[i + 1]) {
     process.env["GOCLI_MODE"] = args[++i];
   } else if (args[i] === "--help" || args[i] === "-h") {
-    console.log(`Usage: go-cli [options]
+    console.log(`Usage: gocode [options]
 
 Options:
   --model, -m <provider/model>  Model to use (default: anthropic/claude-sonnet-4-20250514)
