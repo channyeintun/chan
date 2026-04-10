@@ -20,8 +20,9 @@ interface PromptFooterProps {
 }
 
 const INPUT_HINT =
-  "Enter send | Shift+Enter newline | Arrows move | PgUp/PgDn transcript | Tab mode | Esc cancel";
-const DISABLED_HINT = "Engine busy | PgUp/PgDn transcript | Esc cancel";
+  "Enter send | Shift+Enter newline | Arrows move | PgUp/PgDn transcript | Home/End jump | Tab mode | Esc cancel";
+const DISABLED_HINT =
+  "Engine busy | PgUp/PgDn transcript | Home/End jump | Esc cancel";
 
 const PromptFooter: FC<PromptFooterProps> = ({
   mode,

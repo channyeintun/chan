@@ -13,16 +13,11 @@ Bring `go-cli/tui` as close as possible to the interaction model and visual beha
 
 ## Remaining Work
 
-### Phase 6: Protocol follow-up
+No planned parity work remains in this pass.
 
-1. Evaluate whether rate-limit data (5-hour and 7-day windows) should be emitted for the status line.
-2. Evaluate whether a cost-threshold setting should be exposed so the footer can show cost-threshold notices.
-3. Evaluate whether the permission response payload should carry amendment/feedback text.
-4. Evaluate whether assistant message state should become block-oriented instead of single-string per turn.
+### Deferred Follow-up
 
-### Phase 7: Deferred infrastructure
-
-1. Add scroll/fullscreen primitives to the TUI so a real virtualized transcript list can replace the anchored render cap.
+1. Full scroll/fullscreen primitives and a true virtualized transcript list remain deferred because the upstream implementation depends on custom renderer internals that stock Ink does not expose. The anchored render cap plus transcript paging/jump controls are the accepted local substitute for now.
 
 ## Out of Scope
 
@@ -51,3 +46,4 @@ These can be revisited individually if needed later.
 
 - remaining protocol evaluation items are resolved (implemented or explicitly deferred)
 - virtual transcript list is either implemented or the anchored render cap is confirmed as sufficient
+- parity roadmap is complete for this pass, with any renderer-level fullscreen work explicitly deferred

@@ -119,7 +119,17 @@ const StreamOutput: FC<StreamOutputProps> = ({
 
   useInput(
     (_input, key) => {
-      if (!key.pageUp && !key.pageDown) {
+      if (!key.pageUp && !key.pageDown && !key.home && !key.end) {
+        return;
+      }
+
+      if (key.home) {
+        setSliceStartOverride(0);
+        return;
+      }
+
+      if (key.end) {
+        setSliceStartOverride(null);
         return;
       }
 
@@ -152,7 +162,8 @@ const StreamOutput: FC<StreamOutputProps> = ({
             Showing transcript rows {hiddenBeforeCount + 1}-
             {hiddenBeforeCount + visibleTranscriptBlocks.length} of{" "}
             {transcriptBlocks.length} to keep long sessions responsive. PageUp
-            shows older rows. PageDown returns to newer rows.
+            shows older rows. PageDown returns to newer rows. Home jumps to the
+            oldest visible window. End returns to the live tail.
           </Text>
         </Box>
       ) : null}
