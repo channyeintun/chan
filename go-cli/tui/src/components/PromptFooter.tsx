@@ -1,11 +1,19 @@
 import React, { type FC, useEffect, useMemo, useState } from "react";
 import { Box, Text } from "ink";
+import {
+  calculateApproxTokenWarningState,
+  formatTokenCount,
+  inferContextWindow,
+} from "../utils/modelContext.js";
 
 interface PromptFooterProps {
   mode: string;
+  model: string;
   isLoading: boolean;
   disabled?: boolean;
   promptValue: string;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 const INPUT_HINT =
@@ -14,9 +22,12 @@ const DISABLED_HINT = "Engine busy | Esc cancel";
 
 const PromptFooter: FC<PromptFooterProps> = ({
   mode,
+  model,
   isLoading,
   disabled,
   promptValue,
+  inputTokens,
+  outputTokens,
 }) => {
   const [terminalColumns, setTerminalColumns] = useState(
     process.stdout.columns ?? 80,
@@ -44,26 +55,44 @@ const PromptFooter: FC<PromptFooterProps> = ({
     () => getWrappedLineSegments(promptValue, promptTextColumns).length,
     [promptTextColumns, promptValue],
   );
+  const tokenUsage = inputTokens + outputTokens;
+  const tokenWarning = useMemo(
+    () => calculateApproxTokenWarningState(tokenUsage, model),
+    [model, tokenUsage],
+  );
+  const contextWindow = useMemo(() => inferContextWindow(model), [model]);
   const showWrappedIndicator = promptValue.length > 0 && wrappedLineCount > 1;
   const activityLabel = isLoading ? "running" : disabled ? "blocked" : "ready";
   const hint = disabled ? DISABLED_HINT : INPUT_HINT;
+  const warningText = tokenWarning.isWarning
+    ? `Context low (~${tokenWarning.percentLeft}% remaining) · ${formatTokenCount(tokenUsage)}/${formatTokenCount(contextWindow)} used · Run /compact before the next long turn`
+    : null;
 
   return (
-    <Box
-      paddingX={2}
-      paddingTop={1}
-      flexDirection={footerLayout}
-      justifyContent="space-between"
-    >
-      <Text dimColor>
-        <Text color={getModeColor(mode)} bold>
-          {formatModeLabel(mode)}
+    <Box flexDirection="column">
+      {warningText ? (
+        <Box paddingX={2} paddingTop={1}>
+          <Text color={tokenWarning.isError ? "red" : "yellow"}>
+            {warningText}
+          </Text>
+        </Box>
+      ) : null}
+      <Box
+        paddingX={2}
+        paddingTop={warningText ? 0 : 1}
+        flexDirection={footerLayout}
+        justifyContent="space-between"
+      >
+        <Text dimColor>
+          <Text color={getModeColor(mode)} bold>
+            {formatModeLabel(mode)}
+          </Text>
+          {"  "}
+          <Text>{activityLabel}</Text>
+          {showWrappedIndicator ? `  wrapped:${wrappedLineCount}` : ""}
         </Text>
-        {"  "}
-        <Text>{activityLabel}</Text>
-        {showWrappedIndicator ? `  wrapped:${wrappedLineCount}` : ""}
-      </Text>
-      <Text dimColor>{hint}</Text>
+        <Text dimColor>{hint}</Text>
+      </Box>
     </Box>
   );
 };

@@ -215,9 +215,12 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           />
           <PromptFooter
             mode={uiState.mode}
+            model={uiState.model}
             isLoading={uiState.isStreaming}
             disabled={isPromptDisabled}
             promptValue={prompt.value}
+            inputTokens={uiState.cost.inputTokens}
+            outputTokens={uiState.cost.outputTokens}
           />
         </Box>
       )}
