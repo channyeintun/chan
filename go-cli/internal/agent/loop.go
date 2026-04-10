@@ -103,7 +103,8 @@ func invokeModelWithRecovery(
 	deps QueryDeps,
 	yield func(ipc.StreamEvent, error) bool,
 ) (modelTurn, error) {
-	for attempt := 0; attempt < 2; attempt++ {
+	toolUseRetryUsed := false
+	for attempt := 0; attempt < 3; attempt++ {
 		turn, err := streamModelTurn(ctx, state, deps, yield)
 		if err == nil {
 			turn.stopReason = normalizeStopReason(turn.stopReason)
@@ -114,6 +115,18 @@ func invokeModelWithRecovery(
 		}
 
 		var apiErr *api.APIError
+		if errors.As(err, &apiErr) && state.Capabilities.SupportsToolUse && !toolUseRetryUsed && isToolUseUnavailable(apiErr) {
+			state.Capabilities.SupportsToolUse = false
+			toolUseRetryUsed = true
+			if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
+				Message:     "Current model endpoint does not support tool use; retrying without tools.",
+				Recoverable: true,
+			}), nil) {
+				return modelTurn{}, context.Canceled
+			}
+			continue
+		}
+
 		if !errors.As(err, &apiErr) || apiErr.Type != api.ErrPromptTooLong || deps.CompactMessages == nil {
 			return modelTurn{}, err
 		}
@@ -140,6 +153,18 @@ func invokeModelWithRecovery(
 	}
 
 	return modelTurn{}, fmt.Errorf("model invocation failed after compaction retry")
+}
+
+func isToolUseUnavailable(err *api.APIError) bool {
+	message := strings.ToLower(strings.TrimSpace(err.Message))
+	if message == "" {
+		return false
+	}
+
+	return strings.Contains(message, "no endpoints found that support tool use") ||
+		strings.Contains(message, "does not support tool use") ||
+		strings.Contains(message, "tool use is not supported") ||
+		strings.Contains(message, "tool calls are not supported")
 }
 
 func streamModelTurn(
