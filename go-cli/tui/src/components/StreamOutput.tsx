@@ -1,5 +1,5 @@
-import React, { type FC, useMemo } from "react";
-import { Box } from "ink";
+import React, { type FC, useMemo, useRef } from "react";
+import { Box, Text } from "ink";
 import type {
   UIMessage,
   UIToolCall,
@@ -22,10 +22,23 @@ interface StreamOutputProps {
   model: string;
 }
 
+const MAX_TRANSCRIPT_BLOCKS = 200;
+const TRANSCRIPT_CAP_STEP = 50;
+
+type TranscriptSliceAnchor = {
+  key: string;
+  idx: number;
+} | null;
+
 type TranscriptBlock =
-  | { kind: "message"; message: UIMessage; continuation: boolean }
-  | { kind: "tool_call"; toolCall: UIToolCall }
-  | { kind: "tool_group"; group: ToolCallGroup };
+  | {
+      kind: "message";
+      key: string;
+      message: UIMessage;
+      continuation: boolean;
+    }
+  | { kind: "tool_call"; key: string; toolCall: UIToolCall }
+  | { kind: "tool_group"; key: string; group: ToolCallGroup };
 
 const StreamOutput: FC<StreamOutputProps> = ({
   messages,
@@ -48,6 +61,18 @@ const StreamOutput: FC<StreamOutputProps> = ({
     () => buildTranscriptBlocks(transcript, messageById, toolCallById),
     [messageById, toolCallById, transcript],
   );
+  const sliceAnchorRef = useRef<TranscriptSliceAnchor>(null);
+  const visibleTranscriptBlocks = useMemo(() => {
+    const sliceStart = computeTranscriptSliceStart(
+      transcriptBlocks,
+      sliceAnchorRef,
+    );
+    return sliceStart > 0
+      ? transcriptBlocks.slice(sliceStart)
+      : transcriptBlocks;
+  }, [transcriptBlocks]);
+  const hiddenBlockCount =
+    transcriptBlocks.length - visibleTranscriptBlocks.length;
 
   if (
     transcript.length === 0 &&
@@ -60,26 +85,34 @@ const StreamOutput: FC<StreamOutputProps> = ({
 
   return (
     <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-      {transcriptBlocks.map((block) => {
+      {hiddenBlockCount > 0 ? (
+        <Box marginBottom={1}>
+          <Text dimColor>
+            Showing latest {visibleTranscriptBlocks.length} transcript rows to
+            keep long sessions responsive. {hiddenBlockCount} earlier
+            {hiddenBlockCount === 1 ? " row is" : " rows are"} not re-rendered.
+          </Text>
+        </Box>
+      ) : null}
+
+      {visibleTranscriptBlocks.map((block) => {
         if (block.kind === "tool_group") {
-          return <GroupedToolCalls key={block.group.id} group={block.group} />;
+          return <GroupedToolCalls key={block.key} group={block.group} />;
         }
 
         if (block.kind === "tool_call") {
-          return (
-            <ToolProgress key={block.toolCall.id} toolCall={block.toolCall} />
-          );
+          return <ToolProgress key={block.key} toolCall={block.toolCall} />;
         }
 
         return block.message.role === "assistant" ? (
           <AssistantTextMessage
-            key={block.message.id}
+            key={block.key}
             message={block.message}
             continuation={block.continuation}
           />
         ) : (
           <UserTextMessage
-            key={block.message.id}
+            key={block.key}
             message={block.message}
             continuation={block.continuation}
           />
@@ -127,6 +160,7 @@ function buildTranscriptBlocks(
 
       blocks.push({
         kind: "message",
+        key: `message-${message.id}`,
         message,
         continuation: previousMessageRole === message.role,
       });
@@ -163,7 +197,11 @@ function buildToolBlocks(toolCalls: UIToolCall[]): TranscriptBlock[] {
     const groupKind = toolGroupKind(toolCall);
 
     if (groupKind !== "read_search") {
-      blocks.push({ kind: "tool_call", toolCall });
+      blocks.push({
+        kind: "tool_call",
+        key: `tool-${toolCall.id}`,
+        toolCall,
+      });
       continue;
     }
 
@@ -180,6 +218,7 @@ function buildToolBlocks(toolCalls: UIToolCall[]): TranscriptBlock[] {
     if (grouped.length >= 2) {
       blocks.push({
         kind: "tool_group",
+        key: `tool-group-${grouped[0]!.id}-${grouped[grouped.length - 1]!.id}`,
         group: {
           id: `tool-group-${grouped[0]!.id}-${grouped[grouped.length - 1]!.id}`,
           kind: "read_search",
@@ -190,10 +229,47 @@ function buildToolBlocks(toolCalls: UIToolCall[]): TranscriptBlock[] {
       continue;
     }
 
-    blocks.push({ kind: "tool_call", toolCall });
+    blocks.push({
+      kind: "tool_call",
+      key: `tool-${toolCall.id}`,
+      toolCall,
+    });
   }
 
   return blocks;
+}
+
+function computeTranscriptSliceStart(
+  blocks: ReadonlyArray<{ key: string }>,
+  anchorRef: { current: TranscriptSliceAnchor },
+  cap = MAX_TRANSCRIPT_BLOCKS,
+  step = TRANSCRIPT_CAP_STEP,
+): number {
+  const anchor = anchorRef.current;
+  const anchorIndex = anchor
+    ? blocks.findIndex((block) => block.key === anchor.key)
+    : -1;
+  let start =
+    anchorIndex >= 0
+      ? anchorIndex
+      : anchor
+        ? Math.min(anchor.idx, Math.max(0, blocks.length - cap))
+        : 0;
+
+  if (blocks.length - start > cap + step) {
+    start = blocks.length - cap;
+  }
+
+  const blockAtStart = blocks[start];
+  if (blockAtStart) {
+    if (anchor?.key !== blockAtStart.key || anchor.idx !== start) {
+      anchorRef.current = { key: blockAtStart.key, idx: start };
+    }
+  } else if (anchor) {
+    anchorRef.current = null;
+  }
+
+  return start;
 }
 
 function toolGroupKind(toolCall: UIToolCall): ToolCallGroup["kind"] | null {
