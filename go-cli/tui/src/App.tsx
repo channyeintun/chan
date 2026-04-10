@@ -167,6 +167,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           liveText={uiState.streamedText}
           liveThinkingText={uiState.thinkingText}
           isStreaming={uiState.isStreaming}
+          model={uiState.model}
         />
 
         {uiState.error && (

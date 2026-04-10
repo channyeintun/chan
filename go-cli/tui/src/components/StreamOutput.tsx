@@ -19,11 +19,12 @@ interface StreamOutputProps {
   liveText: string;
   liveThinkingText: string;
   isStreaming: boolean;
+  model: string;
 }
 
 type TranscriptBlock =
-  | { kind: "message"; id: string }
-  | { kind: "tool_call"; id: string }
+  | { kind: "message"; message: UIMessage; continuation: boolean }
+  | { kind: "tool_call"; toolCall: UIToolCall }
   | { kind: "tool_group"; group: ToolCallGroup };
 
 const StreamOutput: FC<StreamOutputProps> = ({
@@ -33,6 +34,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
   liveText,
   liveThinkingText,
   isStreaming,
+  model,
 }) => {
   const messageById = useMemo(
     () => new Map(messages.map((message) => [message.id, message])),
@@ -43,8 +45,8 @@ const StreamOutput: FC<StreamOutputProps> = ({
     [toolCalls],
   );
   const transcriptBlocks = useMemo(
-    () => buildTranscriptBlocks(transcript, toolCallById),
-    [transcript, toolCallById],
+    () => buildTranscriptBlocks(transcript, messageById, toolCallById),
+    [messageById, toolCallById, transcript],
   );
 
   if (
@@ -64,33 +66,34 @@ const StreamOutput: FC<StreamOutputProps> = ({
         }
 
         if (block.kind === "tool_call") {
-          const toolCall = toolCallById.get(block.id);
-          if (!toolCall) {
-            return null;
-          }
-
-          return <ToolProgress key={block.id} toolCall={toolCall} />;
+          return (
+            <ToolProgress key={block.toolCall.id} toolCall={block.toolCall} />
+          );
         }
 
-        const message = messageById.get(block.id);
-        if (!message) {
-          return null;
-        }
-
-        return message.role === "assistant" ? (
-          <AssistantTextMessage key={message.id} message={message} />
+        return block.message.role === "assistant" ? (
+          <AssistantTextMessage
+            key={block.message.id}
+            message={block.message}
+            continuation={block.continuation}
+          />
         ) : (
-          <UserTextMessage key={message.id} message={message} />
+          <UserTextMessage
+            key={block.message.id}
+            message={block.message}
+            continuation={block.continuation}
+          />
         );
       })}
 
       {isStreaming && liveThinkingText && !liveText ? (
-        <AssistantThinkingMessage text={liveThinkingText} />
+        <AssistantThinkingMessage text={liveThinkingText} model={model} />
       ) : null}
 
       {isStreaming && (Boolean(liveText) || !liveThinkingText) ? (
         <StreamingAssistantMessage
           text={liveText || undefined}
+          model={model}
           statusLabel={
             liveText ? "Responding" : liveThinkingText ? "Thinking" : "Working"
           }
@@ -104,9 +107,11 @@ export default StreamOutput;
 
 function buildTranscriptBlocks(
   transcript: UITranscriptEntry[],
+  messageById: Map<string, UIMessage>,
   toolCallById: Map<string, UIToolCall>,
 ): TranscriptBlock[] {
   const blocks: TranscriptBlock[] = [];
+  let previousMessageRole: UIMessage["role"] | null = null;
 
   for (let index = 0; index < transcript.length; index += 1) {
     const entry = transcript[index];
@@ -115,7 +120,17 @@ function buildTranscriptBlocks(
     }
 
     if (entry.kind !== "tool_call") {
-      blocks.push({ kind: "message", id: entry.id });
+      const message = messageById.get(entry.id);
+      if (!message) {
+        continue;
+      }
+
+      blocks.push({
+        kind: "message",
+        message,
+        continuation: previousMessageRole === message.role,
+      });
+      previousMessageRole = message.role;
       continue;
     }
 
@@ -133,6 +148,7 @@ function buildTranscriptBlocks(
     }
 
     blocks.push(...buildToolBlocks(run));
+    previousMessageRole = null;
     index = cursor - 1;
   }
 
@@ -147,7 +163,7 @@ function buildToolBlocks(toolCalls: UIToolCall[]): TranscriptBlock[] {
     const groupKind = toolGroupKind(toolCall);
 
     if (groupKind !== "read_search") {
-      blocks.push({ kind: "tool_call", id: toolCall.id });
+      blocks.push({ kind: "tool_call", toolCall });
       continue;
     }
 
@@ -174,7 +190,7 @@ function buildToolBlocks(toolCalls: UIToolCall[]): TranscriptBlock[] {
       continue;
     }
 
-    blocks.push({ kind: "tool_call", id: toolCall.id });
+    blocks.push({ kind: "tool_call", toolCall });
   }
 
   return blocks;

@@ -5,6 +5,7 @@ import MessageRow from "../MessageRow.js";
 
 interface AssistantThinkingMessageProps {
   text: string;
+  model?: string;
 }
 
 function truncateThinking(text: string): string {
@@ -14,6 +15,7 @@ function truncateThinking(text: string): string {
 
 const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
   text,
+  model,
 }) => {
   const preview = useMemo(() => truncateThinking(text), [text]);
   if (!preview) {
@@ -21,7 +23,16 @@ const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
   }
 
   return (
-    <MessageRow markerColor="gray" markerDim>
+    <MessageRow
+      markerColor="gray"
+      markerDim
+      label={
+        <Text color="gray" dimColor>
+          Assistant
+        </Text>
+      }
+      meta={model ? <Text dimColor>{model}</Text> : null}
+    >
       <Text color="gray" italic>
         <Spinner type="dots" /> Thinking
       </Text>

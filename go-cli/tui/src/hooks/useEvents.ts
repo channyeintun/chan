@@ -31,6 +31,8 @@ export interface UIMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  timestamp: string;
+  model?: string;
 }
 
 export interface UITranscriptEntry {
@@ -103,12 +105,18 @@ const initialState = (model: string, mode: string): EngineUIState => ({
 
 let nextMessageId = 0;
 
-function createMessage(role: UIMessage["role"], text: string): UIMessage {
+function createMessage(
+  role: UIMessage["role"],
+  text: string,
+  options?: { model?: string },
+): UIMessage {
   nextMessageId += 1;
   return {
     id: `msg-${nextMessageId}`,
     role,
     text,
+    timestamp: new Date().toISOString(),
+    model: options?.model,
   };
 }
 
@@ -153,10 +161,11 @@ export function useEvents(initialModel: string, initialMode: string) {
           const text = s.streamedText.trim();
           const message =
             text.length > 0
-              ? createMessage("assistant", text)
+              ? createMessage("assistant", text, { model: s.model })
               : createMessage(
                   "assistant",
                   "(Model returned an empty response)",
+                  { model: s.model },
                 );
           return {
             ...s,

@@ -3,6 +3,8 @@ import { Box, Text } from "ink";
 
 interface MessageRowProps {
   children: ReactNode;
+  label?: ReactNode;
+  meta?: ReactNode;
   marker?: string;
   markerColor?: ComponentProps<typeof Text>["color"];
   markerDim?: boolean;
@@ -13,6 +15,8 @@ const DEFAULT_MARKER = "●";
 
 const MessageRow: FC<MessageRowProps> = ({
   children,
+  label,
+  meta,
   marker = DEFAULT_MARKER,
   markerColor,
   markerDim,
@@ -30,6 +34,12 @@ const MessageRow: FC<MessageRowProps> = ({
         </Text>
       </Box>
       <Box flexDirection="column" flexGrow={1}>
+        {label || meta ? (
+          <Box flexDirection="row" justifyContent="space-between">
+            <Box flexGrow={1}>{label}</Box>
+            {meta ? <Box marginLeft={1}>{meta}</Box> : null}
+          </Box>
+        ) : null}
         {children}
       </Box>
     </Box>

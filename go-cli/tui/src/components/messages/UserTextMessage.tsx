@@ -5,14 +5,24 @@ import MessageRow from "../MessageRow.js";
 
 interface UserTextMessageProps {
   message: UIMessage;
+  continuation?: boolean;
 }
 
-const UserTextMessage: FC<UserTextMessageProps> = ({ message }) => {
+const UserTextMessage: FC<UserTextMessageProps> = ({
+  message,
+  continuation = false,
+}) => {
   return (
-    <MessageRow markerColor="cyan">
-      <Text color="cyan" bold>
-        You
-      </Text>
+    <MessageRow
+      markerColor="cyan"
+      label={
+        continuation ? null : (
+          <Text color="cyan" bold>
+            You
+          </Text>
+        )
+      }
+    >
       <Text>{message.text}</Text>
     </MessageRow>
   );
