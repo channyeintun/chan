@@ -17,7 +17,7 @@
 | 4. Transcript/message-row parity           | completed   | The transcript now uses a shared row wrapper, distinct row renderers, continuation-aware message labels, assistant row metadata stamped from reducer state, and an anchored long-session render cap modeled on the upstream non-virtual fallback path. A real virtual list still depends on scroll/fullscreen primitives that the current TUI does not have. |
 | 5a. Status line parity                     | completed   | The boxed top bar has been replaced with a lighter inline status line that shows workspace/session context, formatted model display, cost and token counts, and a best-effort context percentage derived from model presets. Exact session titles and exact live context usage still need protocol/state follow-up.                                          |
 | 5b. Prompt footer parity                   | completed   | The prompt footer is now rendered as a distinct layer beneath the input box, with mode/activity state, shortcut hints, and a best-effort context-pressure warning aligned to the engine's compaction buffers. Cost-threshold notices still require new engine/UI state and remain part of protocol follow-up rather than the footer slice itself.            |
-| 6. Protocol follow-up                      | not started | Only if parity requires engine changes.                                                                                                                                                                                                                                                                                                                      |
+| 6. Protocol follow-up                      | in progress | The engine now emits exact session/model status metadata so the TUI can stop guessing session titles and context limits, and session metadata saves no longer drop generated titles. Rate-limit data, richer permission payloads, and any explicit cost-threshold state are still pending.                                                                   |
 
 ## Task Log
 
@@ -47,4 +47,5 @@
 - Completed: moved prompt hints, mode state, and wrapped-input status into a dedicated footer layer beneath the prompt so the input box only owns text entry.
 - Completed: aligned the footer and status-line context math to the engine's effective-window reserve and compaction buffers, so the warning row now tracks the same headroom policy instead of rough fixed percentages.
 - Completed: treated Phase 5b as complete for the current architecture, since upstream footer behavior and the local protocol expose context pressure but not any standalone cost-threshold setting.
-- Next: continue into Phase 6 only if we want to expose new engine/UI state for explicit cost thresholds, richer live context usage, or rate-limit metadata.
+- Completed: landed the first Phase 6 slice by emitting live session updates plus exact model context limits through IPC, and by preserving generated session titles across later metadata saves.
+- Remaining in Phase 6: rate-limit metadata, richer permission metadata, and any explicit cost-threshold state still need dedicated engine/UI support.

@@ -17,6 +17,7 @@ export type EventType =
   | "artifact_updated"
   | "ready"
   | "error"
+  | "session_updated"
   | "session_restored";
 
 export interface StreamEvent {
@@ -104,6 +105,8 @@ export interface ModeChangedPayload {
 
 export interface ModelChangedPayload {
   model: string;
+  max_context_window?: number;
+  max_output_tokens?: number;
 }
 
 export interface CostUpdatePayload {
@@ -135,6 +138,11 @@ export interface ArtifactUpdatedPayload {
 export interface SessionRestoredPayload {
   session_id: string;
   mode: string;
+}
+
+export interface SessionUpdatedPayload {
+  session_id: string;
+  title?: string;
 }
 
 export interface ReadyPayload {

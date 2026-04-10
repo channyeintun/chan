@@ -11,6 +11,7 @@ import type {
   PermissionRequestPayload,
   ReadyPayload,
   SessionRestoredPayload,
+  SessionUpdatedPayload,
   StreamEvent,
   TurnCompletePayload,
   TokenDeltaPayload,
@@ -71,6 +72,9 @@ export interface EngineUIState {
   mode: string;
   model: string;
   sessionId: string | null;
+  sessionTitle: string | null;
+  maxContextWindow: number | null;
+  maxOutputTokens: number | null;
   cost: { totalUsd: number; inputTokens: number; outputTokens: number };
   artifacts: UIArtifact[];
   toolCalls: UIToolCall[];
@@ -95,6 +99,9 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   mode,
   model,
   sessionId: null,
+  sessionTitle: null,
+  maxContextWindow: null,
+  maxOutputTokens: null,
   cost: { totalUsd: 0, inputTokens: 0, outputTokens: 0 },
   artifacts: [],
   toolCalls: [],
@@ -328,7 +335,18 @@ export function useEvents(initialModel: string, initialMode: string) {
       }
       case "model_changed": {
         const p = event.payload as ModelChangedPayload;
-        setUIState((s) => ({ ...s, model: p.model }));
+        setUIState((s) => ({
+          ...s,
+          model: p.model,
+          maxContextWindow:
+            typeof p.max_context_window === "number" && p.max_context_window > 0
+              ? p.max_context_window
+              : s.maxContextWindow,
+          maxOutputTokens:
+            typeof p.max_output_tokens === "number" && p.max_output_tokens > 0
+              ? p.max_output_tokens
+              : s.maxOutputTokens,
+        }));
         break;
       }
       case "cost_update": {
@@ -383,10 +401,31 @@ export function useEvents(initialModel: string, initialMode: string) {
           ready: true,
           mode: p.mode,
           sessionId: p.session_id,
+          sessionTitle: null,
           isStreaming: false,
           error: null,
           statusLine: `Resumed session ${p.session_id}`,
         }));
+        break;
+      }
+      case "session_updated": {
+        const p = event.payload as SessionUpdatedPayload;
+        setUIState((s) => {
+          const normalizedTitle = p.title?.trim() ? p.title.trim() : null;
+          if (
+            normalizedTitle &&
+            s.sessionId !== null &&
+            s.sessionId !== p.session_id
+          ) {
+            return s;
+          }
+
+          return {
+            ...s,
+            sessionId: p.session_id,
+            sessionTitle: normalizedTitle,
+          };
+        });
         break;
       }
       case "error": {

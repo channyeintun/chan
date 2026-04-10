@@ -3,7 +3,7 @@ import React, { type FC } from "react";
 import { Box, Text } from "ink";
 import {
   formatTokenCount,
-  getApproxEffectiveContextWindow,
+  getEffectiveContextWindow,
 } from "../utils/modelContext.js";
 
 interface StatusBarProps {
@@ -11,6 +11,9 @@ interface StatusBarProps {
   mode: string;
   model: string;
   sessionId?: string | null;
+  sessionTitle?: string | null;
+  maxContextWindow?: number | null;
+  maxOutputTokens?: number | null;
   totalCostUsd: number;
   inputTokens: number;
   outputTokens: number;
@@ -21,6 +24,9 @@ const StatusBar: FC<StatusBarProps> = ({
   mode,
   model,
   sessionId,
+  sessionTitle,
+  maxContextWindow,
+  maxOutputTokens,
   totalCostUsd,
   inputTokens,
   outputTokens,
@@ -29,9 +35,17 @@ const StatusBar: FC<StatusBarProps> = ({
   const readinessLabel = ready ? "READY" : "BOOTING";
   const readinessColor = ready ? "green" : "yellow";
   const workspaceLabel = path.basename(process.cwd());
-  const sessionLabel = sessionId ? `session ${sessionId.slice(0, 8)}` : null;
+  const sessionLabel = sessionTitle?.trim()
+    ? sessionTitle.trim()
+    : sessionId
+      ? `session ${sessionId.slice(0, 8)}`
+      : null;
   const modelLabel = formatModelLabel(model);
-  const contextWindow = getApproxEffectiveContextWindow(model);
+  const contextWindow = getEffectiveContextWindow(
+    model,
+    maxContextWindow,
+    maxOutputTokens,
+  );
   const contextTokens = inputTokens + outputTokens;
   const contextPercent = Math.min(
     999,

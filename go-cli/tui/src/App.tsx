@@ -131,6 +131,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         mode={uiState.mode}
         model={uiState.model}
         sessionId={uiState.sessionId}
+        sessionTitle={uiState.sessionTitle}
+        maxContextWindow={uiState.maxContextWindow}
+        maxOutputTokens={uiState.maxOutputTokens}
         totalCostUsd={uiState.cost.totalUsd}
         inputTokens={uiState.cost.inputTokens}
         outputTokens={uiState.cost.outputTokens}
@@ -216,6 +219,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           <PromptFooter
             mode={uiState.mode}
             model={uiState.model}
+            maxContextWindow={uiState.maxContextWindow}
+            maxOutputTokens={uiState.maxOutputTokens}
             isLoading={uiState.isStreaming}
             disabled={isPromptDisabled}
             promptValue={prompt.value}

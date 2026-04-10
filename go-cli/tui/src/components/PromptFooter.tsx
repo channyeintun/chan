@@ -1,13 +1,15 @@
 import React, { type FC, useEffect, useMemo, useState } from "react";
 import { Box, Text } from "ink";
 import {
-  calculateApproxTokenWarningState,
+  calculateTokenWarningState,
   formatTokenCount,
 } from "../utils/modelContext.js";
 
 interface PromptFooterProps {
   mode: string;
   model: string;
+  maxContextWindow?: number | null;
+  maxOutputTokens?: number | null;
   isLoading: boolean;
   disabled?: boolean;
   promptValue: string;
@@ -22,6 +24,8 @@ const DISABLED_HINT = "Engine busy | Esc cancel";
 const PromptFooter: FC<PromptFooterProps> = ({
   mode,
   model,
+  maxContextWindow,
+  maxOutputTokens,
   isLoading,
   disabled,
   promptValue,
@@ -56,8 +60,14 @@ const PromptFooter: FC<PromptFooterProps> = ({
   );
   const tokenUsage = inputTokens + outputTokens;
   const tokenWarning = useMemo(
-    () => calculateApproxTokenWarningState(tokenUsage, model),
-    [model, tokenUsage],
+    () =>
+      calculateTokenWarningState(
+        tokenUsage,
+        model,
+        maxContextWindow,
+        maxOutputTokens,
+      ),
+    [maxContextWindow, maxOutputTokens, model, tokenUsage],
   );
   const showWrappedIndicator = promptValue.length > 0 && wrappedLineCount > 1;
   const activityLabel = isLoading ? "running" : disabled ? "blocked" : "ready";

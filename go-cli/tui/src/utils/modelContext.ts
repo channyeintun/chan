@@ -37,16 +37,36 @@ export function inferContextWindow(model: string): number {
 }
 
 export function getApproxEffectiveContextWindow(model: string): number {
-  return Math.max(
-    0,
-    inferContextWindow(model) - APPROX_MAX_RESERVED_OUTPUT_TOKENS,
+  return getEffectiveContextWindow(model);
+}
+
+export function getEffectiveContextWindow(
+  model: string,
+  maxContextWindow?: number | null,
+  maxOutputTokens?: number | null,
+): number {
+  const contextWindow = maxContextWindow ?? inferContextWindow(model);
+  const reservedOutputTokens = Math.min(
+    Math.max(maxOutputTokens ?? APPROX_MAX_RESERVED_OUTPUT_TOKENS, 0),
+    APPROX_MAX_RESERVED_OUTPUT_TOKENS,
   );
+
+  return Math.max(0, contextWindow - reservedOutputTokens);
 }
 
 export function getApproxCompactThreshold(model: string): number {
+  return getCompactThreshold(model);
+}
+
+export function getCompactThreshold(
+  model: string,
+  maxContextWindow?: number | null,
+  maxOutputTokens?: number | null,
+): number {
   return Math.max(
     0,
-    getApproxEffectiveContextWindow(model) - APPROX_AUTOCOMPACT_BUFFER_TOKENS,
+    getEffectiveContextWindow(model, maxContextWindow, maxOutputTokens) -
+      APPROX_AUTOCOMPACT_BUFFER_TOKENS,
   );
 }
 
@@ -60,8 +80,31 @@ export function calculateApproxTokenWarningState(
   effectiveContextWindow: number;
   compactThreshold: number;
 } {
-  const effectiveContextWindow = getApproxEffectiveContextWindow(model);
-  const compactThreshold = getApproxCompactThreshold(model);
+  return calculateTokenWarningState(tokenUsage, model);
+}
+
+export function calculateTokenWarningState(
+  tokenUsage: number,
+  model: string,
+  maxContextWindow?: number | null,
+  maxOutputTokens?: number | null,
+): {
+  percentLeft: number;
+  isWarning: boolean;
+  isError: boolean;
+  effectiveContextWindow: number;
+  compactThreshold: number;
+} {
+  const effectiveContextWindow = getEffectiveContextWindow(
+    model,
+    maxContextWindow,
+    maxOutputTokens,
+  );
+  const compactThreshold = getCompactThreshold(
+    model,
+    maxContextWindow,
+    maxOutputTokens,
+  );
   const warningThreshold = Math.max(
     0,
     compactThreshold - APPROX_WARNING_THRESHOLD_BUFFER_TOKENS,

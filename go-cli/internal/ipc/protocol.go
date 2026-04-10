@@ -3,7 +3,7 @@ package ipc
 import "encoding/json"
 
 // ProtocolVersion is the current IPC protocol version.
-const ProtocolVersion = 1
+const ProtocolVersion = 2
 
 // --- Go → Ink (stdout): StreamEvent ---
 
@@ -39,6 +39,7 @@ const (
 	// Engine status
 	EventReady           EventType = "ready"
 	EventError           EventType = "error"
+	EventSessionUpdated  EventType = "session_updated"
 	EventSessionRestored EventType = "session_restored"
 )
 
@@ -121,7 +122,9 @@ type ModeChangedPayload struct {
 }
 
 type ModelChangedPayload struct {
-	Model string `json:"model"`
+	Model            string `json:"model"`
+	MaxContextWindow int    `json:"max_context_window,omitempty"`
+	MaxOutputTokens  int    `json:"max_output_tokens,omitempty"`
 }
 
 type CostUpdatePayload struct {
@@ -162,6 +165,11 @@ type ErrorPayload struct {
 type SessionRestoredPayload struct {
 	SessionID string `json:"session_id"`
 	Mode      string `json:"mode"`
+}
+
+type SessionUpdatedPayload struct {
+	SessionID string `json:"session_id"`
+	Title     string `json:"title,omitempty"`
 }
 
 // Client message payloads

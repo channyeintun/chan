@@ -215,6 +215,14 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err := bridge.EmitReady(); err != nil {
 		return fmt.Errorf("emit ready: %w", err)
 	}
+	if err := emitSessionUpdated(bridge, sessionID, ""); err != nil {
+		return err
+	}
+	if client != nil {
+		if err := emitModelChanged(bridge, activeModelID, client); err != nil {
+			return err
+		}
+	}
 	if startupModelErr != nil {
 		if err := bridge.EmitError(fmt.Sprintf("initialize model %q: %v", activeModelID, startupModelErr), true); err != nil {
 			return err
@@ -388,21 +396,30 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				// Generate session title after the first successful query
 				if !sessionTitleGenerated && len(messages) > 0 {
 					sessionTitleGenerated = true
+					titleClient := client
+					titleSessionID := sessionID
+					titleStartedAt := startedAt
+					titleMode := mode
+					titleModelID := activeModelID
+					titleCWD := cwd
+					titleBranch := agent.LoadTurnContext().GitBranch
+					titleMessages := append([]api.Message(nil), messages...)
 					go func() {
-						modelRouter := localmodel.NewRouter(client)
-						title := session.GenerateTitle(modelRouter, messages)
+						modelRouter := localmodel.NewRouter(titleClient)
+						title := session.GenerateTitle(modelRouter, titleMessages)
 						if title != "" {
 							_ = sessionStore.SaveMetadata(session.Metadata{
-								SessionID:    sessionID,
-								CreatedAt:    startedAt,
+								SessionID:    titleSessionID,
+								CreatedAt:    titleStartedAt,
 								UpdatedAt:    time.Now(),
-								Mode:         string(mode),
-								Model:        activeModelID,
-								CWD:          cwd,
-								Branch:       agent.LoadTurnContext().GitBranch,
+								Mode:         string(titleMode),
+								Model:        titleModelID,
+								CWD:          titleCWD,
+								Branch:       titleBranch,
 								TotalCostUSD: tracker.Snapshot().TotalCostUSD,
 								Title:        title,
 							})
+							_ = emitSessionUpdated(bridge, titleSessionID, title)
 						}
 					}()
 				}
@@ -945,6 +962,23 @@ func emitCostUpdate(bridge *ipc.Bridge, tracker *costpkg.Tracker) error {
 	})
 }
 
+func emitModelChanged(bridge *ipc.Bridge, activeModelID string, client api.LLMClient) error {
+	payload := ipc.ModelChangedPayload{Model: activeModelID}
+	if client != nil {
+		capabilities := client.Capabilities()
+		payload.MaxContextWindow = capabilities.MaxContextWindow
+		payload.MaxOutputTokens = capabilities.MaxOutputTokens
+	}
+	return bridge.Emit(ipc.EventModelChanged, payload)
+}
+
+func emitSessionUpdated(bridge *ipc.Bridge, sessionID, title string) error {
+	return bridge.Emit(ipc.EventSessionUpdated, ipc.SessionUpdatedPayload{
+		SessionID: sessionID,
+		Title:     title,
+	})
+}
+
 func emitToolUseCapabilityNotice(
 	bridge *ipc.Bridge,
 	activeModelID string,
@@ -1061,7 +1095,7 @@ func handleSlashCommand(
 		}); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
-		if err := bridge.Emit(ipc.EventModelChanged, ipc.ModelChangedPayload{Model: activeModelID}); err != nil {
+		if err := emitModelChanged(bridge, activeModelID, *client); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		if err := emitTextResponse(bridge, fmt.Sprintf("Set model to %s", activeModelID)); err != nil {
@@ -1203,7 +1237,10 @@ func handleSlashCommand(
 		}); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
-		if err := bridge.Emit(ipc.EventModelChanged, ipc.ModelChangedPayload{Model: activeModelID}); err != nil {
+		if err := emitSessionUpdated(bridge, sessionID, restored.Metadata.Title); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := emitModelChanged(bridge, activeModelID, *client); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
@@ -1231,6 +1268,9 @@ func handleSlashCommand(
 			Tracker:   tracker,
 			Messages:  messages,
 		}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := emitSessionUpdated(bridge, sessionID, ""); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		if err := emitTextResponse(bridge, "Conversation cleared. New session started."); err != nil {
@@ -1593,6 +1633,11 @@ func persistSessionState(store *session.Store, params sessionStateParams) error 
 		totalCost = params.Tracker.Snapshot().TotalCostUSD
 	}
 
+	title := ""
+	if existing, err := store.LoadMetadata(params.SessionID); err == nil {
+		title = existing.Title
+	}
+
 	return store.SaveMetadata(session.Metadata{
 		SessionID:    params.SessionID,
 		CreatedAt:    params.CreatedAt,
@@ -1602,6 +1647,7 @@ func persistSessionState(store *session.Store, params sessionStateParams) error 
 		CWD:          params.CWD,
 		Branch:       params.Branch,
 		TotalCostUSD: totalCost,
+		Title:        title,
 	})
 }
 
