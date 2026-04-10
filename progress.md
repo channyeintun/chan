@@ -2,6 +2,9 @@
 
 ## 2026-04-10
 
+- Completed the remaining planned TUI polish by grouping consecutive exploratory tool calls into one transcript block, so repeated read/search/fetch/git inspection steps no longer flood the conversation.
+- Replaced Markdown diff fences for file write/edit results with a structured inline diff panel that shows file path, add/remove counts, and colored preview lines.
+- Finished the plan's Phase 4 and Phase 5 transcript work with sourcecode-inspired batching and more legible file mutation rendering, while keeping the existing event model and engine protocol stable.
 - Implemented Phase 4 groundwork by enriching file write/edit tool results with inline change metadata and short diff previews, then rendering those previews in the TUI transcript.
 - Implemented Phase 3 of `plan.md` by replacing generic tool transcript summaries with tool-aware renderers for bash, file operations, grep/glob, git, and web tools.
 - Kept the sourcecode-style inline transcript layout while making tool rows describe the operation more clearly across running, waiting, success, and failure states.

@@ -1,6 +1,7 @@
 import React, { type FC } from "react";
 import { Box, Text } from "ink";
 import type { UIToolCall } from "../hooks/useEvents.js";
+import FileDiffPreview from "./FileDiffPreview.js";
 import MarkdownText from "./MarkdownText.js";
 
 interface ToolProgressProps {
@@ -71,6 +72,8 @@ const ToolProgress: FC<ToolProgressProps> = ({ toolCall }) => {
 };
 
 export default ToolProgress;
+
+export { describeTool };
 
 function renderResponse(toolCall: UIToolCall) {
   if (toolCall.status === "waiting_permission") {
@@ -216,7 +219,7 @@ function renderSuccess(toolCall: UIToolCall) {
   switch (toolCall.name) {
     case "file_write":
     case "file_edit":
-      return <MarkdownText text={summarizeFileMutation(toolCall)} />;
+      return renderFileMutation(toolCall);
     case "file_read":
       return (
         <MarkdownText
@@ -319,6 +322,23 @@ function summarizeFileMutation(toolCall: UIToolCall): string {
   }
 
   return parts.join("\n\n");
+}
+
+function renderFileMutation(toolCall: UIToolCall) {
+  if (toolCall.preview || toolCall.insertions || toolCall.deletions) {
+    return (
+      <FileDiffPreview
+        filePath={
+          toolCall.filePath || summarizeInput(toolCall.name, toolCall.input)
+        }
+        preview={toolCall.preview}
+        insertions={toolCall.insertions}
+        deletions={toolCall.deletions}
+      />
+    );
+  }
+
+  return <MarkdownText text={summarizeFileMutation(toolCall)} />;
 }
 
 function summarizeFileRead(raw?: string, truncated?: boolean): string {

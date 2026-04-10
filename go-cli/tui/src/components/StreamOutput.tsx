@@ -6,6 +6,7 @@ import type {
   UIToolCall,
   UITranscriptEntry,
 } from "../hooks/useEvents.js";
+import GroupedToolCalls, { type ToolCallGroup } from "./GroupedToolCalls.js";
 import MarkdownText from "./MarkdownText.js";
 import ToolProgress from "./ToolProgress.js";
 
@@ -24,6 +25,11 @@ interface StreamOutputProps {
   isStreaming: boolean;
 }
 
+type TranscriptBlock =
+  | { kind: "message"; id: string }
+  | { kind: "tool_call"; id: string }
+  | { kind: "tool_group"; group: ToolCallGroup };
+
 const StreamOutput: FC<StreamOutputProps> = ({
   messages,
   toolCalls,
@@ -40,6 +46,10 @@ const StreamOutput: FC<StreamOutputProps> = ({
     () => new Map(toolCalls.map((toolCall) => [toolCall.id, toolCall])),
     [toolCalls],
   );
+  const transcriptBlocks = useMemo(
+    () => buildTranscriptBlocks(transcript, toolCallById),
+    [transcript, toolCallById],
+  );
 
   if (
     transcript.length === 0 &&
@@ -52,17 +62,21 @@ const StreamOutput: FC<StreamOutputProps> = ({
 
   return (
     <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-      {transcript.map((entry) => {
-        if (entry.kind === "tool_call") {
-          const toolCall = toolCallById.get(entry.id);
+      {transcriptBlocks.map((block) => {
+        if (block.kind === "tool_group") {
+          return <GroupedToolCalls key={block.group.id} group={block.group} />;
+        }
+
+        if (block.kind === "tool_call") {
+          const toolCall = toolCallById.get(block.id);
           if (!toolCall) {
             return null;
           }
 
-          return <ToolProgress key={entry.id} toolCall={toolCall} />;
+          return <ToolProgress key={block.id} toolCall={toolCall} />;
         }
 
-        const message = messageById.get(entry.id);
+        const message = messageById.get(block.id);
         if (!message) {
           return null;
         }
@@ -105,3 +119,95 @@ const StreamOutput: FC<StreamOutputProps> = ({
 };
 
 export default StreamOutput;
+
+function buildTranscriptBlocks(
+  transcript: UITranscriptEntry[],
+  toolCallById: Map<string, UIToolCall>,
+): TranscriptBlock[] {
+  const blocks: TranscriptBlock[] = [];
+
+  for (let index = 0; index < transcript.length; index += 1) {
+    const entry = transcript[index];
+    if (!entry) {
+      continue;
+    }
+
+    if (entry.kind !== "tool_call") {
+      blocks.push({ kind: "message", id: entry.id });
+      continue;
+    }
+
+    const run: UIToolCall[] = [];
+    let cursor = index;
+    while (
+      cursor < transcript.length &&
+      transcript[cursor]?.kind === "tool_call"
+    ) {
+      const toolCall = toolCallById.get(transcript[cursor]!.id);
+      if (toolCall) {
+        run.push(toolCall);
+      }
+      cursor += 1;
+    }
+
+    blocks.push(...buildToolBlocks(run));
+    index = cursor - 1;
+  }
+
+  return blocks;
+}
+
+function buildToolBlocks(toolCalls: UIToolCall[]): TranscriptBlock[] {
+  const blocks: TranscriptBlock[] = [];
+
+  for (let index = 0; index < toolCalls.length; index += 1) {
+    const toolCall = toolCalls[index];
+    const groupKind = toolGroupKind(toolCall);
+
+    if (groupKind !== "read_search") {
+      blocks.push({ kind: "tool_call", id: toolCall.id });
+      continue;
+    }
+
+    const grouped: UIToolCall[] = [toolCall];
+    let cursor = index + 1;
+    while (
+      cursor < toolCalls.length &&
+      toolGroupKind(toolCalls[cursor]!) === groupKind
+    ) {
+      grouped.push(toolCalls[cursor]!);
+      cursor += 1;
+    }
+
+    if (grouped.length >= 2) {
+      blocks.push({
+        kind: "tool_group",
+        group: {
+          id: `tool-group-${grouped[0]!.id}-${grouped[grouped.length - 1]!.id}`,
+          kind: "read_search",
+          toolCalls: grouped,
+        },
+      });
+      index = cursor - 1;
+      continue;
+    }
+
+    blocks.push({ kind: "tool_call", id: toolCall.id });
+  }
+
+  return blocks;
+}
+
+function toolGroupKind(toolCall: UIToolCall): ToolCallGroup["kind"] | null {
+  switch (toolCall.name) {
+    case "file_read":
+    case "grep":
+    case "glob":
+    case "web_search":
+    case "web_fetch":
+    case "git":
+      return "read_search";
+    default:
+      return null;
+  }
+}
