@@ -3,12 +3,12 @@ import { Box, Text } from "ink";
 import type { UIToolCall } from "../hooks/useEvents.js";
 import FileDiffPreview from "./FileDiffPreview.js";
 import MarkdownText from "./MarkdownText.js";
+import MessageRow from "./MessageRow.js";
 
 interface ToolProgressProps {
   toolCall: UIToolCall;
 }
 
-const STATUS_DOT = "●";
 const RESPONSE_PREFIX = "  ⎿  ";
 
 interface ToolDescriptor {
@@ -49,25 +49,18 @@ const ToolProgress: FC<ToolProgressProps> = ({ toolCall }) => {
   const response = renderResponse(toolCall);
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Box flexDirection="row">
-        <Box minWidth={2}>
-          <Text color={headerColor} dimColor={isDim}>
-            {STATUS_DOT}
-          </Text>
-        </Box>
-        <Text color={headerColor} dimColor={isDim}>
-          <Text bold>{descriptor.title}</Text>
-          {descriptor.summary ? ` (${descriptor.summary})` : ""}
-        </Text>
-      </Box>
+    <MessageRow markerColor={headerColor} markerDim={isDim}>
+      <Text color={headerColor} dimColor={isDim}>
+        <Text bold>{descriptor.title}</Text>
+        {descriptor.summary ? ` (${descriptor.summary})` : ""}
+      </Text>
       {response ? (
         <Box flexDirection="row">
           <Text dimColor>{RESPONSE_PREFIX}</Text>
           <Box flexGrow={1}>{response}</Box>
         </Box>
       ) : null}
-    </Box>
+    </MessageRow>
   );
 };
 

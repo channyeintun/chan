@@ -1,20 +1,16 @@
 import React, { type FC, useMemo } from "react";
-import { Box, Text } from "ink";
-import Spinner from "ink-spinner";
+import { Box } from "ink";
 import type {
   UIMessage,
   UIToolCall,
   UITranscriptEntry,
 } from "../hooks/useEvents.js";
 import GroupedToolCalls, { type ToolCallGroup } from "./GroupedToolCalls.js";
-import MarkdownText from "./MarkdownText.js";
 import ToolProgress from "./ToolProgress.js";
-
-function truncateThinking(text: string): string {
-  const lines = text.split("\n").filter((l) => l.trim().length > 0);
-  const tail = lines.slice(-4);
-  return tail.join("\n");
-}
+import AssistantTextMessage from "./messages/AssistantTextMessage.js";
+import AssistantThinkingMessage from "./messages/AssistantThinkingMessage.js";
+import StreamingAssistantMessage from "./messages/StreamingAssistantMessage.js";
+import UserTextMessage from "./messages/UserTextMessage.js";
 
 interface StreamOutputProps {
   messages: UIMessage[];
@@ -81,39 +77,25 @@ const StreamOutput: FC<StreamOutputProps> = ({
           return null;
         }
 
-        return (
-          <Box key={message.id} flexDirection="column" marginBottom={1}>
-            <Text color={message.role === "user" ? "cyan" : "green"} bold>
-              {message.role === "user" ? "You" : "Assistant"}
-            </Text>
-            {message.role === "assistant" ? (
-              <MarkdownText text={message.text} />
-            ) : (
-              <Text>{message.text}</Text>
-            )}
-          </Box>
+        return message.role === "assistant" ? (
+          <AssistantTextMessage key={message.id} message={message} />
+        ) : (
+          <UserTextMessage key={message.id} message={message} />
         );
       })}
 
-      {isStreaming && (
-        <Box flexDirection="column">
-          <Text color="green" bold>
-            Assistant
-          </Text>
-          <Text color="gray">
-            <Spinner type="dots" />{" "}
-            {liveText
-              ? "Responding"
-              : liveThinkingText
-                ? "Thinking"
-                : "Working"}
-          </Text>
-          {liveThinkingText && !liveText && (
-            <Text color="gray">{truncateThinking(liveThinkingText)}</Text>
-          )}
-          {liveText && <MarkdownText text={liveText} streaming />}
-        </Box>
-      )}
+      {isStreaming && liveThinkingText && !liveText ? (
+        <AssistantThinkingMessage text={liveThinkingText} />
+      ) : null}
+
+      {isStreaming && (Boolean(liveText) || !liveThinkingText) ? (
+        <StreamingAssistantMessage
+          text={liveText || undefined}
+          statusLabel={
+            liveText ? "Responding" : liveThinkingText ? "Thinking" : "Working"
+          }
+        />
+      ) : null}
     </Box>
   );
 };

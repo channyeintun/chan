@@ -2,6 +2,7 @@ import React, { type FC } from "react";
 import { Box, Text } from "ink";
 import type { UIToolCall } from "../hooks/useEvents.js";
 import { describeTool } from "./ToolProgress.js";
+import MessageRow from "./MessageRow.js";
 
 export interface ToolCallGroup {
   id: string;
@@ -13,7 +14,6 @@ interface GroupedToolCallsProps {
   group: ToolCallGroup;
 }
 
-const STATUS_DOT = "●";
 const RESPONSE_PREFIX = "  ⎿  ";
 
 const GroupedToolCalls: FC<GroupedToolCallsProps> = ({ group }) => {
@@ -26,18 +26,11 @@ const GroupedToolCalls: FC<GroupedToolCallsProps> = ({ group }) => {
   const response = renderReadSearchResponse(group.toolCalls);
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Box flexDirection="row">
-        <Box minWidth={2}>
-          <Text color={headerColor} dimColor={isDim}>
-            {STATUS_DOT}
-          </Text>
-        </Box>
-        <Text color={headerColor} dimColor={isDim}>
-          <Text bold>Explored Workspace</Text>
-          {summary ? ` (${summary})` : ""}
-        </Text>
-      </Box>
+    <MessageRow markerColor={headerColor} markerDim={isDim}>
+      <Text color={headerColor} dimColor={isDim}>
+        <Text bold>Explored Workspace</Text>
+        {summary ? ` (${summary})` : ""}
+      </Text>
       <Box flexDirection="column">
         {response.map((line, index) => (
           <Box key={`${group.id}-${index}`} flexDirection="row">
@@ -48,7 +41,7 @@ const GroupedToolCalls: FC<GroupedToolCallsProps> = ({ group }) => {
           </Box>
         ))}
       </Box>
-    </Box>
+    </MessageRow>
   );
 };
 
