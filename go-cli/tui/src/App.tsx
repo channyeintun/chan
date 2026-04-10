@@ -9,6 +9,7 @@ import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
 import PermissionPrompt from "./components/PermissionPrompt.js";
 import ToolProgress from "./components/ToolProgress.js";
+import { usePromptHistory } from "./hooks/usePromptHistory.js";
 
 interface AppProps {
   enginePath: string;
@@ -18,6 +19,7 @@ interface AppProps {
 
 const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const engine = useEngine(enginePath, { model, mode });
+  const prompt = usePromptHistory();
   const {
     uiState,
     handleEvent,
@@ -33,8 +35,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const recentArtifacts = uiState.artifacts
     .filter(
       (artifact) =>
-        artifact.kind !== "implementation-plan" &&
-        artifact.kind !== "tool-log",
+        artifact.kind !== "implementation-plan" && artifact.kind !== "tool-log",
     )
     .slice(0, 2);
 
@@ -44,7 +45,12 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     handleEvent(engine.lastEvent);
   }, [engine.eventVersion, engine.lastEvent, handleEvent]);
 
-  const handleSubmit = (text: string) => {
+  const handleSubmit = () => {
+    const text = prompt.submit();
+    if (!text) {
+      return;
+    }
+
     appendUserMessage(text);
     clearStream();
     beginAssistantTurn();
@@ -134,7 +140,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         )}
 
         {uiState.activeTool && (
-          <ToolProgress toolName={uiState.activeTool.name} toolInput={uiState.activeTool.input} />
+          <ToolProgress
+            toolName={uiState.activeTool.name}
+            toolInput={uiState.activeTool.input}
+          />
         )}
       </Box>
 
@@ -147,10 +156,18 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         />
       ) : (
         <Input
+          value={prompt.value}
+          onChange={prompt.setValue}
           onSubmit={handleSubmit}
+          onHistoryUp={prompt.navigateUp}
+          onHistoryDown={prompt.navigateDown}
           onModeToggle={engine.sendModeToggle}
           onCancel={engine.sendCancel}
-          disabled={!uiState.ready || !!engine.error || uiState.pendingPermission !== null}
+          disabled={
+            !uiState.ready ||
+            !!engine.error ||
+            uiState.pendingPermission !== null
+          }
         />
       )}
     </Box>

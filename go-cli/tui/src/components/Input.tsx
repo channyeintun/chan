@@ -1,16 +1,30 @@
-import React, { useState, type FC } from "react";
+import React, { type FC } from "react";
 import { Box, Text, useInput } from "ink";
 
 interface InputProps {
-  onSubmit: (text: string) => void;
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onHistoryUp: () => void;
+  onHistoryDown: () => void;
   onModeToggle: () => void;
   onCancel: () => void;
   disabled?: boolean;
 }
 
-const Input: FC<InputProps> = ({ onSubmit, onModeToggle, onCancel, disabled }) => {
-  const [value, setValue] = useState("");
+const INPUT_HINT = "Enter send | Up/Down history | Tab mode | Esc cancel";
+const DISABLED_HINT = "Engine busy | Esc cancel";
 
+const Input: FC<InputProps> = ({
+  value,
+  onChange,
+  onSubmit,
+  onHistoryUp,
+  onHistoryDown,
+  onModeToggle,
+  onCancel,
+  disabled,
+}) => {
   useInput((input, key) => {
     if (key.escape) {
       onCancel();
@@ -22,27 +36,46 @@ const Input: FC<InputProps> = ({ onSubmit, onModeToggle, onCancel, disabled }) =
       onModeToggle();
       return;
     }
+    if (key.upArrow) {
+      onHistoryUp();
+      return;
+    }
+    if (key.downArrow) {
+      onHistoryDown();
+      return;
+    }
     if (key.return) {
-      if (value.trim()) {
-        onSubmit(value.trim());
-        setValue("");
-      }
+      onSubmit();
       return;
     }
     if (key.backspace || key.delete) {
-      setValue((v) => v.slice(0, -1));
+      onChange(value.slice(0, -1));
       return;
     }
     if (input) {
-      setValue((v) => v + input);
+      onChange(value + input);
     }
   });
 
+  const showPlaceholder = value.length === 0;
+  const hint = disabled ? DISABLED_HINT : INPUT_HINT;
+
   return (
-    <Box>
-      <Text color="cyan" bold>{"❯ "}</Text>
-      <Text>{value}</Text>
-      <Text color="gray">{"█"}</Text>
+    <Box flexDirection="column">
+      <Box>
+        <Text color="cyan" bold>
+          {"❯ "}
+        </Text>
+        {showPlaceholder ? (
+          <Text color="gray">Ask go-cli to inspect, plan, or edit code</Text>
+        ) : (
+          <Text>{value}</Text>
+        )}
+        <Text color="gray">{"█"}</Text>
+      </Box>
+      <Box paddingLeft={2}>
+        <Text dimColor>{hint}</Text>
+      </Box>
     </Box>
   );
 };
