@@ -2,6 +2,7 @@ import React, { type FC } from "react";
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
 import type { UIMessage } from "../hooks/useEvents.js";
+import MarkdownText from "./MarkdownText.js";
 
 interface StreamOutputProps {
   messages: UIMessage[];
@@ -27,7 +28,11 @@ const StreamOutput: FC<StreamOutputProps> = ({
           <Text color={message.role === "user" ? "cyan" : "green"} bold>
             {message.role === "user" ? "You" : "Assistant"}
           </Text>
-          <Text>{message.text}</Text>
+          {message.role === "assistant" ? (
+            <MarkdownText text={message.text} />
+          ) : (
+            <Text>{message.text}</Text>
+          )}
         </Box>
       ))}
 
@@ -45,7 +50,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
                 : "Working"}
           </Text>
           {liveThinkingText && !liveText && <Text color="gray">{liveThinkingText}</Text>}
-          {liveText && <Text>{liveText}</Text>}
+          {liveText && <MarkdownText text={liveText} />}
         </Box>
       )}
     </Box>
