@@ -10,6 +10,8 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 curl -fsSL https://raw.githubusercontent.com/channyeintun/go-code/main/go-cli/install.sh | sh
 ```
 
+This requires published GitHub release assets for your platform. If no release has been published yet, the installer will return `404`.
+
 The installer chooses a writable install directory automatically:
 
 - `/usr/local/bin` if it is writable
@@ -61,6 +63,17 @@ chmod +x "$HOME/.local/bin/gocode" "$HOME/.local/bin/gocode-engine"
 Then make sure `~/.local/bin` is on your PATH:
 
 ```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+If you are working from a local clone and want to install the current build directly, use the built release directory:
+
+```bash
+cd go-cli/tui
+make release-local
+mkdir -p "$HOME/.local/bin"
+cp release/gocode release/gocode-engine "$HOME/.local/bin/"
+chmod +x "$HOME/.local/bin/gocode" "$HOME/.local/bin/gocode-engine"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 

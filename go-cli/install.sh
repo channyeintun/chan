@@ -55,7 +55,22 @@ echo "Downloading ${LATEST_URL}..."
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-curl -fsSL "$LATEST_URL" -o "$TMPDIR/$ARCHIVE"
+if ! curl -fsSL "$LATEST_URL" -o "$TMPDIR/$ARCHIVE"; then
+  echo ""
+  echo "Install failed: release asset not found for ${ARCHIVE}."
+  echo ""
+  echo "This usually means GitHub release assets have not been published yet."
+  echo ""
+  echo "If you are the maintainer, publish a GitHub release that includes:"
+  echo "  ${ARCHIVE}"
+  echo ""
+  echo "If you already have a local build, install manually instead:"
+  echo "  mkdir -p \"\$HOME/.local/bin\""
+  echo "  cp gocode gocode-engine \"\$HOME/.local/bin/\""
+  echo "  chmod +x \"\$HOME/.local/bin/gocode\" \"\$HOME/.local/bin/gocode-engine\""
+  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+  exit 1
+fi
 tar -xzf "$TMPDIR/$ARCHIVE" -C "$TMPDIR"
 
 # Install binaries
