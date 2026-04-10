@@ -4,15 +4,15 @@ package hooks
 type HookType string
 
 const (
-	HookSessionStart     HookType = "session_start"
-	HookSessionEnd       HookType = "session_end"
-	HookPreToolUse       HookType = "pre_tool_use"
-	HookPostToolUse      HookType = "post_tool_use"
+	HookSessionStart      HookType = "session_start"
+	HookSessionEnd        HookType = "session_end"
+	HookPreToolUse        HookType = "pre_tool_use"
+	HookPostToolUse       HookType = "post_tool_use"
 	HookPermissionRequest HookType = "permission_request"
-	HookPreCompact       HookType = "pre_compact"
-	HookPostCompact      HookType = "post_compact"
-	HookStop             HookType = "stop"
-	HookStopFailure      HookType = "stop_failure"
+	HookPreCompact        HookType = "pre_compact"
+	HookPostCompact       HookType = "post_compact"
+	HookStop              HookType = "stop"
+	HookStopFailure       HookType = "stop_failure"
 )
 
 // Payload is the data passed to a hook.
