@@ -277,12 +277,14 @@ func (t *MultiReplaceFileContentTool) Execute(ctx context.Context, input ToolInp
 	}
 
 	preview, insertions, deletions := buildFileDiffPreview(normalizedOriginal, strings.ReplaceAll(updatedContent, "\r\n", "\n"))
+	diagnostics := runPostEditDiagnostics(ctx, []string{targetFile})
 	return ToolOutput{
-		Output:     fmt.Sprintf("Edited file successfully: %s (%d replacement chunk%s)", targetFile, len(sortedChunks), pluralSuffix(len(sortedChunks))),
-		FilePath:   targetFile,
-		Preview:    preview,
-		Insertions: insertions,
-		Deletions:  deletions,
+		Output:      fmt.Sprintf("Edited file successfully: %s (%d replacement chunk%s)", targetFile, len(sortedChunks), pluralSuffix(len(sortedChunks))),
+		FilePath:    targetFile,
+		Preview:     preview,
+		Insertions:  insertions,
+		Deletions:   deletions,
+		Diagnostics: diagnostics,
 	}, nil
 }
 

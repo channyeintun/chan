@@ -32,17 +32,18 @@ type ToolInput struct {
 
 // ToolOutput holds a tool's result.
 type ToolOutput struct {
-	Output     string
-	IsError    bool
-	Truncated  bool
-	SpillPath  string // non-empty if result was spilled to disk
-	FilePath   string
-	Preview    string
-	Insertions int
-	Deletions  int
-	ErrorKind  string
-	ErrorHint  string
-	Artifacts  []ArtifactMutation
+	Output      string
+	IsError     bool
+	Truncated   bool
+	SpillPath   string // non-empty if result was spilled to disk
+	FilePath    string
+	Preview     string
+	Insertions  int
+	Deletions   int
+	Diagnostics string
+	ErrorKind   string
+	ErrorHint   string
+	Artifacts   []ArtifactMutation
 }
 
 // ArtifactMutation describes an artifact created or updated during tool execution.

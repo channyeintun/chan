@@ -1038,17 +1038,18 @@ func executeToolCalls(
 				}
 			}
 			if err := bridge.Emit(ipc.EventToolResult, ipc.ToolResultPayload{
-				ToolID:     call.ID,
-				Output:     output,
-				Truncated:  truncated || spillPath != "",
-				Name:       call.Name,
-				Input:      call.Input,
-				FilePath:   result.Output.FilePath,
-				Preview:    result.Output.Preview,
-				Insertions: result.Output.Insertions,
-				Deletions:  result.Output.Deletions,
-				ErrorKind:  result.Output.ErrorKind,
-				ErrorHint:  result.Output.ErrorHint,
+				ToolID:      call.ID,
+				Output:      output,
+				Truncated:   truncated || spillPath != "",
+				Name:        call.Name,
+				Input:       call.Input,
+				FilePath:    result.Output.FilePath,
+				Preview:     result.Output.Preview,
+				Insertions:  result.Output.Insertions,
+				Deletions:   result.Output.Deletions,
+				Diagnostics: result.Output.Diagnostics,
+				ErrorKind:   result.Output.ErrorKind,
+				ErrorHint:   result.Output.ErrorHint,
 			}); err != nil {
 				return nil, err
 			}

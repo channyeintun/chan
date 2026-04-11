@@ -92,6 +92,7 @@ export interface ToolResultPayload {
   preview?: string;
   insertions?: number;
   deletions?: number;
+  diagnostics?: string;
   error_kind?: string;
   error_hint?: string;
 }

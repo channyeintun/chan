@@ -229,6 +229,11 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, input ToolInput) (ToolOutp
 
 	combinedPreview := buildApplyPatchPreview(changes)
 	output := renderApplyPatchSummary(changes, totalInsertions, totalDeletions)
+	changedPaths := make([]string, 0, len(changes))
+	for _, change := range changes {
+		changedPaths = append(changedPaths, change.path)
+	}
+	diagnostics := runPostEditDiagnostics(ctx, changedPaths)
 	primaryPath := ""
 	if len(changes) == 1 {
 		primaryPath = changes[0].path
@@ -237,11 +242,12 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, input ToolInput) (ToolOutp
 	}
 
 	return ToolOutput{
-		Output:     output,
-		FilePath:   primaryPath,
-		Preview:    combinedPreview,
-		Insertions: totalInsertions,
-		Deletions:  totalDeletions,
+		Output:      output,
+		FilePath:    primaryPath,
+		Preview:     combinedPreview,
+		Insertions:  totalInsertions,
+		Deletions:   totalDeletions,
+		Diagnostics: diagnostics,
 	}, nil
 }
 

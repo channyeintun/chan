@@ -120,12 +120,14 @@ func (t *FileWriteTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 	}
 
 	preview, insertions, deletions := buildFileDiffPreview(oldContent, content)
+	diagnostics := runPostEditDiagnostics(ctx, []string{filePath})
 
 	return ToolOutput{
-		Output:     fmt.Sprintf("File %s successfully: %s", writeType, filePath),
-		FilePath:   filePath,
-		Preview:    preview,
-		Insertions: insertions,
-		Deletions:  deletions,
+		Output:      fmt.Sprintf("File %s successfully: %s", writeType, filePath),
+		FilePath:    filePath,
+		Preview:     preview,
+		Insertions:  insertions,
+		Deletions:   deletions,
+		Diagnostics: diagnostics,
 	}, nil
 }

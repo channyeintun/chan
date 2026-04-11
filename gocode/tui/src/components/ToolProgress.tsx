@@ -485,20 +485,37 @@ function summarizeFileMutation(toolCall: UIToolCall): string {
 }
 
 function renderFileMutation(toolCall: UIToolCall) {
-  if (toolCall.preview || toolCall.insertions || toolCall.deletions) {
+  if (
+    toolCall.preview ||
+    toolCall.insertions ||
+    toolCall.deletions ||
+    toolCall.diagnostics
+  ) {
     return (
-      <FileDiffPreview
-        filePath={
-          toolCall.filePath || summarizeInput(toolCall.name, toolCall.input)
-        }
-        preview={toolCall.preview}
-        insertions={toolCall.insertions}
-        deletions={toolCall.deletions}
-      />
+      <Box flexDirection="column">
+        <FileDiffPreview
+          filePath={
+            toolCall.filePath || summarizeInput(toolCall.name, toolCall.input)
+          }
+          preview={toolCall.preview}
+          insertions={toolCall.insertions}
+          deletions={toolCall.deletions}
+        />
+        {toolCall.diagnostics ? (
+          <MarkdownText text={summarizeDiagnostics(toolCall.diagnostics)} />
+        ) : null}
+      </Box>
     );
   }
 
   return <MarkdownText text={summarizeFileMutation(toolCall)} />;
+}
+
+function summarizeDiagnostics(raw?: string): string {
+  if (!raw) {
+    return "";
+  }
+  return [`Diagnostics after edit:`, "", raw].join("\n");
 }
 
 function summarizeFileRead(raw?: string, truncated?: boolean): string {

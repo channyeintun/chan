@@ -101,17 +101,18 @@ type ToolProgressPayload struct {
 }
 
 type ToolResultPayload struct {
-	ToolID     string `json:"tool_id"`
-	Output     string `json:"output"`
-	Truncated  bool   `json:"truncated"`
-	Name       string `json:"name,omitempty"`
-	Input      string `json:"input,omitempty"`
-	FilePath   string `json:"file_path,omitempty"`
-	Preview    string `json:"preview,omitempty"`
-	Insertions int    `json:"insertions,omitempty"`
-	Deletions  int    `json:"deletions,omitempty"`
-	ErrorKind  string `json:"error_kind,omitempty"`
-	ErrorHint  string `json:"error_hint,omitempty"`
+	ToolID      string `json:"tool_id"`
+	Output      string `json:"output"`
+	Truncated   bool   `json:"truncated"`
+	Name        string `json:"name,omitempty"`
+	Input       string `json:"input,omitempty"`
+	FilePath    string `json:"file_path,omitempty"`
+	Preview     string `json:"preview,omitempty"`
+	Insertions  int    `json:"insertions,omitempty"`
+	Deletions   int    `json:"deletions,omitempty"`
+	Diagnostics string `json:"diagnostics,omitempty"`
+	ErrorKind   string `json:"error_kind,omitempty"`
+	ErrorHint   string `json:"error_hint,omitempty"`
 }
 
 type ToolErrorPayload struct {

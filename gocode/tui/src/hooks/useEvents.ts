@@ -103,6 +103,7 @@ export interface UIToolCall {
   preview?: string;
   insertions?: number;
   deletions?: number;
+  diagnostics?: string;
   errorKind?: string;
   errorHint?: string;
 }
@@ -531,6 +532,7 @@ export function useEvents(initialModel: string, initialMode: string) {
               preview: p.preview,
               insertions: p.insertions,
               deletions: p.deletions,
+              diagnostics: p.diagnostics,
               errorKind: p.error_kind,
               errorHint: p.error_hint,
             }),

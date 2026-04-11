@@ -165,13 +165,15 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	}
 
 	preview, insertions, deletions := buildFileDiffPreview(content, strings.ReplaceAll(updatedContent, "\r\n", "\n"))
+	diagnostics := runPostEditDiagnostics(ctx, []string{filePath})
 
 	return ToolOutput{
-		Output:     fmt.Sprintf("Edited file successfully: %s (%d replacement%s)", filePath, replacements, pluralSuffix(replacements)),
-		FilePath:   filePath,
-		Preview:    preview,
-		Insertions: insertions,
-		Deletions:  deletions,
+		Output:      fmt.Sprintf("Edited file successfully: %s (%d replacement%s)", filePath, replacements, pluralSuffix(replacements)),
+		FilePath:    filePath,
+		Preview:     preview,
+		Insertions:  insertions,
+		Deletions:   deletions,
+		Diagnostics: diagnostics,
 	}, nil
 }
 

@@ -113,11 +113,13 @@ func (t *CreateFileTool) Execute(ctx context.Context, input ToolInput) (ToolOutp
 	}
 
 	preview, insertions, deletions := buildFileDiffPreview("", content)
+	diagnostics := runPostEditDiagnostics(ctx, []string{filePath})
 	return ToolOutput{
-		Output:     fmt.Sprintf("File created successfully: %s", filePath),
-		FilePath:   filePath,
-		Preview:    preview,
-		Insertions: insertions,
-		Deletions:  deletions,
+		Output:      fmt.Sprintf("File created successfully: %s", filePath),
+		FilePath:    filePath,
+		Preview:     preview,
+		Insertions:  insertions,
+		Deletions:   deletions,
+		Diagnostics: diagnostics,
 	}, nil
 }

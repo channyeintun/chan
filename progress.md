@@ -15,7 +15,7 @@
 | ---------------------------------------- | ----------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Enhancement planning baseline            | completed   | S     | 2026-04-12 created a new execution baseline from `enhancement.md` focused on file-tool robustness and subagent orchestration.                           |
 | Phase 1 file semantics and safety        | completed   | L     | Create, overwrite, and edit intent are now split; read hardening, high-risk file approvals, stable diff previews, and file-history coverage are landed. |
-| Phase 2 edit engine hardening            | in progress | L     | `apply_patch` is landing with the structured edit-failure model; post-edit diagnostics are still pending.                                               |
+| Phase 2 edit engine hardening            | completed   | L     | The edit ladder, structured failures, patch-grade edits, and post-edit diagnostics are now surfaced across file-mutating tools.                        |
 | Phase 3 subagent lineage and metadata    | not started | M     | Stable invocation ids, structured child metadata, and stronger TUI attribution are planned but not started.                                             |
 | Phase 4 child lifecycle and policy hooks | not started | M     | Shared loop alignment plus subagent start/stop hooks and block-stop reasons are planned but not started.                                                |
 
@@ -51,7 +51,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 
 ### Phase 2: Edit Engine Hardening
 
-**Status:** in progress
+**Status:** completed
 
 **Landed**
 
@@ -61,17 +61,18 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Added `apply_patch` as a dedicated patch-grade edit tool for structured multi-hunk and multi-file text edits.
 - Permission summaries, risk checks, compaction rules, subagent allowlists, runtime tool guidance, and TUI rendering now recognize `apply_patch` as part of the file-edit ladder.
 - The runtime prompt, tool descriptions, recovery hints, and README docs now define an explicit edit ladder across `file_edit`, `multi_replace_file_content`, `apply_patch`, `file_write`, and `create_file`.
+- File-mutating tools now run post-edit diagnostics when an obvious local checker is available and surface the results directly in the file-mutation UI.
 
 **Remaining to Finish**
 
-- Surface post-edit diagnostics when available.
+- None.
 
 **Exit Criteria Check**
 
 - [x] `gocode` has a dedicated patch-grade edit path for larger structural changes.
 - [x] File-edit failures are machine-distinguishable and actionable.
 - [x] The edit ladder is explicit enough that structural edits do not overuse exact replacement tools.
-- [ ] Post-edit diagnostics catch broken edits earlier when the environment can provide them.
+- [x] Post-edit diagnostics catch broken edits earlier when the environment can provide them.
 
 ### Phase 3: Subagent Lineage and Metadata
 
@@ -130,6 +131,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Completed: started Phase 2 by standardizing edit failure kinds and recovery hints across `file_edit` and `multi_replace_file_content`, and by surfacing those structured failures in the TUI.
 - Completed: added a dedicated `apply_patch` tool for structured multi-file edits and wired it through permission summaries, risk assessment, compaction, runtime tool guidance, and TUI file-mutation rendering.
 - Completed: defined the runtime edit ladder explicitly in the system prompt, tool descriptions, recovery hints, and README guidance so structural edits have a clear path to `apply_patch`.
+- Completed: finished Phase 2 by adding post-edit diagnostics for file-mutating tools and surfacing those diagnostics in the file-mutation UI when local Go or TypeScript checkers are available.
 
 ## Next Planning Baseline
 
