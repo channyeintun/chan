@@ -15,7 +15,7 @@
 | ----------------------------------- | --------- | ----- | ------------------------------------------------------------------------------------------ |
 | Planning refresh                    | completed | S     | 2026-04-12 explanation-driven roadmap replaced stale parity-era planning docs.             |
 | Phase 1 runtime measurement         | completed | S     | Checkpoint logging, artifact ownership, aggregate tool-result budgeting, and continuation stop telemetry are in place. |
-| Phase 2 tool depth                  | in progress | L   | File-history tools, semantic validation, input-aware bash concurrency, Think, symbol-aware navigation, repository overview tooling, and background command stop control landed; follow-up tooling remains. |
+| Phase 2 tool depth                  | in progress | L   | File-history tools, semantic validation, input-aware bash concurrency, Think, symbol-aware navigation, repository overview tooling, and fuller background command lifecycle tools landed; follow-up tooling remains. |
 | Phase 3 subagents                   | planned   | XL    | Parent-child delegation, fresh context model, permission isolation, sidechain transcripts. |
 | Phase 4 memory                      | planned   | L     | Four-type taxonomy, MEMORY.md index, async recall, staleness warnings.                    |
 | Phase 5 compaction and cache        | planned   | M     | Output slot reservation, prompt memoization, provider-gated cache stability.               |
@@ -53,6 +53,8 @@
 - Completed: registered `project_overview` in the runtime prompt and README so the model can gather a repository snapshot without stitching together repeated `list_dir`, `glob`, and `grep` calls.
 - Completed: added an execute-gated `stop_command` tool so the agent can explicitly terminate a background shell command and retrieve its final unread output and exit status.
 - Completed: extended the background command manager with a dedicated stop path and registered `stop_command` in the runtime prompt and README to close the background-command lifecycle loop.
+- Completed: added a read-only `list_commands` tool so the agent can enumerate active or recently retained background commands without guessing command ids.
+- Completed: extended the background command manager with stable command summaries and registered `list_commands` in the runtime prompt and README to complete inspection of the background command lifecycle.
 
 ## Next Planning Baseline
 

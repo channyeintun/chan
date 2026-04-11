@@ -36,6 +36,7 @@ func NewRegistry() *Registry {
 	r.Register(NewWebSearchTool())
 	r.Register(NewWebFetchTool())
 	r.Register(NewGitTool())
+	r.Register(NewListCommandsTool())
 	r.Register(NewCommandStatusTool())
 	r.Register(NewSendCommandInputTool())
 	r.Register(NewStopCommandTool())

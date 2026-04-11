@@ -59,6 +59,25 @@ var (
 	backgroundCounter    uint64
 )
 
+func listBackgroundCommands(includeCompleted bool) []backgroundCommandSummary {
+	backgroundCommandsMu.RLock()
+	commands := make([]*backgroundCommand, 0, len(backgroundCommands))
+	for _, bg := range backgroundCommands {
+		commands = append(commands, bg)
+	}
+	backgroundCommandsMu.RUnlock()
+
+	summaries := make([]backgroundCommandSummary, 0, len(commands))
+	for _, bg := range commands {
+		summary := bg.summary()
+		if !includeCompleted && !summary.Running {
+			continue
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries
+}
+
 func startBackgroundShellCommand(command, cwd string) (*backgroundCommand, error) {
 	id := fmt.Sprintf("cmd_%d", atomic.AddUint64(&backgroundCounter, 1))
 	cmd := exec.Command("/bin/zsh", "-lc", command)
@@ -299,6 +318,26 @@ func (bg *backgroundCommand) snapshotDelta() backgroundCommandResult {
 		Running:   running,
 		Output:    bg.output.ReadDelta(),
 		Error:     errText,
+		ExitCode:  exitCode,
+	}
+}
+
+func (bg *backgroundCommand) summary() backgroundCommandSummary {
+	bg.mu.Lock()
+	defer bg.mu.Unlock()
+
+	var exitCode *int
+	if bg.exitCode != nil {
+		copied := *bg.exitCode
+		exitCode = &copied
+	}
+
+	return backgroundCommandSummary{
+		CommandID: bg.id,
+		Command:   bg.command,
+		Cwd:       bg.cwd,
+		Running:   bg.running,
+		Error:     bg.errText,
 		ExitCode:  exitCode,
 	}
 }
