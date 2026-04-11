@@ -120,6 +120,10 @@ func (t *ReadFileAliasTool) InputSchema() any {
 				"type":        "string",
 				"description": "Compatibility alias for the file path.",
 			},
+			"file_path": map[string]any{
+				"type":        "string",
+				"description": "Snake_case compatibility alias for the file path.",
+			},
 			"startLine": map[string]any{
 				"type":        "integer",
 				"description": "Optional 1-based start line.",
@@ -131,7 +135,11 @@ func (t *ReadFileAliasTool) InputSchema() any {
 				"minimum":     1,
 			},
 		},
-		"required": []string{"path"},
+		"anyOf": []map[string]any{
+			{"required": []string{"path"}},
+			{"required": []string{"filePath"}},
+			{"required": []string{"file_path"}},
+		},
 	}
 }
 
@@ -146,7 +154,7 @@ func (t *ReadFileAliasTool) IsConcurrencySafe(input ToolInput) bool {
 func (t *ReadFileAliasTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
 	filePath, ok := firstStringParam(input.Params, "path", "filePath", "file_path")
 	if !ok || strings.TrimSpace(filePath) == "" {
-		return ToolOutput{}, fmt.Errorf("read_file requires path")
+		return ToolOutput{}, fmt.Errorf("read_file requires path, filePath, or file_path")
 	}
 
 	params := map[string]any{
