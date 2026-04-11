@@ -162,6 +162,7 @@ The agent has access to:
 
 | Tool                           | Description                                                   |
 | ------------------------------ | ------------------------------------------------------------- |
+| **agent**                      | Spawn a bounded read-only explore subagent in a fresh context |
 | **bash**                       | Execute shell commands                                        |
 | **think**                      | Record scratchpad reasoning with no side effects              |
 | **list_dir**                   | List directory contents as structured JSON                    |

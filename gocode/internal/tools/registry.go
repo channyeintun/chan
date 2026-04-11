@@ -17,10 +17,7 @@ type Registry struct {
 
 // NewRegistry creates a registry preloaded with built-in tools.
 func NewRegistry() *Registry {
-	r := &Registry{
-		tools:   make(map[string]Tool),
-		aliases: make(map[string]Tool),
-	}
+	r := NewEmptyRegistry()
 
 	r.Register(NewBashTool())
 	r.Register(NewThinkTool())
@@ -51,6 +48,14 @@ func NewRegistry() *Registry {
 	r.RegisterAlias(NewReadFileAliasTool())
 
 	return r
+}
+
+// NewEmptyRegistry creates an empty registry without built-in tools.
+func NewEmptyRegistry() *Registry {
+	return &Registry{
+		tools:   make(map[string]Tool),
+		aliases: make(map[string]Tool),
+	}
 }
 
 // Register adds a tool to the registry.
@@ -106,4 +111,23 @@ func (r *Registry) Definitions() []api.ToolDefinition {
 		})
 	}
 	return defs
+}
+
+// CloneFiltered returns a new registry containing only the named tools.
+func (r *Registry) CloneFiltered(names []string) *Registry {
+	allowed := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		allowed[name] = struct{}{}
+	}
+
+	clone := NewEmptyRegistry()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for name, tool := range r.tools {
+		if _, ok := allowed[name]; ok {
+			clone.tools[name] = tool
+		}
+	}
+	clone.FileHistory = r.FileHistory
+	return clone
 }

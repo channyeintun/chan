@@ -113,3 +113,36 @@ func (t *Tracker) Snapshot() TrackerSnapshot {
 	}
 	return snap
 }
+
+// MergeSnapshot adds the values from another snapshot into this tracker.
+func (t *Tracker) MergeSnapshot(snapshot TrackerSnapshot) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.TotalCostUSD += snapshot.TotalCostUSD
+	t.TotalInputTokens += snapshot.TotalInputTokens
+	t.TotalOutputTokens += snapshot.TotalOutputTokens
+	t.TotalCacheReadTokens += snapshot.TotalCacheReadTokens
+	t.TotalCacheCreationTokens += snapshot.TotalCacheCreationTokens
+	t.TotalAPIDuration += snapshot.TotalAPIDuration
+	t.TotalToolDuration += snapshot.TotalToolDuration
+	t.TotalLinesAdded += snapshot.TotalLinesAdded
+	t.TotalLinesRemoved += snapshot.TotalLinesRemoved
+
+	for name, entry := range snapshot.ModelUsage {
+		current, ok := t.ModelUsage[name]
+		if !ok {
+			copied := *entry
+			t.ModelUsage[name] = &copied
+			continue
+		}
+		current.InputTokens += entry.InputTokens
+		current.OutputTokens += entry.OutputTokens
+		current.CacheReadTokens += entry.CacheReadTokens
+		current.CostUSD += entry.CostUSD
+		current.CallCount += entry.CallCount
+		if entry.ContextWindow > current.ContextWindow {
+			current.ContextWindow = entry.ContextWindow
+		}
+	}
+}
