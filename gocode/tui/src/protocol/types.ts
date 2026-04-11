@@ -12,6 +12,7 @@ export type EventType =
   | "model_changed"
   | "context_window"
   | "cost_update"
+  | "turn_timing"
   | "rate_limit_update"
   | "compact_start"
   | "compact_end"
@@ -135,6 +136,11 @@ export interface ModelChangedPayload {
 
 export interface ContextWindowPayload {
   current_usage: number;
+}
+
+export interface TurnTimingPayload {
+  checkpoint: string;
+  elapsed_ms: number;
 }
 
 export interface CostUpdatePayload {

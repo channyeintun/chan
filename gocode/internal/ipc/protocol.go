@@ -31,6 +31,7 @@ const (
 	EventContextWindow   EventType = "context_window"
 	EventCostUpdate      EventType = "cost_update"
 	EventRateLimitUpdate EventType = "rate_limit_update"
+	EventTurnTiming      EventType = "turn_timing"
 	EventCompactStart    EventType = "compact_start"
 	EventCompactEnd      EventType = "compact_end"
 
@@ -141,6 +142,11 @@ type ModelChangedPayload struct {
 
 type ContextWindowPayload struct {
 	CurrentUsage int `json:"current_usage"`
+}
+
+type TurnTimingPayload struct {
+	Checkpoint string `json:"checkpoint"`
+	ElapsedMS  int64  `json:"elapsed_ms"`
 }
 
 type CostUpdatePayload struct {

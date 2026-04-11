@@ -20,6 +20,7 @@ import type {
   SessionRestoredPayload,
   SessionUpdatedPayload,
   StreamEvent,
+  TurnTimingPayload,
   TurnCompletePayload,
   TokenDeltaPayload,
   ToolErrorPayload,
@@ -169,6 +170,12 @@ export interface EngineUIState {
     tokensBefore: number;
     tokensAfter?: number;
   } | null;
+  turnTiming: {
+    firstTokenMs: number | null;
+    firstToolResultMs: number | null;
+    firstArtifactFocusMs: number | null;
+    totalMs: number | null;
+  };
   statusLine: string | null;
   pendingPermission: PermissionRequestPayload | null;
   error: string | null;
@@ -206,6 +213,12 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   toolCalls: [],
   backgroundAgents: [],
   compact: null,
+  turnTiming: {
+    firstTokenMs: null,
+    firstToolResultMs: null,
+    firstArtifactFocusMs: null,
+    totalMs: null,
+  },
   statusLine: null,
   pendingPermission: null,
   error: null,
@@ -329,7 +342,10 @@ export function useEvents(initialModel: string, initialMode: string) {
               pendingPermission: null,
               isStreaming: false,
               compact: null,
-              statusLine: "Turn cancelled",
+              statusLine: buildTurnCompleteStatusLine(
+                "cancelled",
+                s.turnTiming,
+              ),
             };
           }
 
@@ -350,7 +366,22 @@ export function useEvents(initialModel: string, initialMode: string) {
             activeTurnStatus: "idle",
             isStreaming: false,
             compact: null,
-            statusLine: `Turn complete (${p.stop_reason})`,
+            statusLine: buildTurnCompleteStatusLine(p.stop_reason, s.turnTiming),
+          };
+        });
+        break;
+      }
+      case "turn_timing": {
+        const p = event.payload as TurnTimingPayload;
+        setUIState((s) => {
+          const turnTiming = applyTurnTimingUpdate(s.turnTiming, p);
+          return {
+            ...s,
+            turnTiming,
+            statusLine:
+              s.isStreaming || s.activeTurnStatus !== "idle"
+                ? buildTurnTimingStatusLine(p, turnTiming)
+                : s.statusLine,
           };
         });
         break;
@@ -786,6 +817,12 @@ export function useEvents(initialModel: string, initialMode: string) {
       activeTurnStatus: "idle",
       isStreaming: false,
       compact: null,
+      turnTiming: {
+        firstTokenMs: null,
+        firstToolResultMs: null,
+        firstArtifactFocusMs: null,
+        totalMs: null,
+      },
       statusLine: null,
       error: null,
     }));
@@ -857,6 +894,12 @@ export function useEvents(initialModel: string, initialMode: string) {
       ...s,
       liveAssistantBlocks: [],
       activeTurnStatus: "working",
+      turnTiming: {
+        firstTokenMs: null,
+        firstToolResultMs: null,
+        firstArtifactFocusMs: null,
+        totalMs: null,
+      },
       error: null,
       statusLine: null,
       isStreaming: true,
@@ -872,6 +915,77 @@ export function useEvents(initialModel: string, initialMode: string) {
     appendUserMessage,
     beginAssistantTurn,
   };
+}
+
+function applyTurnTimingUpdate(
+  timing: EngineUIState["turnTiming"],
+  payload: TurnTimingPayload,
+): EngineUIState["turnTiming"] {
+  switch (payload.checkpoint) {
+    case "first_token":
+      return { ...timing, firstTokenMs: payload.elapsed_ms };
+    case "first_tool_result":
+      return { ...timing, firstToolResultMs: payload.elapsed_ms };
+    case "first_artifact_focus":
+      return { ...timing, firstArtifactFocusMs: payload.elapsed_ms };
+    case "turn_complete":
+    case "cancelled":
+      return { ...timing, totalMs: payload.elapsed_ms };
+    default:
+      return timing;
+  }
+}
+
+function buildTurnTimingStatusLine(
+  payload: TurnTimingPayload,
+  timing: EngineUIState["turnTiming"],
+): string | null {
+  switch (payload.checkpoint) {
+    case "first_token":
+      return `First token in ${formatLatencyMs(payload.elapsed_ms)}`;
+    case "first_tool_result":
+      return `First tool result in ${formatLatencyMs(payload.elapsed_ms)}`;
+    case "first_artifact_focus":
+      return `Artifact focused in ${formatLatencyMs(payload.elapsed_ms)}`;
+    case "turn_complete":
+    case "cancelled":
+      return buildTurnCompleteStatusLine(
+        payload.checkpoint === "cancelled" ? "cancelled" : "end_turn",
+        timing,
+      );
+    default:
+      return null;
+  }
+}
+
+function buildTurnCompleteStatusLine(
+  stopReason: string,
+  timing: EngineUIState["turnTiming"],
+): string {
+  const parts = [`Turn complete (${stopReason})`];
+  if (timing.firstTokenMs !== null) {
+    parts.push(`first token ${formatLatencyMs(timing.firstTokenMs)}`);
+  }
+  if (timing.firstToolResultMs !== null) {
+    parts.push(`first tool ${formatLatencyMs(timing.firstToolResultMs)}`);
+  }
+  if (timing.firstArtifactFocusMs !== null) {
+    parts.push(`artifact ${formatLatencyMs(timing.firstArtifactFocusMs)}`);
+  }
+  if (timing.totalMs !== null) {
+    parts.push(`total ${formatLatencyMs(timing.totalMs)}`);
+  }
+  return parts.join(" · ");
+}
+
+function formatLatencyMs(value: number): string {
+  if (!Number.isFinite(value) || value < 0) {
+    return "0ms";
+  }
+  if (value < 1000) {
+    return `${Math.round(value)}ms`;
+  }
+  return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}s`;
 }
 
 interface AgentToolInput {

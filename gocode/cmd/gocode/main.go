@@ -462,9 +462,17 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					}
 					switch event.Type {
 					case ipc.EventTokenDelta:
-						turnMetrics.Mark("first_token")
+						if turnMetrics.Mark("first_token") {
+							if err := emitTurnTimingCheckpoint(bridge, turnMetrics, "first_token"); err != nil {
+								return err
+							}
+						}
 					case ipc.EventTurnComplete:
-						turnMetrics.Mark("turn_complete")
+						if turnMetrics.Mark("turn_complete") {
+							if err := emitTurnTimingCheckpoint(bridge, turnMetrics, "turn_complete"); err != nil {
+								return err
+							}
+						}
 						var payload ipc.TurnCompletePayload
 						if err := json.Unmarshal(event.Payload, &payload); err == nil {
 							turnStopReason = payload.StopReason
@@ -479,7 +487,11 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				router.SetCancelFunc(nil)
 
 				if queryCancelled {
-					turnMetrics.Mark("cancelled")
+					if turnMetrics.Mark("cancelled") {
+						if err := emitTurnTimingCheckpoint(bridge, turnMetrics, "cancelled"); err != nil {
+							return err
+						}
+					}
 					turnStopReason = "cancelled"
 					if err := bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "cancelled"}); err != nil {
 						return err
@@ -1011,7 +1023,11 @@ func executeToolCalls(
 			}
 
 			if turnMetrics != nil {
-				turnMetrics.Mark("first_tool_result")
+				if turnMetrics.Mark("first_tool_result") {
+					if err := emitTurnTimingCheckpoint(bridge, turnMetrics, "first_tool_result"); err != nil {
+						return nil, err
+					}
+				}
 			}
 			if err := bridge.Emit(ipc.EventToolResult, ipc.ToolResultPayload{
 				ToolID:     call.ID,
@@ -1940,10 +1956,27 @@ func emitArtifactFocused(bridge *ipc.Bridge, artifact artifactspkg.Artifact) err
 }
 
 func emitArtifactFocusedForTurn(bridge *ipc.Bridge, artifact artifactspkg.Artifact, turnMetrics *timing.CheckpointRecorder) error {
-	if turnMetrics != nil {
-		turnMetrics.Mark("first_artifact_focus")
+	if turnMetrics != nil && turnMetrics.Mark("first_artifact_focus") {
+		if err := emitTurnTimingCheckpoint(bridge, turnMetrics, "first_artifact_focus"); err != nil {
+			return err
+		}
 	}
 	return emitArtifactFocused(bridge, artifact)
+}
+
+func emitTurnTimingCheckpoint(bridge *ipc.Bridge, recorder *timing.CheckpointRecorder, checkpoint string) error {
+	if bridge == nil || recorder == nil || checkpoint == "" {
+		return nil
+	}
+	snapshot := recorder.Snapshot()
+	at, ok := snapshot.Checkpoints[checkpoint]
+	if !ok {
+		return nil
+	}
+	return bridge.Emit(ipc.EventTurnTiming, ipc.TurnTimingPayload{
+		Checkpoint: checkpoint,
+		ElapsedMS:  at.Sub(snapshot.StartedAt).Milliseconds(),
+	})
 }
 
 func emitArtifactStatusChanged(bridge *ipc.Bridge, artifact artifactspkg.Artifact) error {

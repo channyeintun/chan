@@ -17,6 +17,12 @@ interface PromptFooterProps {
   totalCostUsd: number;
   inputTokens: number;
   outputTokens: number;
+  turnTiming: {
+    firstTokenMs: number | null;
+    firstToolResultMs: number | null;
+    firstArtifactFocusMs: number | null;
+    totalMs: number | null;
+  };
 }
 
 const INPUT_HINT =
@@ -36,6 +42,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
   totalCostUsd,
   inputTokens,
   outputTokens,
+  turnTiming,
 }) => {
   const [terminalColumns, setTerminalColumns] = useState(
     process.stdout.columns ?? 80,
@@ -81,6 +88,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
     () => buildCostWarningText(totalCostUsd),
     [totalCostUsd],
   );
+  const latencyText = useMemo(() => buildLatencyText(turnTiming), [turnTiming]);
   const warningText = tokenWarning.isWarning
     ? `Compact soon (~${tokenWarning.percentLeft}% until threshold) · ${formatTokenCount(tokenUsage)}/${formatTokenCount(tokenWarning.effectiveContextWindow)} used · Run /compact before the next long turn`
     : null;
@@ -111,6 +119,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
           </Text>
           {"  "}
           <Text>{activityLabel}</Text>
+          {latencyText ? `  ${latencyText}` : ""}
           {showWrappedIndicator ? `  wrapped:${wrappedLineCount}` : ""}
         </Text>
         <Text dimColor>{hint}</Text>
@@ -167,6 +176,33 @@ function buildCostWarningText(totalCostUsd: number): string | null {
   }
 
   return `Session cost passed $${threshold.toFixed(2)} · current spend $${totalCostUsd.toFixed(4)} · Review API usage before the next long turn`;
+}
+
+function buildLatencyText(turnTiming: PromptFooterProps["turnTiming"]): string | null {
+  const parts: string[] = [];
+  if (turnTiming.firstTokenMs !== null) {
+    parts.push(`token:${formatLatencyMs(turnTiming.firstTokenMs)}`);
+  }
+  if (turnTiming.firstToolResultMs !== null) {
+    parts.push(`tool:${formatLatencyMs(turnTiming.firstToolResultMs)}`);
+  }
+  if (turnTiming.firstArtifactFocusMs !== null) {
+    parts.push(`artifact:${formatLatencyMs(turnTiming.firstArtifactFocusMs)}`);
+  }
+  if (turnTiming.totalMs !== null) {
+    parts.push(`total:${formatLatencyMs(turnTiming.totalMs)}`);
+  }
+  return parts.length > 0 ? parts.join("  ") : null;
+}
+
+function formatLatencyMs(value: number): string {
+  if (!Number.isFinite(value) || value < 0) {
+    return "0ms";
+  }
+  if (value < 1000) {
+    return `${Math.round(value)}ms`;
+  }
+  return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}s`;
 }
 
 function getCostWarningThresholdUsd(): number {
