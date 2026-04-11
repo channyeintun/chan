@@ -1,128 +1,100 @@
 # Enhancement Opportunities
 
-Code review of progress against `plan.md` phases 6–8 and post-parity stabilization.
+This file has been reset from the old parity-audit backlog. Those historical items are now resolved or superseded, so the current list focuses on new product opportunities discovered by reviewing these reference prompts:
 
-## Status as of 2026-04-11
+- `reference/system-prompts/Antigravity/fast.txt`
+- `reference/system-prompts/Antigravity/planning.txt`
+- `reference/system-prompts/ClaudeCode/prompt.txt`
+- `reference/system-prompts/ClaudeCode/tools.txt`
 
-All items in this review have now been addressed or superseded by later changes.
+## Highest-Leverage Opportunities
 
-- Resolved in code: tool-result truncation, planner lifecycle hooks, background output loss reporting, PTY-backed background commands, background command cleanup, background reader shutdown cancellation, file-tool path traversal defense, artifact ID sanitization, protocol parse warnings, image paste warnings, Esc cancellation during permission waits, bash substitution narrowing, TUI limit documentation, and compat alias schema alignment.
-- Superseded by current code: the permission prompt no longer replaces the live transcript area, and the markdown token cache now promotes hits on access so eviction behaves as LRU.
+### 1. Task-mode UI with explicit review checkpoints
 
-Keep the historical findings below only as an audit trail.
+**Prompt signal**
+Antigravity planning mode is built around `task_boundary` / `notify_user`, explicit `PLANNING`, `EXECUTION`, and `VERIFICATION` phases, and approval-style review of plan artifacts before coding.
 
----
+**Current gap**
+`gocode/internal/agent/modes.go` only exposes `plan` and `fast`. `gocode/internal/agent/planner.go` persists implementation-plan artifacts, but the runtime still relies on “save the plan, then tell the user to switch to /fast” instead of a first-class task-mode UI and review gate.
 
-## P0 — Bugs / Correctness
+**Scope**
+Add task lifecycle events over IPC, render a task-status panel in the TUI, and let the agent pause for explicit review/approval without forcing the user to manage the transition only through slash commands.
 
-### 1. Tool result truncation is a no-op
+### 2. Interactive artifact review instead of plain-text previews
 
-**File:** `gocode/internal/compact/tool_truncate.go`
+**Prompt signal**
+Antigravity treats artifacts as first-class outputs with structured review and rich markdown formatting guidance: alerts, diffs, mermaid, media, carousels, and clickable file links.
 
-`TruncateToolResults` keys `lastSeen` by `ToolCallID`, which is unique per invocation. The guard `if i == lastSeen[msg.ToolResult.ToolCallID]` therefore always matches, so no tool result is ever truncated. The function should key by **tool name** (not call ID) to preserve only the most recent result of each compactable tool type.
+**Current gap**
+`gocode/tui/src/components/PlanPanel.tsx` and `gocode/tui/src/components/ArtifactView.tsx` currently render artifact bodies as plain text. Artifact IPC only supports `artifact_created` / `artifact_updated`, so there is no artifact-scoped review action or richer rendering contract.
 
-### 2. Planner lifecycle hooks are dead code
+**Scope**
+Upgrade artifact rendering to reuse the markdown pipeline for full artifact bodies, then add artifact review actions, revision requests, and version-aware display for plans, walkthroughs, and search reports.
 
-**File:** `gocode/internal/agent/planner.go`
+### 3. Workflow library and workflow-aware slash commands
 
-`BeginTurn()` and `FinalizeTurn()` both return `(nil, nil)` and are never called from the agent loop. `progress.md` claims "updates draft/final implementation-plan artifacts at the start/end of plan-mode turns" but this is handled entirely by the explicit `save_implementation_plan` tool instead. The dead stubs should either be removed or implemented to seed/finalize plan artifacts automatically as the progress notes describe.
+**Prompt signal**
+Both Antigravity prompts define `.agent/workflows/*.md` files with YAML frontmatter plus `// turbo` and `// turbo-all` execution hints. They also expect the agent to discover workflow files when a slash command or task matches.
 
-### 3. Background command output buffer offset can drift
+**Current gap**
+`gocode/internal/skills/loader.go` only loads `.agents/*.md` skills. Slash commands in `gocode/cmd/gocode/main.go` are fixed to `/plan`, `/fast`, `/model`, `/cost`, `/usage`, `/compact`, `/resume`, and `/help`.
 
-**File:** `gocode/internal/tools/background_commands.go` (lines 200–210)
+**Scope**
+Add workflow discovery, parsing, and safe execution semantics, plus a workflow command surface such as `/workflow <name>` or direct workflow-backed slash commands with approval-aware auto-run behavior.
 
-After trimming the front of the buffer, `readOffset` is adjusted with `readOffset -= trim`. If the write burst that triggers trimming is large enough to overshoot the previous `readOffset`, the else branch resets to 0, which silently skips already-buffered output that hasn't been read yet. A safer approach is to clamp to 0 and document the skip so callers know output was lost.
+### 4. Knowledge Item system backed by session history
 
----
+**Prompt signal**
+Antigravity heavily leans on Knowledge Items (KIs): review KI summaries before research, reuse past analysis, and update durable learnings instead of rediscovering them every session.
 
-## P1 — Plan Deviations
+**Current gap**
+`gocode/internal/artifacts/types.go` declares `KindKnowledgeItem`, but there is no KI loader, ranking/indexing, or prompt injection path. `gocode/internal/session/store.go` persists transcripts, but there is no layer that promotes durable knowledge out of those transcripts.
 
-### 4. Background commands use pipes instead of PTYs
+**Scope**
+Add KI metadata/index storage, retrieve relevant KIs for new turns, and let the agent promote durable findings from sessions into reusable knowledge artifacts.
 
-**File:** `gocode/internal/tools/background_commands.go`
+### 5. Delegated subagents for bounded research and setup tasks
 
-`plan.md` specifies "pseudo-terminals (PTYs)" for background command orchestration. The current implementation uses `cmd.StdinPipe()` / `cmd.StdoutPipe()` / `cmd.StderrPipe()`. This means interactive programs that rely on terminal capabilities (raw mode, control characters, line editing) will not work correctly. Consider using `github.com/creack/pty` to allocate a real PTY.
+**Prompt signal**
+ClaudeCode’s tool model includes a Task/subagent mechanism with specialized agents and bounded handoff of work.
 
-### 5. Background command map is never pruned
+**Current gap**
+`gocode/internal/tools/registry.go` exposes a single-agent tool surface only. There is no way to launch a scoped child agent for read-only exploration, product setup, or focused investigations.
 
-**File:** `gocode/internal/tools/background_commands.go`
+**Scope**
+Add a subagent runtime that can launch a child session with restricted tools/context, collect its report, and fold the result back into the parent turn without losing transcript clarity.
 
-Completed entries in the `backgroundCommands` map persist for the lifetime of the process. Long sessions with many background commands will accumulate stale entries, leaking the `exec.Cmd`, stdin pipe, and output buffer for each. Add a reaper (TTL or explicit cleanup after final status read).
+### 6. Hook feedback on prompt submission
 
-### 6. Background output goroutines lack cancellation
+**Prompt signal**
+ClaudeCode treats hook output, including `user-prompt-submit-hook`, as user feedback that should influence the next iteration.
 
-**File:** `gocode/internal/tools/background_commands.go`
+**Current gap**
+`gocode/internal/hooks/types.go` defines session/tool/permission/compact/stop hooks, but there is no prompt-submit hook type or first-class path that injects hook feedback into the next user turn before model execution.
 
-The two `streamBackgroundOutput` goroutines per command run `io.Copy` without a context or deadline. If a process hangs without producing output, those goroutines block indefinitely. Pass a context to enable cancellation from the agent loop.
+**Scope**
+Add prompt-submit hooks, merge their messages into turn context as user feedback, and surface blocked or adjusted prompt state clearly in the UI.
 
----
+### 7. Prompt caching and context-pressure adaptation
 
-## P2 — Security / Defense-in-Depth
+**Prompt signal**
+These reference prompts assume long-running agentic loops where stable instructions, memory, and repeated context should be handled efficiently.
 
-### 7. File tools lack path-traversal validation
+**Current gap**
+`gocode/internal/cost/pricing.go` and `gocode/internal/cost/tracker.go` already account for cache read/write tokens, but `gocode/internal/api/anthropic.go` does not send prompt-cache controls. `gocode/internal/agent/modes.go` also uses fixed read parallelism and summary verbosity instead of adapting to live context pressure.
 
-**Files:** `file_edit.go`, `file_write.go`, `multi_replace_file_content.go`, `file_read.go`, `list_dir.go`
+**Scope**
+Enable Anthropic prompt caching for stable prompt sections, surface cache savings in `/cost`, and adapt read parallelism / tool-summary verbosity as the live context window fills.
 
-When a relative path is provided, these tools join it to `os.Getwd()` via `filepath.Join` without verifying the resolved path stays within the project root. A model-generated path containing `../../` could reach outside the working directory. The permission layer mitigates most risk, but an explicit `filepath.Rel` + prefix check would add defense-in-depth.
+## Already Implemented
 
-### 8. Artifact store ID not sanitized
+Do not reopen these as new backlog items unless new regressions appear.
 
-**File:** `gocode/internal/artifacts/store.go`
-
-`Save()` accepts an external `req.ID` and uses it in `filepath.Join(baseDir, kind, id)`. A crafted ID like `../../etc` could escape the store directory. Sanitize the ID (reject `/` and `..` components) or use the generated hex ID exclusively.
-
----
-
-## P3 — TUI Behavior / UX
-
-### 9. Permission prompt hides live assistant content
-
-**File:** `gocode/tui/src/App.tsx`
-
-When a `permission_request` event arrives mid-stream, the permission modal replaces the main content area. The user loses visibility of the partial assistant response. `plan.md` post-parity item 2 states: "Keep the live assistant status visible across tool execution and permission waits." Render the permission prompt as an overlay or inline element that preserves the visible stream output.
-
-### 10. Esc during permission wait denies instead of cancelling
-
-**File:** `gocode/tui/src/App.tsx`, `gocode/tui/src/components/Input.tsx`
-
-Pressing Esc while a permission prompt is shown sends a denial for that specific tool, not a cancel of the active turn. `plan.md` post-parity item 3 states: "Make Esc interruption reliable while a turn is active." Consider adding a secondary key (e.g., Ctrl+C) or changing Esc to cancel the entire turn from the permission state.
-
-### 11. Silent protocol parse failures
-
-**File:** `gocode/tui/src/protocol/codec.ts`
-
-`parseEvent()` returns `null` on JSON parse errors without logging. Malformed engine output is silently dropped, making protocol bugs hard to diagnose. Emit a debug-level warning to stderr.
-
-### 12. Silent image paste failures
-
-**File:** `gocode/tui/src/utils/imagePaste.ts`
-
-`readImageFile()` catches all errors and returns `null`. Users have no indication that an image wasn't loaded. Surface a brief warning to the user.
-
----
-
-## P4 — Code Quality / Cleanup
-
-### 13. DangerousSubstitution regex overly broad
-
-**File:** `gocode/internal/permissions/bash_rules.go`
-
-The pattern blocks all `$()` and `${}` expansions, which prevents common legitimate shell idioms like `echo "$(date)"` or `${VAR:-default}`. If the intent is to block only dangerous expansions, narrow the pattern or whitelist common safe forms.
-
-### 14. Token cache eviction is not LRU
-
-**File:** `gocode/tui/src/utils/markdown.ts`
-
-The token cache evicts using `Map.keys().next()` (insertion order), not least-recently-used. Under high reuse of certain entries, frequently accessed items can be evicted while stale ones remain. Use an LRU structure or promote on access.
-
-### 15. Hardcoded magic numbers without documentation
-
-**Files:** `StreamOutput.tsx`, `ToolProgress.tsx`, `Input.tsx`
-
-Constants like `MAX_TRANSCRIPT_BLOCKS = 200`, `TRANSCRIPT_CAP_STEP = 50`, 320-char output truncation, and 6-line limits have no comments explaining their rationale. Add brief inline documentation to aid future maintenance.
-
-### 16. Compat alias schema/parameter mismatch
-
-**File:** `gocode/internal/tools/compat_aliases.go`
-
-The `ReadFileAliasTool` schema declares `path` as the only required parameter, but `Execute()` also accepts `filePath` and `file_path`. A model calling with `filePath` would pass schema validation only if the schema lists it. Align the schema with accepted parameter names.
+- Distinct `plan` and `fast` execution modes.
+- Session task-list, implementation-plan, walkthrough, and tool-log artifacts.
+- Permission prompts with optional user notes on tool approvals.
+- Skill auto-loading from `.agents/` and `~/.config/gocode/agents/`.
+- Hook runners for session/tool/permission/compact/stop lifecycle events.
+- PTY-backed background commands with `command_status` and `send_command_input`.
+- Conversation compaction, cost tracking, and context window warnings.
+- Structured directory/file/search tools and path-traversal hardening.

@@ -13,7 +13,7 @@
 | -------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 6. Protocol follow-up      | completed | Permission amendment/feedback text, raw 5h/7d Anthropic rate-limit windows, configurable footer cost-threshold notices, and block-oriented assistant message rendering are now wired through the IPC/TUI path.                                                                                          |
 | 7. Deferred infrastructure | completed | The capped transcript now supports PageUp/PageDown paging plus Home/End jumps in stock Ink, which is sufficient for this parity pass. Full scroll/fullscreen primitives for a true virtualized list remain explicitly deferred because the upstream implementation relies on custom renderer internals. |
-| 8. Agent Tool Enhancement  | completed | Added the Antigravity parity tool slice (`list_dir`, `multi_replace_file_content`, `command_status`, `send_command_input`), aligned artifact runtime support with task-list and walkthrough updates, and removed Claude-specific `.claude` / `CLAUDE.md` loader support from the engine. |
+| 8. Agent Tool Enhancement  | completed | Added the Antigravity parity tool slice (`list_dir`, `multi_replace_file_content`, `command_status`, `send_command_input`), aligned artifact runtime support with task-list and walkthrough updates, and removed Claude-specific `.claude` / `CLAUDE.md` loader support from the engine.                |
 
 ## Task Log
 
@@ -24,6 +24,7 @@
 
 ### 2026-04-11
 
+- Updated: Replaced the stale resolved-item audit in `enhancement.md` with a prompt-derived roadmap after reviewing `reference/system-prompts/Antigravity/*` and `reference/system-prompts/ClaudeCode/*`. The new backlog is centered on task-mode review UX, richer artifact handling, workflow files, Knowledge Items, subagents, prompt-submit hook feedback, and prompt caching/context adaptation.
 - Completed: Refactored the tool scheduler concurrency API to use explicit classifications instead of a misleading boolean predicate. The `Tool` interface now reports a `Concurrency` decision (`serial` vs `parallel`), the batch/streaming executors were renamed internally to match that model, and dynamic tools such as `bash` still choose their scheduling class from input while fixed-policy tools now return an explicit constant that reads naturally.
 - Completed: Surfaced `file_read` scanner-limit truncation explicitly. When a file contains a line longer than the configured scan token limit, the tool now returns any already-read content plus a clear truncation notice and marks the result as truncated instead of only bubbling a generic read failure.
 - Completed: Serialized background-command unread-output consumption across `command_status` and `send_command_input`. Per-command delta reads now run behind a dedicated mutex so interactive stdin writes cannot race status polling and steal each other's unread output, while `command_status` remains conservatively non-concurrent under the current batch scheduler because unread-output consumption is still stateful per command.
