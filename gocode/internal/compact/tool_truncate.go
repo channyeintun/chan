@@ -20,12 +20,24 @@ const truncatedMarker = "[Old tool result content cleared]"
 // Only truncates results from compactable tools, preserving the most recent
 // tool result of each type.
 func TruncateToolResults(messages []api.Message) []api.Message {
-	// Find the last occurrence index for each tool result
+	toolNamesByCallID := make(map[string]string)
+	for _, msg := range messages {
+		for _, toolCall := range msg.ToolCalls {
+			toolNamesByCallID[toolCall.ID] = toolCall.Name
+		}
+	}
+
+	// Find the last occurrence index for each compactable tool type.
 	lastSeen := make(map[string]int)
 	for i, msg := range messages {
-		if msg.ToolResult != nil {
-			lastSeen[msg.ToolResult.ToolCallID] = i
+		if msg.ToolResult == nil {
+			continue
 		}
+		toolName := toolNamesByCallID[msg.ToolResult.ToolCallID]
+		if !CompactableTools[toolName] {
+			continue
+		}
+		lastSeen[toolName] = i
 	}
 
 	result := make([]api.Message, len(messages))
@@ -35,13 +47,19 @@ func TruncateToolResults(messages []api.Message) []api.Message {
 		if msg.Role != api.RoleTool || msg.ToolResult == nil {
 			continue
 		}
-		// Don't truncate the most recent results
-		if i == lastSeen[msg.ToolResult.ToolCallID] {
+		toolName := toolNamesByCallID[msg.ToolResult.ToolCallID]
+		if !CompactableTools[toolName] {
 			continue
 		}
-		// Only truncate compactable tool results
-		if msg.Content != "" && len(msg.Content) > 200 {
+		// Don't truncate the most recent results
+		if i == lastSeen[toolName] {
+			continue
+		}
+		if len(msg.Content) > 200 || len(msg.ToolResult.Output) > 200 {
+			toolResultCopy := *result[i].ToolResult
+			toolResultCopy.Output = truncatedMarker
 			result[i].Content = truncatedMarker
+			result[i].ToolResult = &toolResultCopy
 		}
 	}
 
