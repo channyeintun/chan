@@ -22,7 +22,7 @@ interface PermissionPromptProps {
   targetValue?: string;
   workingDir?: string;
   onRespond: (decision: PermissionDecision, feedback?: string) => void;
-  onCancel: () => void;
+  onCancelTurn: () => void;
 }
 
 const OPTIONS: PermissionOption[] = [
@@ -77,7 +77,7 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
   targetValue,
   workingDir,
   onRespond,
-  onCancel,
+  onCancelTurn,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [feedback, setFeedback] = useState("");
@@ -86,7 +86,7 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
 
   useInput((input, key) => {
     if (key.escape) {
-      onCancel();
+      onCancelTurn();
       return;
     }
 
@@ -294,7 +294,7 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>
           Enter confirm · Up/Down change selection · Tab{" "}
-          {isEditingFeedback ? "return to actions" : "edit note"} · Esc deny
+          {isEditingFeedback ? "return to actions" : "edit note"} · Esc cancel turn
         </Text>
         <Text dimColor>
           Selected:{" "}

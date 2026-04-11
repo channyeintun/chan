@@ -276,7 +276,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           targetValue={uiState.pendingPermission.target_value}
           workingDir={uiState.pendingPermission.working_dir}
           onRespond={handlePermissionResponse}
-          onCancel={() => handlePermissionResponse("deny")}
+          onCancelTurn={handleCancel}
         />
       ) : (
         <Box flexDirection="column">

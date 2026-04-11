@@ -254,6 +254,7 @@ export function useEvents(initialModel: string, initialMode: string) {
                 : s.transcript,
               liveAssistantBlocks: [],
               activeTurnStatus: "idle",
+              pendingPermission: null,
               isStreaming: false,
               compact: null,
               statusLine: "Turn cancelled",
@@ -605,7 +606,18 @@ export function useEvents(initialModel: string, initialMode: string) {
   const cancelActiveTurn = useCallback(() => {
     setUIState((s) => ({
       ...s,
+      activeTurnStatus: "cancelling",
       compact: null,
+      pendingPermission: null,
+      toolCalls: s.pendingPermission
+        ? upsertToolCall(s.toolCalls, {
+            id: s.pendingPermission.tool_id,
+            name: s.pendingPermission.tool,
+            input: s.pendingPermission.command,
+            status: "waiting_permission",
+            permissionRequestId: undefined,
+          })
+        : s.toolCalls,
       statusLine: "Cancellation requested...",
     }));
   }, []);
