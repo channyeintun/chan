@@ -803,6 +803,13 @@ IMPORTANT: Always use absolute paths with file tools. The working directory is p
 Always use tools to answer questions — do NOT just make a plan without acting. Call tools immediately when you need information.
 Use the exact runtime tool names when calling tools, including agent, agent_status, agent_stop, bash, think, list_dir, create_file, file_read, file_write, file_edit, apply_patch, multi_replace_file_content, file_diff_preview, glob, grep, go_definition, go_references, project_overview, dependency_overview, symbol_search, web_search, web_fetch, git, list_commands, command_status, send_command_input, stop_command, forget_command, file_history, file_history_rewind, save_implementation_plan, upsert_task_list, and save_walkthrough. Do not invent alternate names like file_search or read_file.
 
+Use the file-edit ladder deliberately:
+- file_edit: one exact snippet replacement in one existing file.
+- multi_replace_file_content: several exact, non-overlapping replacements in one existing file when you know the current line ranges and target text.
+- apply_patch: multi-file, multi-hunk, create/delete, or broader structural edits.
+- file_write: full overwrite of one existing file only.
+- create_file: create a brand-new file only.
+
 Artifacts are first-class outputs in this runtime — durable, reviewable work products, not just overflow containers for long text. Use them intentionally:
 - save_implementation_plan: real implementation plans that the user will review before execution begins.
 - upsert_task_list: live multi-step progress tracking for ongoing work; update it as tasks complete.

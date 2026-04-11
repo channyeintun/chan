@@ -27,7 +27,7 @@ func (t *MultiReplaceFileContentTool) Name() string {
 }
 
 func (t *MultiReplaceFileContentTool) Description() string {
-	return "Apply multiple validated non-contiguous replacements to one existing text file in one write. Use apply_patch for multi-file or larger structural edits."
+	return "Apply several validated, non-overlapping exact replacements to one existing text file in one write. Best when you know the current line ranges and target text. Use file_edit for one exact snippet replacement and apply_patch for multi-file or larger structural edits."
 }
 
 func (t *MultiReplaceFileContentTool) Validate(input ToolInput) error {
@@ -54,7 +54,7 @@ func (t *MultiReplaceFileContentTool) Validate(input ToolInput) error {
 		return err
 	}
 	if len(chunks) == 0 {
-		return NewEditFailure(EditFailureInvalidRequest, resolvedPath, "multi_replace_file_content requires at least one replacement chunk", "Add one or more replacement chunks with exact line ranges and target content.")
+		return NewEditFailure(EditFailureInvalidRequest, resolvedPath, "multi_replace_file_content requires at least one replacement chunk", "Add one or more replacement chunks with exact line ranges and target content, or use file_edit for one exact replacement.")
 	}
 	return nil
 }
@@ -202,7 +202,7 @@ func (t *MultiReplaceFileContentTool) Execute(ctx context.Context, input ToolInp
 		return ToolOutput{}, err
 	}
 	if len(chunks) == 0 {
-		return ToolOutput{}, NewEditFailure(EditFailureInvalidRequest, targetFile, "multi_replace_file_content requires at least one replacement chunk", "Add one or more replacement chunks with exact line ranges and target content.")
+		return ToolOutput{}, NewEditFailure(EditFailureInvalidRequest, targetFile, "multi_replace_file_content requires at least one replacement chunk", "Add one or more replacement chunks with exact line ranges and target content, or use file_edit for one exact replacement.")
 	}
 
 	originalBytes, err := os.ReadFile(targetFile)
@@ -239,7 +239,7 @@ func (t *MultiReplaceFileContentTool) Execute(ctx context.Context, input ToolInp
 		}
 	}
 	if noOpChunks == len(sortedChunks) {
-		return EditFailureOutput(EditFailureNoOp, targetFile, "no changes to make: every replacement chunk already matches its replacement content", "Skip the edit or adjust the replacement chunks so they actually change the file."), nil
+		return EditFailureOutput(EditFailureNoOp, targetFile, "no changes to make: every replacement chunk already matches its replacement content", "Skip the edit, adjust the replacement chunks so they actually change the file, or use apply_patch if the intended change is more structural than line-ranged replacement."), nil
 	}
 
 	updatedLines := append([]string(nil), lines...)
@@ -336,10 +336,10 @@ func validateReplacementChunks(lines []string, chunks []replacementChunk) error 
 	previousStart := len(lines) + 1
 	for _, chunk := range chunks {
 		if chunk.StartLine < 1 || chunk.EndLine < chunk.StartLine {
-			return NewEditFailure(EditFailureInvalidRange, "", fmt.Sprintf("invalid line range %d-%d", chunk.StartLine, chunk.EndLine), "Reread the file and provide a valid inclusive line range where start_line <= end_line.")
+			return NewEditFailure(EditFailureInvalidRange, "", fmt.Sprintf("invalid line range %d-%d", chunk.StartLine, chunk.EndLine), "Reread the file and provide a valid inclusive line range where start_line <= end_line, or switch to apply_patch if the edit is easier to express as contextual hunks.")
 		}
 		if chunk.EndLine > len(lines) {
-			return NewEditFailure(EditFailureInvalidRange, "", fmt.Sprintf("replacement chunk line range %d-%d exceeds file length %d", chunk.StartLine, chunk.EndLine, len(lines)), "Reread the file and refresh the line numbers before retrying the edit.")
+			return NewEditFailure(EditFailureInvalidRange, "", fmt.Sprintf("replacement chunk line range %d-%d exceeds file length %d", chunk.StartLine, chunk.EndLine, len(lines)), "Reread the file and refresh the line numbers before retrying the edit, or use apply_patch if exact line ranges are unstable.")
 		}
 		if chunk.EndLine >= previousStart {
 			return NewEditFailure(EditFailureOverlap, "", fmt.Sprintf("replacement chunks overlap at lines %d-%d", chunk.StartLine, chunk.EndLine), "Split or merge the overlapping chunks so each line is changed by at most one chunk.")
@@ -347,7 +347,7 @@ func validateReplacementChunks(lines []string, chunks []replacementChunk) error 
 
 		currentSnippet := strings.Join(lines[chunk.StartLine-1:chunk.EndLine], "\n")
 		if currentSnippet != chunk.TargetContent {
-			return NewEditFailure(EditFailureContentMismatch, "", fmt.Sprintf("target content mismatch for lines %d-%d", chunk.StartLine, chunk.EndLine), "Reread that range and update target_content so it matches the current file exactly.")
+			return NewEditFailure(EditFailureContentMismatch, "", fmt.Sprintf("target content mismatch for lines %d-%d", chunk.StartLine, chunk.EndLine), "Reread that range and update target_content so it matches the current file exactly, or use apply_patch if contextual hunks are a better fit than fixed line ranges.")
 		}
 		previousStart = chunk.StartLine
 	}

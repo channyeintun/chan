@@ -60,18 +60,17 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - `multi_replace_file_content` now renders as a first-class file mutation in the TUI, including structured file-update failures.
 - Added `apply_patch` as a dedicated patch-grade edit tool for structured multi-hunk and multi-file text edits.
 - Permission summaries, risk checks, compaction rules, subagent allowlists, runtime tool guidance, and TUI rendering now recognize `apply_patch` as part of the file-edit ladder.
+- The runtime prompt, tool descriptions, recovery hints, and README docs now define an explicit edit ladder across `file_edit`, `multi_replace_file_content`, `apply_patch`, `file_write`, and `create_file`.
 
 **Remaining to Finish**
 
-- Extend the edit failure taxonomy and recovery hints to the future `apply_patch` path and any remaining file mutation surfaces.
-- Define explicit tool-selection guidance for exact edit, multi-replace, and patch flows.
 - Surface post-edit diagnostics when available.
 
 **Exit Criteria Check**
 
 - [x] `gocode` has a dedicated patch-grade edit path for larger structural changes.
 - [x] File-edit failures are machine-distinguishable and actionable.
-- [ ] The edit ladder is explicit enough that structural edits do not overuse exact replacement tools.
+- [x] The edit ladder is explicit enough that structural edits do not overuse exact replacement tools.
 - [ ] Post-edit diagnostics catch broken edits earlier when the environment can provide them.
 
 ### Phase 3: Subagent Lineage and Metadata
@@ -130,6 +129,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Completed: finished Phase 1 by adding a dedicated `create_file` tool, narrowing `file_write` to overwrite-only behavior, updating tool labels/prompts/docs to reflect the split, and confirming diff-preview plus file-history coverage across the direct write tool surface.
 - Completed: started Phase 2 by standardizing edit failure kinds and recovery hints across `file_edit` and `multi_replace_file_content`, and by surfacing those structured failures in the TUI.
 - Completed: added a dedicated `apply_patch` tool for structured multi-file edits and wired it through permission summaries, risk assessment, compaction, runtime tool guidance, and TUI file-mutation rendering.
+- Completed: defined the runtime edit ladder explicitly in the system prompt, tool descriptions, recovery hints, and README guidance so structural edits have a clear path to `apply_patch`.
 
 ## Next Planning Baseline
 

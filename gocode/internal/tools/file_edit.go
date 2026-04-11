@@ -20,7 +20,7 @@ func (t *FileEditTool) Name() string {
 }
 
 func (t *FileEditTool) Description() string {
-	return "Perform exact string replacements in an existing text file. Use apply_patch for larger structural edits, create_file for new files, and file_write for full overwrites."
+	return "Perform one exact snippet replacement in one existing text file. Best for small, precise edits when old_string matches exactly once or replace_all is intentional. Use multi_replace_file_content for several exact replacements in one file, apply_patch for structural or multi-file edits, create_file for new files, and file_write for full overwrites."
 }
 
 func (t *FileEditTool) InputSchema() any {
@@ -135,10 +135,10 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 
 	matchCount := strings.Count(content, normalizedOldString)
 	if matchCount == 0 {
-		return EditFailureOutput(EditFailureNoMatch, filePath, "string to replace not found in file", "Reread the file, copy a longer exact snippet into old_string, or switch to multi_replace_file_content for line-based edits."), nil
+		return EditFailureOutput(EditFailureNoMatch, filePath, "string to replace not found in file", "Reread the file, copy a longer exact snippet into old_string, switch to multi_replace_file_content for line-ranged exact edits, or use apply_patch for broader structural changes."), nil
 	}
 	if matchCount > 1 && !replaceAll {
-		return EditFailureOutput(EditFailureMultipleMatch, filePath, fmt.Sprintf("found %d matches of old_string", matchCount), "Provide a more specific old_string with surrounding context, or set replace_all=true only if every match should change."), nil
+		return EditFailureOutput(EditFailureMultipleMatch, filePath, fmt.Sprintf("found %d matches of old_string", matchCount), "Provide a more specific old_string with surrounding context, set replace_all=true only if every match should change, or switch to apply_patch when the edit is structural rather than one exact replacement."), nil
 	}
 
 	updatedContent := strings.Replace(content, normalizedOldString, normalizedNewString, 1)

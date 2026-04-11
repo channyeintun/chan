@@ -63,7 +63,7 @@ func (t *ApplyPatchTool) Name() string {
 }
 
 func (t *ApplyPatchTool) Description() string {
-	return "Apply structured multi-hunk or multi-file text edits. Use for larger structural changes that do not fit file_edit or multi_replace_file_content. Patch format: *** Begin Patch, file sections with *** Add File:, *** Update File:, or *** Delete File:, optional @@ markers inside update hunks, then *** End Patch."
+	return "Apply structured multi-hunk or multi-file text edits. Best for structural edits, coordinated changes across files, or patches that create or delete files. Prefer file_edit for one exact snippet replacement and multi_replace_file_content for several exact replacements in one existing file. Patch format: *** Begin Patch, file sections with *** Add File:, *** Update File:, or *** Delete File:, optional @@ markers inside update hunks, then *** End Patch."
 }
 
 func (t *ApplyPatchTool) InputSchema() any {

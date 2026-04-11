@@ -193,6 +193,14 @@ The agent has access to:
 | **file_history_rewind**        | Restore tracked files to a previous file-history snapshot                |
 | **git**                        | Read-only git operations (status, diff, log, blame)                      |
 
+### Edit Tool Selection
+
+- `file_edit`: one exact snippet replacement in one existing file.
+- `multi_replace_file_content`: several exact, non-overlapping replacements in one existing file when current line ranges and target text are known.
+- `apply_patch`: multi-file, multi-hunk, create/delete, or broader structural edits.
+- `file_write`: overwrite the full contents of one existing file.
+- `create_file`: create one brand-new file.
+
 ## Configuration
 
 Config file: `~/.config/gocode/config.json`

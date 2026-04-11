@@ -186,6 +186,13 @@ The agent has access to:
 | **web_fetch**  | Fetch and read a URL                                |
 | **git**        | Read-only git operations (status, diff, log, blame) |
 
+### Edit Tool Selection
+
+- `file_edit`: one exact snippet replacement in one existing file.
+- `apply_patch`: multi-hunk, multi-file, or structural edits.
+- `file_write`: full overwrite of one existing file.
+- `create_file`: create one brand-new file.
+
 ## Configuration
 
 Config file: `~/.config/gocode/config.json`
