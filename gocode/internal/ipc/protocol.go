@@ -125,6 +125,7 @@ type PermissionRequestPayload struct {
 	Tool            string `json:"tool"`
 	Command         string `json:"command"`
 	Risk            string `json:"risk"`
+	RiskReason      string `json:"risk_reason,omitempty"`
 	PermissionLevel string `json:"permission_level,omitempty"`
 	TargetKind      string `json:"target_kind,omitempty"`
 	TargetValue     string `json:"target_value,omitempty"`

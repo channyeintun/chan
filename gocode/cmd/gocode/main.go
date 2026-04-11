@@ -1092,6 +1092,7 @@ func authorizeToolCall(
 	toolCallID string,
 	pending toolpkg.PendingCall,
 ) (authorizationResult, error) {
+	risk := permissions.AssessRisk(pending.Tool.Name(), pending.Input, pending.Tool.Permission())
 	decision := permissionCtx.Check(pending.Tool.Name(), pending.Input, pending.Tool.Permission())
 	switch decision {
 	case permissions.DecisionAllow:
@@ -1107,6 +1108,9 @@ func authorizeToolCall(
 		case "allow":
 			return authorizationResult{Allowed: true, Feedback: response.Feedback}, nil
 		case "always_allow":
+			if risk.DisallowPersistentAllow {
+				return authorizationResult{Allowed: true, Feedback: response.Feedback}, nil
+			}
 			if raw := strings.TrimSpace(pending.Input.Raw); raw != "" {
 				if err := permissionCtx.AddAlwaysAllow(pending.Tool.Name(), "^"+regexp.QuoteMeta(raw)+"$"); err != nil {
 					return authorizationResult{}, err
@@ -1137,12 +1141,14 @@ func waitForPermissionDecision(
 	pending toolpkg.PendingCall,
 ) (permissionResponse, error) {
 	requestID := fmt.Sprintf("perm-%d", time.Now().UnixNano())
+	risk := permissions.AssessRisk(pending.Tool.Name(), pending.Input, pending.Tool.Permission())
 	if err := bridge.Emit(ipc.EventPermissionRequest, ipc.PermissionRequestPayload{
 		RequestID:       requestID,
 		ToolID:          toolCallID,
 		Tool:            pending.Tool.Name(),
 		Command:         summarizePermissionTarget(pending),
 		Risk:            permissionRisk(pending),
+		RiskReason:      risk.Reason,
 		PermissionLevel: permissionLevelLabel(pending),
 		TargetKind:      permissionTargetKind(pending),
 		TargetValue:     summarizePermissionTarget(pending),
@@ -1179,22 +1185,7 @@ func waitForPermissionDecision(
 }
 
 func permissionRisk(call toolpkg.PendingCall) string {
-	if call.Tool.Name() == "bash" {
-		command, _ := stringParamFromMap(call.Input.Params, "command")
-		if warning := permissions.CheckDestructive(command); warning != "" {
-			return "destructive"
-		}
-		return "execute"
-	}
-
-	switch call.Tool.Permission() {
-	case toolpkg.PermissionWrite:
-		return "write"
-	case toolpkg.PermissionExecute:
-		return "execute"
-	default:
-		return "read"
-	}
+	return permissions.AssessRisk(call.Tool.Name(), call.Input, call.Tool.Permission()).Level
 }
 
 func permissionLevelLabel(call toolpkg.PendingCall) string {

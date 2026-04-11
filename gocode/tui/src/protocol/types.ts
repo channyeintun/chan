@@ -107,6 +107,7 @@ export interface PermissionRequestPayload {
   tool: string;
   command: string;
   risk: string;
+  risk_reason?: string;
   permission_level?: string;
   target_kind?: string;
   target_value?: string;

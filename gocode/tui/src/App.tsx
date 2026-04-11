@@ -403,6 +403,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           tool={uiState.pendingPermission.tool}
           command={uiState.pendingPermission.command}
           risk={uiState.pendingPermission.risk}
+          riskReason={uiState.pendingPermission.risk_reason}
           permissionLevel={uiState.pendingPermission.permission_level}
           targetKind={uiState.pendingPermission.target_kind}
           targetValue={uiState.pendingPermission.target_value}

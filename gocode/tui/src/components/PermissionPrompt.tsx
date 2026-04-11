@@ -17,6 +17,7 @@ interface PermissionPromptProps {
   tool: string;
   command: string;
   risk: string;
+  riskReason?: string;
   permissionLevel?: string;
   targetKind?: string;
   targetValue?: string;
@@ -73,6 +74,7 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
   tool,
   command,
   risk,
+  riskReason,
   permissionLevel,
   targetKind,
   targetValue,
@@ -236,6 +238,7 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
         <Text color="gray">
           Risk: <Text color={riskColor}>{risk || "normal"}</Text>
         </Text>
+        {riskReason?.trim() ? <Text color="yellow">Policy: {riskReason}</Text> : null}
         {workingDir ? (
           <Text color="gray">
             Cwd: <Text color="white">{workingDir}</Text>

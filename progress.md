@@ -11,13 +11,13 @@
 
 ## Current Status
 
-| Workstream                               | Status      | Scope | Notes                                                                                                                                             |
-| ---------------------------------------- | ----------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Enhancement planning baseline            | completed   | S     | 2026-04-12 created a new execution baseline from `enhancement.md` focused on file-tool robustness and subagent orchestration.                     |
-| Phase 1 file semantics and safety        | in progress | L     | Create vs overwrite semantics and read hardening have started; risk-tier approval and remaining write-surface consistency work are still pending. |
-| Phase 2 edit engine hardening            | not started | L     | `apply_patch`, edit failure taxonomy, recovery hints, and post-edit diagnostics are planned but not started.                                      |
-| Phase 3 subagent lineage and metadata    | not started | M     | Stable invocation ids, structured child metadata, and stronger TUI attribution are planned but not started.                                       |
-| Phase 4 child lifecycle and policy hooks | not started | M     | Shared loop alignment plus subagent start/stop hooks and block-stop reasons are planned but not started.                                          |
+| Workstream                               | Status      | Scope | Notes                                                                                                                                                   |
+| ---------------------------------------- | ----------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enhancement planning baseline            | completed   | S     | 2026-04-12 created a new execution baseline from `enhancement.md` focused on file-tool robustness and subagent orchestration.                           |
+| Phase 1 file semantics and safety        | in progress | L     | Create vs overwrite semantics, read hardening, and high-risk file approval rules are landed; remaining write-surface consistency work is still pending. |
+| Phase 2 edit engine hardening            | not started | L     | `apply_patch`, edit failure taxonomy, recovery hints, and post-edit diagnostics are planned but not started.                                            |
+| Phase 3 subagent lineage and metadata    | not started | M     | Stable invocation ids, structured child metadata, and stronger TUI attribution are planned but not started.                                             |
+| Phase 4 child lifecycle and policy hooks | not started | M     | Shared loop alignment plus subagent start/stop hooks and block-stop reasons are planned but not started.                                                |
 
 ## Completion Dashboard
 
@@ -32,19 +32,20 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - `file_write` now requires explicit `overwrite=true` before replacing an existing file.
 - `file_edit` no longer acts as an implicit create path and now requires editing an existing file with a non-empty `old_string`.
 - `file_read` now rejects likely binary or image-like files and adds explicit continuation guidance for partial ranged reads.
+- Sensitive local file targets such as `.env*`, `.git/*`, `.vscode/*.json`, selected dotfiles, and lockfiles now escalate to `high` risk in permission prompts.
+- High-risk file targets now surface an explicit policy reason in the permission prompt and no longer grant persistent `always_allow` rules.
 - README tool descriptions now match the stricter create, overwrite, edit, and read semantics.
 
 **Remaining to Finish**
 
 - Finish separating create, overwrite, and edit intent across the remaining file-tool surface.
-- Add risk-tiered approval rules for sensitive local paths without weakening cwd containment.
 - Ensure stable diff-preview behavior and file-history coverage across all direct write paths.
 
 **Exit Criteria Check**
 
 - [ ] Create, overwrite, and edit intent are no longer conflated.
 - [x] `file_read` safely distinguishes text reads from binary-like content and guides continued reads.
-- [ ] Higher-risk local files require stronger approval than ordinary source files.
+- [x] Higher-risk local files require stronger approval than ordinary source files.
 - [ ] File-history behavior still covers every direct write path.
 
 ### Phase 2: Edit Engine Hardening
@@ -121,6 +122,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Note: this remains a planning-only task. No runtime, tool, or TUI implementation work has started yet.
 - Completed: started Phase 1 by making `file_write` require explicit overwrite permission for existing files, restricting `file_edit` to existing-file edits with non-empty `old_string`, and hardening `file_read` with binary detection plus ranged-read continuation hints.
 - Completed: updated the README tool table so the user-facing file-tool descriptions match the new create, overwrite, edit, and read behavior.
+- Completed: added high-risk file approval rules for sensitive project-local paths, surfaced policy reasons in the permission prompt, and prevented persistent `always_allow` approval on those targets while keeping cwd containment unchanged.
 
 ## Next Planning Baseline
 
