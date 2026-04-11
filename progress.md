@@ -70,6 +70,7 @@
 - Completed: added a compact Background Agents panel plus human-readable agent tool summaries so active and recent child runs are visible directly in the terminal UI while the parent session continues.
 - Completed: added a dedicated `background_agent_updated` IPC event so the engine now pushes background child launch, completion, failure, cancellation, and stop-request state changes directly to the TUI.
 - Completed: wired the TUI reducer to merge live background-agent events with existing tool-result-derived state, so the Background Agents panel updates even when no follow-up `agent_status` poll is run.
+- Completed: added transcript-level background-agent notices for launch, stop, completion, cancellation, and failure so important child-agent state transitions are visible in the main conversation flow instead of only in the side panel.
 
 ## Next Planning Baseline
 

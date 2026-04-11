@@ -58,6 +58,12 @@ interface UIMessageBase {
   model?: string;
 }
 
+export interface UISystemMessage extends UIMessageBase {
+  role: "system";
+  text: string;
+  tone: "info" | "success" | "warning" | "error";
+}
+
 export interface UIUserMessage extends UIMessageBase {
   role: "user";
   text: string;
@@ -68,7 +74,7 @@ export interface UIAssistantMessage extends UIMessageBase {
   blocks: UIAssistantBlock[];
 }
 
-export type UIMessage = UIUserMessage | UIAssistantMessage;
+export type UIMessage = UIUserMessage | UIAssistantMessage | UISystemMessage;
 
 export interface UITranscriptEntry {
   id: string;
@@ -213,6 +219,20 @@ function createAssistantMessage(
     blocks,
     timestamp: new Date().toISOString(),
     model: options?.model,
+  };
+}
+
+function createSystemMessage(
+  text: string,
+  tone: UISystemMessage["tone"],
+): UISystemMessage {
+  nextMessageId += 1;
+  return {
+    id: `msg-${nextMessageId}`,
+    role: "system",
+    text,
+    tone,
+    timestamp: new Date().toISOString(),
   };
 }
 
@@ -637,9 +657,11 @@ export function useEvents(initialModel: string, initialMode: string) {
       }
       case "background_agent_updated": {
         const p = event.payload as BackgroundAgentUpdatedPayload;
-        setUIState((s) => ({
-          ...s,
-          backgroundAgents: upsertBackgroundAgent(s.backgroundAgents, {
+        setUIState((s) => {
+          const previousAgent = s.backgroundAgents.find(
+            (agent) => agent.agentId === p.agent_id,
+          );
+          const nextAgent = {
             agentId: p.agent_id,
             description: stringOrEmpty(p.description),
             subagentType: stringOrEmpty(p.subagent_type),
@@ -650,8 +672,30 @@ export function useEvents(initialModel: string, initialMode: string) {
             outputFile: stringOrUndefined(p.output_file),
             error: stringOrUndefined(p.error),
             updatedAt: new Date().toISOString(),
-          }),
-        }));
+          };
+          const notice = buildBackgroundAgentNotice(previousAgent, nextAgent);
+          const noticeMessage = notice
+            ? createSystemMessage(notice.text, notice.tone)
+            : null;
+
+          return {
+            ...s,
+            backgroundAgents: upsertBackgroundAgent(
+              s.backgroundAgents,
+              nextAgent,
+            ),
+            messages: noticeMessage
+              ? [...s.messages, noticeMessage]
+              : s.messages,
+            transcript: noticeMessage
+              ? appendTranscriptEntry(s.transcript, {
+                  id: noticeMessage.id,
+                  kind: "message",
+                })
+              : s.transcript,
+            statusLine: notice?.text ?? s.statusLine,
+          };
+        });
         break;
       }
       case "session_restored": {
@@ -822,6 +866,11 @@ interface AgentToolResult {
   error?: string;
 }
 
+interface BackgroundAgentNotice {
+  text: string;
+  tone: UISystemMessage["tone"];
+}
+
 function applyBackgroundAgentResult(
   agents: UIBackgroundAgent[],
   payload: ToolResultPayload,
@@ -966,6 +1015,74 @@ function summarizeBackgroundAgent(
     default:
       return "Background child agent updated.";
   }
+}
+
+function buildBackgroundAgentNotice(
+  previousAgent: UIBackgroundAgent | undefined,
+  nextAgent: UIBackgroundAgent,
+): BackgroundAgentNotice | null {
+  if (previousAgent?.status === nextAgent.status) {
+    return null;
+  }
+
+  const subject = backgroundAgentSubject(nextAgent);
+
+  switch (nextAgent.status) {
+    case "running":
+      if (previousAgent) {
+        return null;
+      }
+      return {
+        text: `${subject} started in the background.`,
+        tone: "info",
+      };
+    case "cancelling":
+      return {
+        text: `${subject} is stopping.`,
+        tone: "warning",
+      };
+    case "completed":
+      return {
+        text: summarizeNoticeWithDetail(
+          `${subject} completed.`,
+          nextAgent.summary,
+        ),
+        tone: "success",
+      };
+    case "cancelled":
+      return {
+        text: summarizeNoticeWithDetail(
+          `${subject} was cancelled.`,
+          nextAgent.error || nextAgent.summary,
+        ),
+        tone: "warning",
+      };
+    case "failed":
+      return {
+        text: summarizeNoticeWithDetail(
+          `${subject} failed.`,
+          nextAgent.error || nextAgent.summary,
+        ),
+        tone: "error",
+      };
+    default:
+      return null;
+  }
+}
+
+function backgroundAgentSubject(agent: UIBackgroundAgent): string {
+  const label = agent.description || agent.agentId;
+  return `Background agent ${label}`;
+}
+
+function summarizeNoticeWithDetail(prefix: string, detail: string): string {
+  const normalized = detail.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) {
+    return prefix;
+  }
+  const truncated =
+    normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
+  return `${prefix} ${truncated}`;
 }
 
 function parseJSONObject<T>(value: string | undefined): T | null {

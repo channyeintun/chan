@@ -5,6 +5,7 @@ import type {
   UIAssistantBlock,
   UIAssistantMessage,
   UIMessage,
+  UISystemMessage,
   UIUserMessage,
   UIToolCall,
   UITranscriptEntry,
@@ -13,6 +14,7 @@ import GroupedToolCalls, { type ToolCallGroup } from "./GroupedToolCalls.js";
 import ToolProgress from "./ToolProgress.js";
 import AssistantTextMessage from "./messages/AssistantTextMessage.js";
 import StreamingAssistantMessage from "./messages/StreamingAssistantMessage.js";
+import SystemTextMessage from "./messages/SystemTextMessage.js";
 import UserTextMessage from "./messages/UserTextMessage.js";
 
 interface StreamOutputProps {
@@ -41,7 +43,7 @@ type TranscriptBlock =
   | {
       kind: "message";
       key: string;
-      message: UIAssistantMessage | UIUserMessage;
+      message: UIAssistantMessage | UISystemMessage | UIUserMessage;
       continuation: boolean;
     }
   | { kind: "tool_call"; key: string; toolCall: UIToolCall }
@@ -184,13 +186,21 @@ const StreamOutput: FC<StreamOutputProps> = ({
           return <ToolProgress key={block.key} toolCall={block.toolCall} />;
         }
 
-        return block.message.role === "assistant" ? (
-          <AssistantTextMessage
-            key={block.key}
-            message={block.message}
-            continuation={block.continuation}
-          />
-        ) : (
+        if (block.message.role === "assistant") {
+          return (
+            <AssistantTextMessage
+              key={block.key}
+              message={block.message}
+              continuation={block.continuation}
+            />
+          );
+        }
+
+        if (block.message.role === "system") {
+          return <SystemTextMessage key={block.key} message={block.message} />;
+        }
+
+        return (
           <UserTextMessage
             key={block.key}
             message={block.message}
