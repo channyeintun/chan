@@ -66,10 +66,6 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
         if (event.type === "ready") {
           next.ready = true;
         }
-        if (event.type === "error") {
-          next.error =
-            (event.payload as { message: string })?.message ?? "Unknown error";
-        }
         return next;
       });
     });

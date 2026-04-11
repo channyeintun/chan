@@ -217,7 +217,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
         {uiState.statusLine && (
           <Box paddingLeft={1} marginTop={1}>
-            <Text color="cyan">{uiState.statusLine}</Text>
+            <Text color={uiState.error ? "red" : "cyan"}>{uiState.statusLine}</Text>
           </Box>
         )}
 

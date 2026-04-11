@@ -208,6 +208,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           activeTurnStatus: "responding",
           isStreaming: true,
           statusLine: null,
+          error: null,
         }));
         break;
       }
@@ -222,6 +223,8 @@ export function useEvents(initialModel: string, initialMode: string) {
           ),
           activeTurnStatus: "thinking",
           isStreaming: true,
+          statusLine: null,
+          error: null,
         }));
         break;
       }
@@ -285,6 +288,8 @@ export function useEvents(initialModel: string, initialMode: string) {
           ...s,
           activeTurnStatus: "running_tools",
           isStreaming: true,
+          statusLine: null,
+          error: null,
           transcript: appendTranscriptEntry(s.transcript, {
             id: p.tool_id,
             kind: "tool_call",
@@ -574,10 +579,11 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ErrorPayload;
         setUIState((s) => ({
           ...s,
-          activeTurnStatus: "idle",
-          error: p.message,
-          isStreaming: false,
+          activeTurnStatus: p.recoverable ? "working" : "idle",
+          error: p.recoverable ? null : p.message,
+          isStreaming: p.recoverable ? s.isStreaming : false,
           compact: null,
+          statusLine: p.message,
         }));
         break;
       }
