@@ -21,6 +21,127 @@
 | Phase 5 compaction and cache        | in progress | M     | Session-local prompt memoization, adaptive output slot reservation, shared context-pressure policy, provider-gated cache-stable prompt ordering, and continuation-aware compaction/output-escalation coordination are landed.                                        |
 | Phase 6 UI and developer experience | in progress | M     | Data-driven work has started with async API preconnect warmup, streamed turn-latency feedback in the footer/status line, and session timing records; measured Ink optimizations and subagent/memory UI surfaces remain.                                              |
 
+## Completion Dashboard
+
+This section is the canonical phase tracker. A phase is only complete when its `Remaining to Finish` list is empty and its exit criteria are all satisfied.
+
+### Phase 2: Tool Depth
+
+**Status:** in progress
+
+**Landed**
+
+- Registered `file_diff_preview`, `file_history`, and `file_history_rewind`.
+- Added semantic validation and input-aware bash concurrency classification.
+- Added `think`, `symbol_search`, `project_overview`, `dependency_overview`, `go_definition`, and `go_references`.
+- Completed background command lifecycle tooling with `list_commands`, `command_status`, `send_command_input`, `stop_command`, and `forget_command`.
+
+**Remaining to Finish**
+
+- Evaluate whether `internal/skills/` needs explicit integration work with the expanded tool surface.
+- Decide whether any additional high-value local inspection tool is still missing enough to block Phase 2 exit.
+- Confirm the current tool surface is broad enough to satisfy the phase goal without more parity chasing.
+
+**Exit Criteria Check**
+
+- [x] Tool surface is materially broader than the original local-only set.
+- [x] Tool validation and concurrency decisions are input-aware where it matters.
+- [ ] Larger tool batches and the expanded tool surface are considered complete enough that no additional Phase 2 follow-up is required.
+
+### Phase 3: Subagents
+
+**Status:** in progress
+
+**Landed**
+
+- Added sync `agent` execution with fresh-context `explore` subagents.
+- Added broader `general-purpose` child agents with artifact mutation tools excluded.
+- Added async launch plus `agent_status` and `agent_stop` lifecycle tools.
+- Added background-agent panel, transcript notices, live update events, and child-cost surfacing.
+
+**Remaining to Finish**
+
+- Reassess whether any further transcript-clarity or delegation-quality fixes are still needed before declaring the parent-child lifecycle stable.
+- Confirm the current artifact-safe result delivery model is sufficient for v1 completion without adding more subagent types.
+- Decide whether any missing edge case in permission isolation or cancellation still blocks phase exit.
+
+**Exit Criteria Check**
+
+- [x] The model can delegate research, search, and setup work without polluting the parent turn.
+- [x] Background children do not deadlock on permission prompts under the current auto-deny policy.
+- [ ] Artifact ownership and child lifecycle behavior are stable enough that no additional Phase 3 hardening is required.
+
+### Phase 4: Memory
+
+**Status:** in progress
+
+**Landed**
+
+- Added project and user `MEMORY.md` loading with tighter caps and staleness cues.
+- Added prompt guidance for durable memory writes using existing file tools.
+- Added bounded heuristic recall plus model-backed side-query recall.
+- Added structured `MEMORY.md` entry parsing, validation, note loading, telemetry, and separate memory-recall cost tracking.
+
+**Remaining to Finish**
+
+- Decide whether the current memory write flow is sufficient or needs a small usability pass to make durable memory maintenance less manual.
+- Confirm the current side-query routing and fallback behavior are good enough to treat recall as production-stable.
+- Verify that the separation between durable memory and artifacts is complete enough to close the phase.
+
+**Exit Criteria Check**
+
+- [x] `gocode` can remember durable project guidance across sessions.
+- [x] Memory recall is selective and bounded.
+- [x] Old memories surface with age-aware caveats instead of false authority.
+- [ ] Memory workflow is considered complete enough that no additional Phase 4 follow-up is required.
+
+### Phase 5: Compaction and Cache
+
+**Status:** in progress
+
+**Landed**
+
+- Added session-local memoization for prompt sections.
+- Added adaptive output budgeting with escalation after truncation.
+- Added shared context-pressure policy across compaction, recall, and continuation.
+- Added provider-gated cache-stable prompt ordering and continuation-aware pressure coordination.
+
+**Remaining to Finish**
+
+- Confirm whether sticky-latch handling for cache-sensitive prompt fields is still needed or can be explicitly deferred.
+- Decide whether the current provider-gated caching support is sufficient to close the phase.
+- Reassess whether compaction reviewability needs any further artifact treatment before Phase 5 can be called complete.
+
+**Exit Criteria Check**
+
+- [x] Sessions keep more usable context before compaction fires.
+- [x] Repeated turns avoid unnecessary prompt rebuild churn.
+- [x] Compaction remains bounded and compatible with subagents and memory recall.
+- [ ] Provider-specific optimizations are complete enough for the intended supported providers.
+
+### Phase 6: UI and Developer Experience
+
+**Status:** in progress
+
+**Landed**
+
+- Added async API preconnect warmup and session timing records.
+- Surfaced turn timing in the footer and status line.
+- Added transcript search and better long-session navigation.
+- Added memory recall visibility, child-agent status/cost visibility, and background-command panels, notices, summaries, and cleanup behavior.
+
+**Remaining to Finish**
+
+- Add at least one more deliberate long-session or artifact-navigation improvement outside the background-command track.
+- Reassess prompt editing and keystroke responsiveness against the measured bottlenecks called out in `plan.md`.
+- Decide whether the current UI coverage is sufficient to say the slowest visible interactions have been intentionally improved.
+
+**Exit Criteria Check**
+
+- [x] The slowest visible interactions are instrumented.
+- [ ] The highest-priority measured UI bottlenecks have been improved enough to call the phase complete.
+- [x] Artifact presentation remains stronger, not weaker, after the new UI surfaces.
+
 ## Task Log
 
 ### 2026-04-12
