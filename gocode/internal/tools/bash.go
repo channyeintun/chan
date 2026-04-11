@@ -17,7 +17,7 @@ import (
 const defaultBashTimeout = 30 * time.Second
 
 var bashDangerousZshCommands = regexp.MustCompile(`\b(zmodload|emulate|sysopen|sysread|syswrite|zpty|ztcp|zsocket|zf_rm|zf_mv|zf_chmod|zf_mkdir|zf_chown|mapfile)\b`)
-var bashDangerousSubstitution = regexp.MustCompile(`\$\(|\$\{[^}]*\}|<\(|>\(`)
+var bashDangerousSubstitution = regexp.MustCompile(`<\(|>\(`)
 var bashIFSInjection = regexp.MustCompile(`\bIFS=`)
 var bashReadOnlyCommands = regexp.MustCompile(`^\s*(git\s+(diff|status|log|show|branch|tag)|ls|cat|find|rg|grep|wc|head|tail|echo|pwd|which|type|file|stat|du|df)\b`)
 
@@ -236,7 +236,7 @@ func validateBashSecurity(command string) string {
 		return "blocked: dangerous ZSH command detected"
 	}
 	if bashDangerousSubstitution.MatchString(command) {
-		return "blocked: dangerous command substitution pattern"
+		return "blocked: dangerous process substitution pattern"
 	}
 	if bashIFSInjection.MatchString(command) {
 		return "blocked: IFS injection detected"

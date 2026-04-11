@@ -7,9 +7,10 @@ var DangerousZshCommands = regexp.MustCompile(
 	`\b(zmodload|emulate|sysopen|sysread|syswrite|zpty|ztcp|zsocket|zf_rm|zf_mv|zf_chmod|zf_mkdir|zf_chown|mapfile)\b`,
 )
 
-// Command substitution patterns to reject.
+// Process substitution creates implicit file descriptors/pipes and remains
+// blocked even though normal $() and ${...} expansions are allowed.
 var DangerousSubstitution = regexp.MustCompile(
-	`\$\(|\$\{[^}]*\}|<\(|>\(`,
+	`<\(|>\(`,
 )
 
 // IFS injection.
@@ -48,7 +49,7 @@ func ValidateBashSecurity(command string) string {
 		return "blocked: dangerous ZSH command detected"
 	}
 	if DangerousSubstitution.MatchString(command) {
-		return "blocked: dangerous command substitution pattern"
+		return "blocked: dangerous process substitution pattern"
 	}
 	if IFSInjection.MatchString(command) {
 		return "blocked: IFS injection detected"
