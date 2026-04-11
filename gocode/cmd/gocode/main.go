@@ -237,6 +237,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 
 	// Start the message router — single reader goroutine for the bridge.
 	router := ipc.NewMessageRouter(ctx, bridge)
+	defer toolpkg.ShutdownBackgroundCommandsForSession()
 
 	// Fire session_start hooks (best-effort)
 	_, _ = hookRunner.Run(ctx, hooks.Payload{

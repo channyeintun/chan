@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +29,7 @@ type backgroundCommand struct {
 	cmd      *exec.Cmd
 	stdin    io.WriteCloser
 	terminal *os.File
+	cancel   context.CancelFunc
 	output   *boundedOutput
 	running  bool
 	exitCode *int
@@ -60,9 +62,11 @@ func startBackgroundShellCommand(command, cwd string) (*backgroundCommand, error
 	id := fmt.Sprintf("cmd_%d", atomic.AddUint64(&backgroundCounter, 1))
 	cmd := exec.Command("/bin/zsh", "-lc", command)
 	cmd.Dir = cwd
+	streamCtx, cancel := context.WithCancel(context.Background())
 
 	terminal, err := pty.Start(cmd)
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("start background command in pty: %w", err)
 	}
 
@@ -73,6 +77,7 @@ func startBackgroundShellCommand(command, cwd string) (*backgroundCommand, error
 		cmd:      cmd,
 		stdin:    terminal,
 		terminal: terminal,
+		cancel:   cancel,
 		output:   &boundedOutput{},
 		running:  true,
 		done:     make(chan struct{}),
@@ -82,7 +87,7 @@ func startBackgroundShellCommand(command, cwd string) (*backgroundCommand, error
 	backgroundCommands[id] = bg
 	backgroundCommandsMu.Unlock()
 
-	go streamBackgroundOutput(bg.output, terminal)
+	go streamBackgroundOutput(streamCtx, bg.output, terminal)
 	go waitForBackgroundCommand(bg)
 
 	return bg, nil
@@ -95,6 +100,10 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 	defer bg.mu.Unlock()
 	defer close(bg.done)
 	defer scheduleBackgroundCommandCleanup(bg)
+	if bg.cancel != nil {
+		bg.cancel()
+		bg.cancel = nil
+	}
 	if bg.terminal != nil {
 		_ = bg.terminal.Close()
 		bg.terminal = nil
@@ -118,14 +127,24 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 	bg.errText = err.Error()
 }
 
-func streamBackgroundOutput(buffer *boundedOutput, reader io.Reader) {
+func streamBackgroundOutput(ctx context.Context, buffer *boundedOutput, terminal *os.File) {
 	chunk := make([]byte, 4096)
 	for {
-		readLen, err := reader.Read(chunk)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		_ = terminal.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+		readLen, err := terminal.Read(chunk)
 		if readLen > 0 {
 			_, _ = buffer.Write(chunk[:readLen])
 		}
 		if err == nil {
+			continue
+		}
+		if timeoutErr, ok := err.(interface{ Timeout() bool }); ok && timeoutErr.Timeout() {
 			continue
 		}
 		if errors.Is(err, io.EOF) || errors.Is(err, syscall.EIO) {
@@ -133,6 +152,46 @@ func streamBackgroundOutput(buffer *boundedOutput, reader io.Reader) {
 		}
 		_, _ = buffer.Write([]byte(fmt.Sprintf("\n[Background PTY stream closed: %v]\n", err)))
 		return
+	}
+}
+
+func shutdownBackgroundCommands() {
+	backgroundCommandsMu.RLock()
+	commands := make([]*backgroundCommand, 0, len(backgroundCommands))
+	for _, bg := range backgroundCommands {
+		commands = append(commands, bg)
+	}
+	backgroundCommandsMu.RUnlock()
+
+	for _, bg := range commands {
+		bg.shutdown()
+	}
+}
+
+// ShutdownBackgroundCommandsForSession terminates any still-running background
+// commands so their PTY readers do not outlive engine shutdown.
+func ShutdownBackgroundCommandsForSession() {
+	shutdownBackgroundCommands()
+}
+
+func (bg *backgroundCommand) shutdown() {
+	bg.mu.Lock()
+	if bg.cancel != nil {
+		bg.cancel()
+		bg.cancel = nil
+	}
+	terminal := bg.terminal
+	bg.terminal = nil
+	bg.stdin = nil
+	cmd := bg.cmd
+	running := bg.running
+	bg.mu.Unlock()
+
+	if terminal != nil {
+		_ = terminal.Close()
+	}
+	if running && cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
 	}
 }
 
