@@ -59,6 +59,8 @@
 - Completed: registered `go_definition` in the runtime prompt and README so the agent now has a parser-backed Go navigation primitive beyond regex search.
 - Completed: added a read-only `go_references` tool that walks parsed Go ASTs and returns identifier reference locations, usage kinds, and source-line context, with optional inclusion of declaration sites.
 - Completed: registered `go_references` in the runtime prompt and README so the agent now has a companion Go-aware reference finder alongside `go_definition`.
+- Completed: added a read-only `dependency_overview` tool that summarizes dependencies from common manifests such as `go.mod`, `package.json`, `pyproject.toml`, `requirements.txt`, `Cargo.toml`, and `Gemfile` so the agent can inspect project dependencies without stitching together raw file reads.
+- Completed: registered `dependency_overview` in the runtime prompt, README, and subagent allowlists so both parent and child agents can use the same structured dependency inspection primitive.
 - Completed: started Phase 3 with a runtime-backed `agent` tool that launches a synchronous `explore` child agent in a fresh child session and returns its final report plus sidecar transcript path.
 - Completed: kept the first subagent slice artifact-safe by restricting the child tool pool to read-only exploration tools, suppressing child UI/tool event leakage, and persisting child transcripts in their own session directories.
 - Completed: widened the `agent` tool to support a synchronous `general-purpose` child agent with a broader tool pool while keeping artifact mutation tools excluded from child sessions.

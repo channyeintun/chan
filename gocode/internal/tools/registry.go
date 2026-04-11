@@ -31,6 +31,7 @@ func NewRegistry() *Registry {
 	r.Register(NewGoDefinitionTool())
 	r.Register(NewGoReferencesTool())
 	r.Register(NewProjectOverviewTool())
+	r.Register(NewDependencyOverviewTool())
 	r.Register(NewSymbolSearchTool())
 	r.Register(NewWebSearchTool())
 	r.Register(NewWebFetchTool())

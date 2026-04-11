@@ -177,6 +177,7 @@ The agent has access to:
 | **go_definition**              | Resolve Go symbol definitions with parser-backed locations    |
 | **go_references**              | Find Go identifier references with parser-backed context      |
 | **project_overview**           | Summarize repository structure, manifests, and languages      |
+| **dependency_overview**        | Summarize dependencies from common project manifests          |
 | **symbol_search**              | Find likely symbol definitions across source files            |
 | **web_search**                 | Search the web                                                |
 | **web_fetch**                  | Fetch and read a URL                                          |
