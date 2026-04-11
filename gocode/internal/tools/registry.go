@@ -31,6 +31,7 @@ func NewRegistry() *Registry {
 	r.Register(NewMultiReplaceFileContentTool())
 	r.Register(NewGlobTool())
 	r.Register(NewGrepTool())
+	r.Register(NewGoDefinitionTool())
 	r.Register(NewProjectOverviewTool())
 	r.Register(NewSymbolSearchTool())
 	r.Register(NewWebSearchTool())
