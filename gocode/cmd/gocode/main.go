@@ -282,20 +282,26 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			queryIndex++
 			turnID := queryIndex
 			turnMetrics := timing.NewCheckpointRecorder(time.Now())
+			turnStats := &turnExecutionStats{}
 			turnStopReason := ""
 			flushTurnMetrics := func(outcome string) {
 				if turnMetrics == nil {
 					return
 				}
 				_ = timingLogger.AppendSnapshot("turn", "query_latency", sessionID, turnID, turnMetrics, map[string]any{
-					"image_count":           len(payload.Images),
-					"message_count_after":   len(messages),
-					"message_count_before":  messageCountBefore,
-					"mode":                  string(mode),
-					"model":                 activeModelID,
-					"outcome":               outcome,
-					"stop_reason":           turnStopReason,
-					"user_input_characters": len(payload.Text),
+					"aggregate_tool_budget_chars": turnStats.AggregateBudgetChars,
+					"aggregate_budget_spills":     turnStats.AggregateBudgetSpills,
+					"image_count":                 len(payload.Images),
+					"message_count_after":         len(messages),
+					"message_count_before":        messageCountBefore,
+					"mode":                        string(mode),
+					"model":                       activeModelID,
+					"outcome":                     outcome,
+					"stop_reason":                 turnStopReason,
+					"tool_inline_chars":           turnStats.ToolInlineChars,
+					"tool_result_count":           turnStats.ToolResultCount,
+					"tool_spill_count":            turnStats.ToolSpillCount,
+					"user_input_characters":       len(payload.Text),
 				})
 				turnMetrics = nil
 			}
@@ -383,7 +389,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						return trackModelStream(callCtx, bridge, tracker, client, req)
 					},
 					ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-						return executeToolCalls(callCtx, bridge, router, registry, permissionCtx, tracker, planner, artifactManager, hookRunner, sessionID, client.Capabilities().MaxOutputTokens, turnMetrics, calls)
+						return executeToolCalls(callCtx, bridge, router, registry, permissionCtx, tracker, planner, artifactManager, hookRunner, sessionID, client.Capabilities().MaxOutputTokens, turnMetrics, turnStats, calls)
 					},
 					CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
 						result, err := compactWithMetrics(callCtx, bridge, tracker, client, timingLogger, sessionID, turnID, string(reason), current)
@@ -755,12 +761,17 @@ func executeToolCalls(
 	sessionID string,
 	maxOutputTokens int,
 	turnMetrics *timing.CheckpointRecorder,
+	turnStats *turnExecutionStats,
 	calls []api.ToolCall,
 ) ([]api.ToolResult, error) {
 	results := make([]api.ToolResult, len(calls))
 	approved := make([]toolpkg.PendingCall, 0, len(calls))
 	approvalFeedback := make(map[int]string, len(calls))
 	budget := toolpkg.DefaultResultBudgetForModel(filepath.Join(os.TempDir(), "gocode-session"), maxOutputTokens)
+	aggregateBudget := toolpkg.NewAggregateResultBudget(budget)
+	if turnStats != nil {
+		turnStats.AggregateBudgetChars = aggregateBudget.MaxChars()
+	}
 
 	for index, call := range calls {
 		call, err := normalizeToolCall(call)
@@ -874,11 +885,21 @@ func executeToolCalls(
 			spillPath := result.Output.SpillPath
 			truncated := result.Output.Truncated
 			if !result.Output.IsError {
-				budgetedOutput, artifact, err := budgetToolOutput(ctx, artifactManager, sessionID, budget, call, output)
+				budgetedOutput, artifact, budgetInfo, err := budgetToolOutput(ctx, artifactManager, sessionID, budget, aggregateBudget, call, output)
 				output = budgetedOutput
 				if err != nil {
 					if emitErr := bridge.EmitError(fmt.Sprintf("persist tool-log artifact: %v", err), true); emitErr != nil {
 						return nil, emitErr
+					}
+				}
+				if turnStats != nil {
+					turnStats.ToolResultCount++
+					turnStats.ToolInlineChars += budgetInfo.InlineChars
+					if budgetInfo.Spilled {
+						turnStats.ToolSpillCount++
+					}
+					if budgetInfo.AggregateLimited {
+						turnStats.AggregateBudgetSpills++
 					}
 				}
 				if artifact.ID != "" {
@@ -1863,14 +1884,19 @@ func budgetToolOutput(
 	artifactManager *artifactspkg.Manager,
 	sessionID string,
 	budget toolpkg.ResultBudget,
+	aggregateBudget *toolpkg.AggregateResultBudget,
 	call api.ToolCall,
 	output string,
-) (string, artifactspkg.Artifact, error) {
-	if len(output) <= budget.MaxChars {
-		return output, artifactspkg.Artifact{}, nil
+) (string, artifactspkg.Artifact, toolBudgetInfo, error) {
+	inlineLimit, shouldSpill, aggregateLimited := aggregateBudget.InlineLimit(len(output), budget)
+	if !shouldSpill {
+		aggregateBudget.Consume(len(output))
+		return output, artifactspkg.Artifact{}, toolBudgetInfo{InlineChars: len(output)}, nil
 	}
 	if artifactManager == nil {
-		return truncateOutputPreview(output, budget.PreviewLen, "", len(output)), artifactspkg.Artifact{}, nil
+		preview := truncateOutputPreview(output, inlineLimit, "", len(output))
+		aggregateBudget.Consume(len(preview))
+		return preview, artifactspkg.Artifact{}, toolBudgetInfo{InlineChars: len(preview), Spilled: true, AggregateLimited: aggregateLimited}, nil
 	}
 
 	artifact, _, _, err := artifactManager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
@@ -1885,10 +1911,28 @@ func budgetToolOutput(
 		},
 	}, sessionID, "tool-log-"+call.ID)
 	if err != nil {
-		return truncateOutputPreview(output, budget.PreviewLen, "", len(output)), artifactspkg.Artifact{}, err
+		preview := truncateOutputPreview(output, inlineLimit, "", len(output))
+		aggregateBudget.Consume(len(preview))
+		return preview, artifactspkg.Artifact{}, toolBudgetInfo{InlineChars: len(preview), Spilled: true, AggregateLimited: aggregateLimited}, err
 	}
 
-	return truncateOutputPreview(output, budget.PreviewLen, artifact.ContentPath, len(output)), artifact, nil
+	preview := truncateOutputPreview(output, inlineLimit, artifact.ContentPath, len(output))
+	aggregateBudget.Consume(len(preview))
+	return preview, artifact, toolBudgetInfo{InlineChars: len(preview), Spilled: true, AggregateLimited: aggregateLimited}, nil
+}
+
+type turnExecutionStats struct {
+	AggregateBudgetChars  int
+	AggregateBudgetSpills int
+	ToolInlineChars       int
+	ToolResultCount       int
+	ToolSpillCount        int
+}
+
+type toolBudgetInfo struct {
+	AggregateLimited bool
+	InlineChars      int
+	Spilled          bool
 }
 
 func truncateOutputPreview(output string, previewLen int, artifactPath string, totalChars int) string {

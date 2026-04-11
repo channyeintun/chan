@@ -14,7 +14,7 @@
 | Workstream                          | Status    | Scope | Notes                                                                                      |
 | ----------------------------------- | --------- | ----- | ------------------------------------------------------------------------------------------ |
 | Planning refresh                    | completed | S     | 2026-04-12 explanation-driven roadmap replaced stale parity-era planning docs.             |
-| Phase 1 runtime measurement         | in progress | S   | Checkpoint logging and artifact ownership contract landed; threshold validation remains.   |
+| Phase 1 runtime measurement         | in progress | S   | Checkpoint logging, artifact ownership, and aggregate tool-result budgeting landed; continuation threshold validation remains. |
 | Phase 2 tool depth                  | planned   | L     | Register existing tools, add Think tool, semantic validation, input-aware concurrency.     |
 | Phase 3 subagents                   | planned   | XL    | Parent-child delegation, fresh context model, permission isolation, sidechain transcripts. |
 | Phase 4 memory                      | planned   | L     | Four-type taxonomy, MEMORY.md index, async recall, staleness warnings.                    |
@@ -34,7 +34,9 @@
 - Completed: instrumented engine startup, per-query first-token latency, first tool-result latency, first artifact-focus latency, and compaction duration without changing runtime behavior.
 - Completed: made session artifact ownership explicit in the artifact manager via normalized ownership metadata (`owner_scope`, `owner_id`, `owner_authority`) while preserving `session_id` compatibility for existing lookups.
 - Completed: routed tool-log artifact persistence through the session upsert path so implementation plans, task lists, walkthroughs, search reports, diff previews, and tool logs all share the same parent-session ownership contract.
-- Note: Phase 1 is now in progress rather than planned; the remaining work is continuation and budgeting threshold validation against real timing data.
+- Completed: added an aggregate per-turn inline tool-result budget so parallel tool batches cannot flood a single turn even when each individual tool result stays under its own cap.
+- Completed: extended turn timing metadata with tool-result count, inline-char usage, spill count, and aggregate-budget spill count so future threshold tuning has real session data to work from.
+- Note: no `timings.ndjson` samples existed locally yet, so continuation-threshold validation still needs real session data from subsequent runs.
 
 ## Next Planning Baseline
 
