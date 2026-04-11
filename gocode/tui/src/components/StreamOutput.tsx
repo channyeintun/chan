@@ -25,6 +25,12 @@ interface StreamOutputProps {
   isStreaming: boolean;
   activeTurnStatus: UIActiveTurnStatus;
   model: string;
+  transcriptSearchQuery?: string;
+  transcriptSearchSelectedIndex?: number;
+  onTranscriptSearchStatsChange?: (
+    totalMatches: number,
+    selectedIndex: number,
+  ) => void;
 }
 
 // Keep a few screens of recent transcript mounted without letting long sessions
@@ -57,6 +63,9 @@ const StreamOutput: FC<StreamOutputProps> = ({
   isStreaming,
   activeTurnStatus,
   model,
+  transcriptSearchQuery = "",
+  transcriptSearchSelectedIndex = 0,
+  onTranscriptSearchStatsChange,
 }) => {
   const [sliceStartOverride, setSliceStartOverride] = useState<number | null>(
     null,
@@ -107,6 +116,27 @@ const StreamOutput: FC<StreamOutputProps> = ({
       visibleSliceStart -
       visibleTranscriptBlocks.length,
   );
+  const searchQuery = transcriptSearchQuery.trim().toLowerCase();
+  const searchMatchIndices = useMemo(() => {
+    if (!searchQuery) {
+      return [] as number[];
+    }
+
+    const matches: number[] = [];
+    transcriptBlocks.forEach((block, index) => {
+      if (blockSearchText(block).includes(searchQuery)) {
+        matches.push(index);
+      }
+    });
+    return matches;
+  }, [searchQuery, transcriptBlocks]);
+  const normalizedSearchSelectedIndex =
+    searchMatchIndices.length === 0
+      ? -1
+      : Math.max(
+          0,
+          Math.min(transcriptSearchSelectedIndex, searchMatchIndices.length - 1),
+        );
 
   useEffect(() => {
     if (transcriptBlocks.length <= MAX_TRANSCRIPT_BLOCKS) {
@@ -125,6 +155,39 @@ const StreamOutput: FC<StreamOutputProps> = ({
       setSliceStartOverride(clamped);
     }
   }, [maxSliceStart, sliceStartOverride, transcriptBlocks.length]);
+
+  useEffect(() => {
+    onTranscriptSearchStatsChange?.(
+      searchMatchIndices.length,
+      normalizedSearchSelectedIndex,
+    );
+  }, [
+    normalizedSearchSelectedIndex,
+    onTranscriptSearchStatsChange,
+    searchMatchIndices.length,
+  ]);
+
+  useEffect(() => {
+    if (!searchQuery || normalizedSearchSelectedIndex < 0) {
+      return;
+    }
+
+    const targetIndex = searchMatchIndices[normalizedSearchSelectedIndex];
+    if (typeof targetIndex !== "number") {
+      return;
+    }
+
+    const desiredStart = clampSliceStart(
+      targetIndex - Math.floor(MAX_TRANSCRIPT_BLOCKS / 3),
+      maxSliceStart,
+    );
+    setSliceStartOverride(desiredStart >= maxSliceStart ? null : desiredStart);
+  }, [
+    maxSliceStart,
+    normalizedSearchSelectedIndex,
+    searchMatchIndices,
+    searchQuery,
+  ]);
 
   useInput(
     (_input, key) => {
@@ -177,35 +240,90 @@ const StreamOutput: FC<StreamOutputProps> = ({
         </Box>
       ) : null}
 
+      {searchQuery ? (
+        <Box marginBottom={1}>
+          <Text color={searchMatchIndices.length > 0 ? "cyan" : "yellow"}>
+            {searchMatchIndices.length > 0
+              ? `Transcript search: ${searchMatchIndices.length} match${searchMatchIndices.length === 1 ? "" : "es"} · showing ${normalizedSearchSelectedIndex + 1}/${searchMatchIndices.length}`
+              : `Transcript search: no matches for \"${transcriptSearchQuery}\"`}
+          </Text>
+        </Box>
+      ) : null}
+
       {visibleTranscriptBlocks.map((block) => {
+        const absoluteIndex = transcriptBlocks.indexOf(block);
+        const matchOrdinal = searchMatchIndices.indexOf(absoluteIndex);
+        const isSelectedSearchMatch =
+          matchOrdinal >= 0 && matchOrdinal === normalizedSearchSelectedIndex;
+        const isSearchMatch = matchOrdinal >= 0;
+
         if (block.kind === "tool_group") {
-          return <GroupedToolCalls key={block.key} group={block.group} />;
+          return (
+            <Box key={block.key} flexDirection="column">
+              {isSelectedSearchMatch ? (
+                <Text color="cyan">Search match</Text>
+              ) : isSearchMatch ? (
+                <Text dimColor>match</Text>
+              ) : null}
+              <GroupedToolCalls group={block.group} />
+            </Box>
+          );
         }
 
         if (block.kind === "tool_call") {
-          return <ToolProgress key={block.key} toolCall={block.toolCall} />;
+          return (
+            <Box key={block.key} flexDirection="column">
+              {isSelectedSearchMatch ? (
+                <Text color="cyan">Search match</Text>
+              ) : isSearchMatch ? (
+                <Text dimColor>match</Text>
+              ) : null}
+              <ToolProgress toolCall={block.toolCall} />
+            </Box>
+          );
         }
 
         if (block.message.role === "assistant") {
           return (
-            <AssistantTextMessage
-              key={block.key}
-              message={block.message}
-              continuation={block.continuation}
-            />
+            <Box key={block.key} flexDirection="column">
+              {isSelectedSearchMatch ? (
+                <Text color="cyan">Search match</Text>
+              ) : isSearchMatch ? (
+                <Text dimColor>match</Text>
+              ) : null}
+              <AssistantTextMessage
+                message={block.message}
+                continuation={block.continuation}
+              />
+            </Box>
           );
         }
 
         if (block.message.role === "system") {
-          return <SystemTextMessage key={block.key} message={block.message} />;
+          return (
+            <Box key={block.key} flexDirection="column">
+              {isSelectedSearchMatch ? (
+                <Text color="cyan">Search match</Text>
+              ) : isSearchMatch ? (
+                <Text dimColor>match</Text>
+              ) : null}
+              <SystemTextMessage message={block.message} />
+            </Box>
+          );
         }
 
         return (
-          <UserTextMessage
-            key={block.key}
-            message={block.message}
-            continuation={block.continuation}
-          />
+          <Box key={block.key} flexDirection="column">
+            {isSelectedSearchMatch ? (
+              <Text color="cyan">Search match</Text>
+            ) : isSearchMatch ? (
+              <Text dimColor>match</Text>
+            ) : null}
+            <UserTextMessage
+              message={block.message}
+              continuation={block.continuation}
+            />
+          </Box>
         );
       })}
 
@@ -400,4 +518,42 @@ function toolGroupKind(toolCall: UIToolCall): ToolCallGroup["kind"] | null {
     default:
       return null;
   }
+}
+
+function blockSearchText(block: TranscriptBlock): string {
+  switch (block.kind) {
+    case "message":
+      return messageSearchText(block.message);
+    case "tool_call":
+      return toolCallSearchText(block.toolCall);
+    case "tool_group":
+      return block.group.toolCalls.map(toolCallSearchText).join("\n");
+    default:
+      return "";
+  }
+}
+
+function messageSearchText(message: UIMessage): string {
+  switch (message.role) {
+    case "assistant":
+      return message.blocks.map((block) => block.text).join("\n").toLowerCase();
+    case "system":
+    case "user":
+      return message.text.toLowerCase();
+    default:
+      return "";
+  }
+}
+
+function toolCallSearchText(toolCall: UIToolCall): string {
+  return [
+    toolCall.name,
+    toolCall.input,
+    toolCall.output,
+    toolCall.error,
+    toolCall.preview,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .join("\n")
+    .toLowerCase();
 }

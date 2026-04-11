@@ -8,6 +8,7 @@ interface InputProps {
   mode: string;
   isLoading: boolean;
   onSubmit: () => void;
+  onOpenTranscriptSearch: () => void;
   onImagePaste: (images: PastedImageData[]) => void;
   onPasteWarning: (warnings: string[]) => void;
   onModeToggle: () => void;
@@ -99,6 +100,7 @@ const Input: FC<InputProps> = ({
   mode,
   isLoading,
   onSubmit,
+  onOpenTranscriptSearch,
   onImagePaste,
   onPasteWarning,
   onModeToggle,
@@ -212,6 +214,9 @@ const Input: FC<InputProps> = ({
           return;
         case "f":
           prompt.moveRight();
+          return;
+        case "g":
+          onOpenTranscriptSearch();
           return;
         case "h":
           prompt.backspace();

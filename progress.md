@@ -92,6 +92,8 @@
 - Completed: started Phase 6 by adding async API preconnect warmup during engine startup, reusing each provider client's existing HTTP transport and writing session timing records for warmup outcomes without blocking ready-to-query startup.
 - Completed: surfaced streamed turn-latency checkpoints in the TUI footer and status line so first-token, first-tool-result, artifact-focus, and total turn timings are visible during and after a turn instead of staying buried in session timing logs.
 - Completed: removed low-value ready-state status copy such as `Engine ready (protocol v1)` so the UI now relies on user-relevant readiness and activity signals instead of filling the screen with protocol details.
+- Completed: added a local transcript search mode in the Ink TUI, activated with `Ctrl+G`, so long sessions can jump between matching transcript blocks without issuing a new model/tool request.
+- Completed: taught transcript paging to recenter around selected search hits and surface visible match markers plus a dedicated search prompt, extending the existing PageUp/PageDown history window into actual long-session search navigation.
 - Completed: emitted structured `memory_recalled` telemetry from the query loop using existing MEMORY.md recall metadata so each turn can report which durable notes were selected without polluting the transcript.
 - Completed: surfaced low-noise per-turn memory recall summaries in the TUI footer, showing recalled note titles and recall source while keeping full recall content out of the main conversation flow.
 - Completed: switched MEMORY.md index injection from whole-file dumping to bounded heuristic recall so only a small set of lines relevant to the current request enters the prompt by default.

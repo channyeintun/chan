@@ -10,6 +10,7 @@ import PlanPanel from "./components/PlanPanel.js";
 import PromptFooter from "./components/PromptFooter.js";
 import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
+import TranscriptSearchPrompt from "./components/TranscriptSearchPrompt.js";
 import PermissionPrompt from "./components/PermissionPrompt.js";
 import { usePromptHistory } from "./hooks/usePromptHistory.js";
 import {
@@ -53,6 +54,12 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const [nextImageId, setNextImageId] = useState(1);
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
   const [nextQueuedPromptId, setNextQueuedPromptId] = useState(1);
+  const [transcriptSearchActive, setTranscriptSearchActive] = useState(false);
+  const [transcriptSearchQuery, setTranscriptSearchQuery] = useState("");
+  const [transcriptSearchSelectedIndex, setTranscriptSearchSelectedIndex] =
+    useState(0);
+  const [transcriptSearchMatchCount, setTranscriptSearchMatchCount] =
+    useState(0);
   const {
     uiState,
     handleEvent,
@@ -214,6 +221,13 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   };
 
   const handleCancel = () => {
+    if (transcriptSearchActive) {
+      setTranscriptSearchActive(false);
+      setTranscriptSearchQuery("");
+      setTranscriptSearchSelectedIndex(0);
+      setTranscriptSearchMatchCount(0);
+      return;
+    }
     if (!uiState.isStreaming) {
       return;
     }
@@ -224,8 +238,52 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const isPromptDisabled =
     !isEngineReady ||
     !!engine.error ||
+    transcriptSearchActive ||
     uiState.pendingPermission !== null ||
     uiState.pendingArtifactReview !== null;
+
+  const openTranscriptSearch = useCallback(() => {
+    setTranscriptSearchActive(true);
+    setTranscriptSearchSelectedIndex(0);
+  }, []);
+
+  const closeTranscriptSearch = useCallback(() => {
+    setTranscriptSearchActive(false);
+    setTranscriptSearchQuery("");
+    setTranscriptSearchSelectedIndex(0);
+    setTranscriptSearchMatchCount(0);
+  }, []);
+
+  const handleTranscriptSearchQueryChange = useCallback((value: string) => {
+    setTranscriptSearchQuery(value);
+    setTranscriptSearchSelectedIndex(0);
+  }, []);
+
+  const handleTranscriptSearchNext = useCallback(() => {
+    setTranscriptSearchSelectedIndex((current) => {
+      if (transcriptSearchMatchCount <= 0) {
+        return 0;
+      }
+      return (current + 1) % transcriptSearchMatchCount;
+    });
+  }, [transcriptSearchMatchCount]);
+
+  const handleTranscriptSearchPrevious = useCallback(() => {
+    setTranscriptSearchSelectedIndex((current) => {
+      if (transcriptSearchMatchCount <= 0) {
+        return 0;
+      }
+      return (current - 1 + transcriptSearchMatchCount) % transcriptSearchMatchCount;
+    });
+  }, [transcriptSearchMatchCount]);
+
+  const handleTranscriptSearchStatsChange = useCallback(
+    (totalMatches: number, selectedIndex: number) => {
+      setTranscriptSearchMatchCount(totalMatches);
+      setTranscriptSearchSelectedIndex(totalMatches > 0 ? Math.max(0, selectedIndex) : 0);
+    },
+    [],
+  );
 
   return (
     <Box flexDirection="column" height="100%">
@@ -286,6 +344,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           isStreaming={uiState.isStreaming}
           activeTurnStatus={uiState.activeTurnStatus}
           model={uiState.model}
+          transcriptSearchQuery={transcriptSearchQuery}
+          transcriptSearchSelectedIndex={transcriptSearchSelectedIndex}
+          onTranscriptSearchStatsChange={handleTranscriptSearchStatsChange}
         />
 
         {uiState.backgroundAgents.length > 0 && (
@@ -350,17 +411,30 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
               )}
             </Box>
           )}
-          <Input
-            prompt={prompt}
-            mode={uiState.mode}
-            isLoading={uiState.isStreaming}
-            onSubmit={handleSubmit}
-            onImagePaste={handleImagePaste}
-            onPasteWarning={handlePasteWarning}
-            onModeToggle={engine.sendModeToggle}
-            onCancel={handleCancel}
-            disabled={isPromptDisabled}
-          />
+          {transcriptSearchActive ? (
+            <TranscriptSearchPrompt
+              query={transcriptSearchQuery}
+              matchCount={transcriptSearchMatchCount}
+              selectedIndex={transcriptSearchSelectedIndex}
+              onChange={handleTranscriptSearchQueryChange}
+              onNext={handleTranscriptSearchNext}
+              onPrevious={handleTranscriptSearchPrevious}
+              onClose={closeTranscriptSearch}
+            />
+          ) : (
+            <Input
+              prompt={prompt}
+              mode={uiState.mode}
+              isLoading={uiState.isStreaming}
+              onSubmit={handleSubmit}
+              onOpenTranscriptSearch={openTranscriptSearch}
+              onImagePaste={handleImagePaste}
+              onPasteWarning={handlePasteWarning}
+              onModeToggle={engine.sendModeToggle}
+              onCancel={handleCancel}
+              disabled={isPromptDisabled}
+            />
+          )}
           {pasteWarning && (
             <Box paddingLeft={1} marginTop={1}>
               <Text color="yellow">{pasteWarning}</Text>
