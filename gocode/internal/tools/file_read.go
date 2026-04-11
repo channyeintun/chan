@@ -2,15 +2,20 @@ package tools
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 const fileReadMaxTokenBytes = 2 * 1024 * 1024
+const fileReadBinarySampleBytes = 8192
 
 // FileReadTool reads file contents from disk, optionally limited to a line range.
 type FileReadTool struct{}
@@ -25,7 +30,7 @@ func (t *FileReadTool) Name() string {
 }
 
 func (t *FileReadTool) Description() string {
-	return "Read a text file from disk, optionally limited to a line range."
+	return "Read a text file from disk, optionally limited to a line range. For large files, continue reading with start_line and end_line."
 }
 
 func (t *FileReadTool) InputSchema() any {
@@ -88,11 +93,27 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	}
 	defer file.Close()
 
+	sample := make([]byte, fileReadBinarySampleBytes)
+	readCount, readErr := file.Read(sample)
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
+		return ToolOutput{}, fmt.Errorf("sample file %q: %w", filePath, readErr)
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		return ToolOutput{}, fmt.Errorf("rewind file %q: %w", filePath, err)
+	}
+	if isLikelyBinaryFile(filePath, sample[:readCount]) {
+		return ToolOutput{
+			Output:  fmt.Sprintf("%s: binary or image-like file detected; file_read only supports text files and skipped this read for safety", filePath),
+			IsError: true,
+		}, nil
+	}
+
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64*1024), fileReadMaxTokenBytes)
 
 	var builder strings.Builder
 	lineNo := 0
+	hasMoreLines := false
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
@@ -105,6 +126,7 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 			continue
 		}
 		if endLine > 0 && lineNo > endLine {
+			hasMoreLines = true
 			break
 		}
 		fmt.Fprintf(&builder, "%d\t%s\n", lineNo, scanner.Text())
@@ -126,7 +148,43 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	}
 
 	output := strings.TrimRight(builder.String(), "\n")
+	if hasMoreLines && endLine > 0 {
+		nextStart := endLine + 1
+		nextEnd := endLine + max(1, endLine-startLine+1)
+		output += fmt.Sprintf("\n\n[Partial read. Continue with start_line=%d and end_line=%d.]", nextStart, nextEnd)
+		return ToolOutput{Output: output, Truncated: true}, nil
+	}
 	return ToolOutput{Output: output}, nil
+}
+
+func isLikelyBinaryFile(filePath string, sample []byte) bool {
+	if len(sample) == 0 {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".tif", ".tiff", ".pdf", ".zip", ".gz", ".tar", ".jar", ".exe", ".dll", ".so", ".dylib", ".woff", ".woff2", ".ttf", ".otf":
+		return true
+	}
+	if bytes.IndexByte(sample, 0) >= 0 {
+		return true
+	}
+	if !utf8.Valid(sample) {
+		return true
+	}
+	controlBytes := 0
+	for _, b := range sample {
+		if b < 0x20 && b != '\n' && b != '\r' && b != '\t' && b != '\f' {
+			controlBytes++
+		}
+	}
+	return controlBytes > len(sample)/10
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func fileReadRange(params map[string]any) (int, int, error) {

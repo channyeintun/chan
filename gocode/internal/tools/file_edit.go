@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -21,7 +20,7 @@ func (t *FileEditTool) Name() string {
 }
 
 func (t *FileEditTool) Description() string {
-	return "Perform exact string replacements in an existing text file, or create a new file when old_string is empty."
+	return "Perform exact string replacements in an existing text file. Use file_write to create new files or overwrite full file contents."
 }
 
 func (t *FileEditTool) InputSchema() any {
@@ -57,6 +56,35 @@ func (t *FileEditTool) Concurrency(input ToolInput) ConcurrencyDecision {
 	return ConcurrencySerial
 }
 
+func (t *FileEditTool) Validate(input ToolInput) error {
+	filePath, ok := stringParam(input.Params, "file_path")
+	if !ok || strings.TrimSpace(filePath) == "" {
+		return fmt.Errorf("file_edit requires file_path")
+	}
+	resolvedPath, err := resolveToolPath(filePath)
+	if err != nil {
+		return err
+	}
+	oldString, ok := stringParam(input.Params, "old_string")
+	if !ok {
+		return fmt.Errorf("file_edit requires old_string")
+	}
+	if oldString == "" {
+		return fmt.Errorf("file_edit requires a non-empty old_string; use file_write to create or overwrite files")
+	}
+	info, err := os.Stat(resolvedPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("file does not exist: %s (use file_write to create it)", resolvedPath)
+		}
+		return fmt.Errorf("stat file %q: %w", resolvedPath, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%q is a directory", resolvedPath)
+	}
+	return nil
+}
+
 func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
 	select {
 	case <-ctx.Done():
@@ -81,55 +109,29 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	if !ok {
 		return ToolOutput{}, fmt.Errorf("file_edit requires new_string")
 	}
+	if oldString == "" {
+		return ToolOutput{}, fmt.Errorf("file_edit requires a non-empty old_string; use file_write to create or overwrite files")
+	}
 	if oldString == newString {
 		return ToolOutput{}, fmt.Errorf("no changes to make: old_string and new_string are exactly the same")
 	}
 
 	replaceAll := boolParam(input.Params, "replace_all")
 
-	trackFileBeforeWrite(filePath)
-
-	parentDir := filepath.Dir(filePath)
-	if err := os.MkdirAll(parentDir, 0o755); err != nil {
-		return ToolOutput{}, fmt.Errorf("create parent directory %q: %w", parentDir, err)
-	}
-
 	contentBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return ToolOutput{}, fmt.Errorf("read file %q: %w", filePath, err)
 		}
-
-		if oldString != "" {
-			return ToolOutput{}, fmt.Errorf("file does not exist: %s", filePath)
-		}
-
-		if err := os.WriteFile(filePath, []byte(newString), 0o644); err != nil {
-			return ToolOutput{}, fmt.Errorf("write file %q: %w", filePath, err)
-		}
-		return ToolOutput{Output: fmt.Sprintf("File created successfully: %s", filePath)}, nil
+		return ToolOutput{}, fmt.Errorf("file does not exist: %s (use file_write to create it)", filePath)
 	}
+
+	trackFileBeforeWrite(filePath)
 
 	originalContent := string(contentBytes)
 	content, originalLineEnding, hadTrailingNewline := normalizeFileForLineEditing(originalContent)
 	normalizedOldString := strings.ReplaceAll(oldString, "\r\n", "\n")
 	normalizedNewString := strings.ReplaceAll(newString, "\r\n", "\n")
-	if oldString == "" {
-		if strings.TrimSpace(content) != "" {
-			return ToolOutput{}, fmt.Errorf("cannot create new file: file already exists and is not empty")
-		}
-		if err := os.WriteFile(filePath, []byte(newString), 0o644); err != nil {
-			return ToolOutput{}, fmt.Errorf("write file %q: %w", filePath, err)
-		}
-		preview, insertions, deletions := buildFileDiffPreview(content, newString)
-		return ToolOutput{
-			Output:     fmt.Sprintf("File initialized successfully: %s", filePath),
-			FilePath:   filePath,
-			Preview:    preview,
-			Insertions: insertions,
-			Deletions:  deletions,
-		}, nil
-	}
 
 	matchCount := strings.Count(content, normalizedOldString)
 	if matchCount == 0 {
