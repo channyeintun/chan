@@ -21,10 +21,14 @@ type MemoryFile struct {
 }
 
 const (
-	memoryTypeProject      = "project"
-	memoryTypeLocal        = "local"
-	memoryTypeProjectIndex = "project-index"
-	memoryTypeUserIndex    = "user-index"
+	memoryTypeProject       = "project"
+	memoryTypeLocal         = "local"
+	memoryTypeProjectIndex  = "project-index"
+	memoryTypeUserIndex     = "user-index"
+	memoryTypeUserNote      = "user"
+	memoryTypeFeedbackNote  = "feedback"
+	memoryTypeProjectNote   = "project"
+	memoryTypeReferenceNote = "reference"
 
 	maxMemoryFileBytes  = 40_000
 	maxMemoryIndexBytes = 25_000
@@ -339,8 +343,66 @@ func formatMemoryWriteGuidance() string {
 	b.WriteString(userIndexPath)
 	b.WriteString("\n")
 	b.WriteString("- Memory file types: user, feedback, project, reference. Prefer short Markdown files with YAML frontmatter that records at least title, type, and updated_at.\n")
+	b.WriteString("- Canonical project memory filename example: ")
+	b.WriteString(filepath.Join(projectMemoryDir, suggestedMemoryFilename(memoryTypeProjectNote, "Example project note")))
+	b.WriteString("\n")
+	b.WriteString("- Canonical user memory filename example: ")
+	b.WriteString(filepath.Join(userMemoryDir, suggestedMemoryFilename(memoryTypeUserNote, "Example user preference")))
+	b.WriteString("\n")
 	b.WriteString("- When writing a new memory file, also add or update a concise entry in the appropriate MEMORY.md index so future recall can find it.\n")
 	b.WriteString("- Store only durable, non-derivable guidance. If a fact can be re-derived from the repository state, prefer not to save it as memory.\n")
+	b.WriteString("- Recommended memory file template:\n")
+	b.WriteString(indentLines(memoryFileTemplate(memoryTypeProjectNote, "Example project note"), "  "))
+	b.WriteString("\n")
+	b.WriteString("- Recommended MEMORY.md index entry format:\n")
+	b.WriteString(indentLines(memoryIndexEntryTemplate(memoryTypeProjectNote, "Example project note", suggestedMemoryFilename(memoryTypeProjectNote, "Example project note")), "  "))
 
 	return strings.TrimSpace(b.String())
+}
+
+func suggestedMemoryFilename(memoryType, title string) string {
+	slug := strings.ToLower(strings.TrimSpace(title))
+	slug = nonSlugChars.ReplaceAllString(slug, "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		slug = "note"
+	}
+	if len(slug) > 48 {
+		slug = strings.Trim(slug[:48], "-")
+	}
+	return fmt.Sprintf("%s-%s.md", memoryType, slug)
+}
+
+func memoryFileTemplate(memoryType, title string) string {
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("title: ")
+	b.WriteString(title)
+	b.WriteString("\n")
+	b.WriteString("type: ")
+	b.WriteString(memoryType)
+	b.WriteString("\n")
+	b.WriteString("updated_at: ")
+	b.WriteString(time.Now().UTC().Format(time.RFC3339))
+	b.WriteString("\n")
+	b.WriteString("---\n\n")
+	b.WriteString("- Durable note summary\n")
+	b.WriteString("- Why it matters\n")
+	b.WriteString("- Trigger or verification cue\n")
+	return b.String()
+}
+
+func memoryIndexEntryTemplate(memoryType, title, filename string) string {
+	return fmt.Sprintf("- [%s] %s (%s)", filename, title, memoryType)
+}
+
+func indentLines(value, indent string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(value, "\n"), "\n")
+	for i := range lines {
+		lines[i] = indent + lines[i]
+	}
+	return strings.Join(lines, "\n")
 }
