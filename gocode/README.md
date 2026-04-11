@@ -171,6 +171,7 @@ The agent has access to:
 | **multi_replace_file_content** | Apply multiple validated block replacements in one file write |
 | **glob**                       | Find files by pattern                                         |
 | **grep**                       | Search file contents (ripgrep)                                |
+| **project_overview**           | Summarize repository structure, manifests, and languages      |
 | **symbol_search**              | Find likely symbol definitions across source files            |
 | **web_search**                 | Search the web                                                |
 | **web_fetch**                  | Fetch and read a URL                                          |
