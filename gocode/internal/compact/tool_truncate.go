@@ -1,17 +1,21 @@
 package compact
 
-import "github.com/channyeintun/gocode/internal/api"
+import (
+	"strings"
+
+	"github.com/channyeintun/gocode/internal/api"
+)
 
 // CompactableTools lists tools whose old results can be safely truncated.
 var CompactableTools = map[string]bool{
-	"FileRead":  true,
-	"Bash":      true,
-	"Grep":      true,
-	"Glob":      true,
-	"WebSearch": true,
-	"WebFetch":  true,
-	"FileEdit":  true,
-	"FileWrite": true,
+	"file_read":  true,
+	"bash":       true,
+	"grep":       true,
+	"glob":       true,
+	"web_search": true,
+	"web_fetch":  true,
+	"file_edit":  true,
+	"file_write": true,
 }
 
 const truncatedMarker = "[Old tool result content cleared]"
@@ -33,7 +37,7 @@ func TruncateToolResults(messages []api.Message) []api.Message {
 		if msg.ToolResult == nil {
 			continue
 		}
-		toolName := toolNamesByCallID[msg.ToolResult.ToolCallID]
+		toolName := canonicalCompactableToolName(toolNamesByCallID[msg.ToolResult.ToolCallID])
 		if !CompactableTools[toolName] {
 			continue
 		}
@@ -47,7 +51,7 @@ func TruncateToolResults(messages []api.Message) []api.Message {
 		if msg.Role != api.RoleTool || msg.ToolResult == nil {
 			continue
 		}
-		toolName := toolNamesByCallID[msg.ToolResult.ToolCallID]
+		toolName := canonicalCompactableToolName(toolNamesByCallID[msg.ToolResult.ToolCallID])
 		if !CompactableTools[toolName] {
 			continue
 		}
@@ -64,4 +68,28 @@ func TruncateToolResults(messages []api.Message) []api.Message {
 	}
 
 	return result
+}
+
+func canonicalCompactableToolName(name string) string {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	switch normalized {
+	case "fileread", "file_read", "read_file":
+		return "file_read"
+	case "bash":
+		return "bash"
+	case "grep", "grepsearch", "grep_search":
+		return "grep"
+	case "glob", "filesearch", "file_search":
+		return "glob"
+	case "websearch", "web_search":
+		return "web_search"
+	case "webfetch", "web_fetch":
+		return "web_fetch"
+	case "fileedit", "file_edit":
+		return "file_edit"
+	case "filewrite", "file_write":
+		return "file_write"
+	default:
+		return normalized
+	}
 }
