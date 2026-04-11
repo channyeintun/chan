@@ -1,7 +1,7 @@
 import React, { type FC, useCallback, useEffect, useState } from "react";
 import { Box, Text } from "ink";
 import { useEngine } from "./hooks/useEngine.js";
-import { useEvents } from "./hooks/useEvents.js";
+import { useEvents, type UIArtifact } from "./hooks/useEvents.js";
 import ArtifactView from "./components/ArtifactView.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
 import BackgroundAgentsPanel from "./components/BackgroundAgentsPanel.js";
@@ -85,12 +85,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     ) ??
     null;
   // Secondary artifact list: non-plan, non-log artifacts excluding the focused impl-plan.
-  const recentArtifacts = uiState.artifacts
-    .filter(
-      (artifact) =>
-        artifact.kind !== "implementation-plan" && artifact.kind !== "tool-log",
-    )
-    .slice(0, 2);
+  const recentArtifacts = selectRecentArtifacts(
+    uiState.artifacts,
+    uiState.focusedArtifactId,
+  );
   const isEngineReady = uiState.ready || engine.ready;
 
   const submitPrompt = useCallback(
@@ -386,7 +384,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         )}
 
         {recentArtifacts.length > 0 && (
-          <ArtifactView artifacts={recentArtifacts} />
+          <ArtifactView
+            artifacts={recentArtifacts}
+            focusedArtifactId={uiState.focusedArtifactId}
+          />
         )}
       </Box>
 
@@ -478,6 +479,31 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 };
 
 export default App;
+
+function selectRecentArtifacts(
+  artifacts: UIArtifact[],
+  focusedArtifactId: string | null,
+) {
+  const nonPlanArtifacts = artifacts.filter(
+    (artifact) =>
+      artifact.kind !== "implementation-plan" && artifact.kind !== "tool-log",
+  );
+
+  if (!focusedArtifactId) {
+    return nonPlanArtifacts.slice(0, 2);
+  }
+
+  const focusedArtifact = nonPlanArtifacts.find(
+    (artifact) => artifact.id === focusedArtifactId,
+  );
+  const remainingArtifacts = nonPlanArtifacts.filter(
+    (artifact) => artifact.id !== focusedArtifactId,
+  );
+
+  return focusedArtifact
+    ? [focusedArtifact, ...remainingArtifacts].slice(0, 2)
+    : nonPlanArtifacts.slice(0, 2);
+}
 
 function summarizeQueuedPrompt(queuedPrompt: QueuedPrompt): string {
   const flattened = queuedPrompt.text.replace(/\s+/g, " ").trim();
