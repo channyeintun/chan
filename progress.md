@@ -15,7 +15,7 @@
 | ----------------------------------- | --------- | ----- | ------------------------------------------------------------------------------------------ |
 | Planning refresh                    | completed | S     | 2026-04-12 explanation-driven roadmap replaced stale parity-era planning docs.             |
 | Phase 1 runtime measurement         | completed | S     | Checkpoint logging, artifact ownership, aggregate tool-result budgeting, and continuation stop telemetry are in place. |
-| Phase 2 tool depth                  | in progress | L   | File-history tools, semantic validation, input-aware bash concurrency, Think, stronger code navigation, repository overview tooling, and fuller background command lifecycle tools landed; follow-up tooling remains. |
+| Phase 2 tool depth                  | in progress | L   | File-history tools, semantic validation, input-aware bash concurrency, Think, stronger Go-aware navigation, repository overview tooling, and fuller background command lifecycle tools landed; follow-up tooling remains. |
 | Phase 3 subagents                   | planned   | XL    | Parent-child delegation, fresh context model, permission isolation, sidechain transcripts. |
 | Phase 4 memory                      | planned   | L     | Four-type taxonomy, MEMORY.md index, async recall, staleness warnings.                    |
 | Phase 5 compaction and cache        | planned   | M     | Output slot reservation, prompt memoization, provider-gated cache stability.               |
@@ -57,6 +57,8 @@
 - Completed: extended the background command manager with stable command summaries and registered `list_commands` in the runtime prompt and README to complete inspection of the background command lifecycle.
 - Completed: added a read-only `go_definition` tool that parses Go source files directly and returns precise file, line, column, package, kind, and signature information for matching declarations.
 - Completed: registered `go_definition` in the runtime prompt and README so the agent now has a parser-backed Go navigation primitive beyond regex search.
+- Completed: added a read-only `go_references` tool that walks parsed Go ASTs and returns identifier reference locations, usage kinds, and source-line context, with optional inclusion of declaration sites.
+- Completed: registered `go_references` in the runtime prompt and README so the agent now has a companion Go-aware reference finder alongside `go_definition`.
 
 ## Next Planning Baseline
 

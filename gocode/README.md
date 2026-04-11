@@ -172,6 +172,7 @@ The agent has access to:
 | **glob**                       | Find files by pattern                                         |
 | **grep**                       | Search file contents (ripgrep)                                |
 | **go_definition**              | Resolve Go symbol definitions with parser-backed locations    |
+| **go_references**              | Find Go identifier references with parser-backed context      |
 | **project_overview**           | Summarize repository structure, manifests, and languages      |
 | **symbol_search**              | Find likely symbol definitions across source files            |
 | **web_search**                 | Search the web                                                |
