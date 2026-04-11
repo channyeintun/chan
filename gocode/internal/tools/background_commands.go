@@ -28,9 +28,10 @@ type backgroundCommand struct {
 }
 
 type boundedOutput struct {
-	mu         sync.Mutex
-	data       []byte
-	readOffset int
+	mu               sync.Mutex
+	data             []byte
+	readOffset       int
+	droppedUnreadLen int
 }
 
 type backgroundCommandResult struct {
@@ -201,6 +202,9 @@ func (b *boundedOutput) Write(p []byte) (int, error) {
 	b.data = append(b.data, p...)
 	if len(b.data) > backgroundCommandMaxOutputBytes {
 		trim := len(b.data) - backgroundCommandMaxOutputBytes
+		if b.readOffset < trim {
+			b.droppedUnreadLen += trim - b.readOffset
+		}
 		b.data = append([]byte(nil), b.data[trim:]...)
 		if b.readOffset > trim {
 			b.readOffset -= trim
@@ -215,10 +219,23 @@ func (b *boundedOutput) ReadDelta() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	hadDroppedOutput := b.droppedUnreadLen > 0
+	droppedUnreadLen := b.droppedUnreadLen
+	b.droppedUnreadLen = 0
+
 	if b.readOffset >= len(b.data) {
+		if hadDroppedOutput {
+			return fmt.Sprintf("[Older buffered output was dropped before it could be read (%d bytes)]", droppedUnreadLen)
+		}
 		return ""
 	}
 	delta := bytes.TrimSpace(b.data[b.readOffset:])
 	b.readOffset = len(b.data)
+	if hadDroppedOutput {
+		if len(delta) == 0 {
+			return fmt.Sprintf("[Older buffered output was dropped before it could be read (%d bytes)]", droppedUnreadLen)
+		}
+		return fmt.Sprintf("[Older buffered output was dropped before it could be read (%d bytes)]\n%s", droppedUnreadLen, delta)
+	}
 	return string(delta)
 }
