@@ -28,6 +28,13 @@ func NewLocalStore(baseDir string) *LocalStore {
 func (s *LocalStore) Save(_ context.Context, req SaveRequest) (ArtifactVersion, error) {
 	now := time.Now()
 	id := strings.TrimSpace(req.ID)
+	if id != "" {
+		var err error
+		id, err = sanitizeArtifactID(id)
+		if err != nil {
+			return ArtifactVersion{}, err
+		}
+	}
 	createdAt := now
 	version := 1
 	artDir := ""
@@ -126,10 +133,14 @@ func (s *LocalStore) Save(_ context.Context, req SaveRequest) (ArtifactVersion, 
 }
 
 func (s *LocalStore) Load(_ context.Context, req LoadRequest) (Artifact, error) {
-	art, artDir, err := s.findByID(req.ID)
+	id, err := sanitizeArtifactID(req.ID)
+	if err != nil {
+		return Artifact{}, err
+	}
+	art, artDir, err := s.findByID(id)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return Artifact{}, fmt.Errorf("artifact not found: %s", req.ID)
+			return Artifact{}, fmt.Errorf("artifact not found: %s", id)
 		}
 		return Artifact{}, err
 	}
@@ -142,7 +153,7 @@ func (s *LocalStore) Load(_ context.Context, req LoadRequest) (Artifact, error) 
 	info, err := os.Stat(contentPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return Artifact{}, fmt.Errorf("artifact version not found: %s@v%d", req.ID, req.Version)
+			return Artifact{}, fmt.Errorf("artifact version not found: %s@v%d", id, req.Version)
 		}
 		return Artifact{}, fmt.Errorf("stat content version: %w", err)
 	}
@@ -201,21 +212,29 @@ func (s *LocalStore) List(_ context.Context, req ListRequest) ([]ArtifactRef, er
 }
 
 func (s *LocalStore) Delete(_ context.Context, req DeleteRequest) error {
+	id, err := sanitizeArtifactID(req.ID)
+	if err != nil {
+		return err
+	}
 	kinds, _ := os.ReadDir(s.baseDir)
 	for _, kindDir := range kinds {
-		artPath := filepath.Join(s.baseDir, kindDir.Name(), req.ID)
+		artPath := filepath.Join(s.baseDir, kindDir.Name(), id)
 		if _, err := os.Stat(artPath); err == nil {
 			return os.RemoveAll(artPath)
 		}
 	}
-	return fmt.Errorf("artifact not found: %s", req.ID)
+	return fmt.Errorf("artifact not found: %s", id)
 }
 
 func (s *LocalStore) Versions(_ context.Context, req VersionsRequest) ([]ArtifactVersion, error) {
-	art, artDir, err := s.findByID(req.ID)
+	id, err := sanitizeArtifactID(req.ID)
+	if err != nil {
+		return nil, err
+	}
+	art, artDir, err := s.findByID(id)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("artifact not found: %s", req.ID)
+			return nil, fmt.Errorf("artifact not found: %s", id)
 		}
 		return nil, err
 	}
@@ -247,7 +266,7 @@ func (s *LocalStore) Versions(_ context.Context, req VersionsRequest) ([]Artifac
 		})
 	}
 	if len(versions) == 0 {
-		return nil, fmt.Errorf("artifact not found: %s", req.ID)
+		return nil, fmt.Errorf("artifact not found: %s", id)
 	}
 	sort.Slice(versions, func(i, j int) bool {
 		return versions[i].Version > versions[j].Version
@@ -256,6 +275,11 @@ func (s *LocalStore) Versions(_ context.Context, req VersionsRequest) ([]Artifac
 }
 
 func (s *LocalStore) findByID(id string) (Artifact, string, error) {
+	id, err := sanitizeArtifactID(id)
+	if err != nil {
+		return Artifact{}, "", err
+	}
+
 	entries, err := os.ReadDir(s.baseDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -318,4 +342,22 @@ func generateID() string {
 	b := make([]byte, 8)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+func sanitizeArtifactID(id string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", fmt.Errorf("artifact id is required")
+	}
+	if filepath.IsAbs(id) {
+		return "", fmt.Errorf("invalid artifact id %q", id)
+	}
+	cleaned := filepath.Clean(id)
+	if cleaned == "." || cleaned == ".." || cleaned != id {
+		return "", fmt.Errorf("invalid artifact id %q", id)
+	}
+	if strings.Contains(id, "/") || strings.Contains(id, `\\`) {
+		return "", fmt.Errorf("invalid artifact id %q", id)
+	}
+	return id, nil
 }
