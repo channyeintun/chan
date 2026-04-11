@@ -59,7 +59,7 @@ func (t *SaveImplementationPlanTool) Name() string {
 }
 
 func (t *SaveImplementationPlanTool) Description() string {
-	return "Create or update the session implementation-plan artifact with the final markdown plan for the current task."
+	return "Create or update the session implementation-plan artifact with the final markdown plan for the current task. After you call this, the runtime will present the plan to the user for review. If approved, the session automatically switches to fast mode and execution begins — do not instruct the user to switch modes manually. If the user requests revisions, you will receive feedback in the next turn; call this tool again with the updated plan rather than creating a new artifact."
 }
 
 func (t *SaveImplementationPlanTool) InputSchema() any {

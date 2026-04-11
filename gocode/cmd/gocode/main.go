@@ -635,17 +635,23 @@ IMPORTANT: Always use absolute paths with file tools. The working directory is p
 Always use tools to answer questions — do NOT just make a plan without acting. Call tools immediately when you need information.
 Use the exact runtime tool names when calling tools, including bash, list_dir, file_read, file_write, file_edit, multi_replace_file_content, glob, grep, web_search, web_fetch, git, command_status, send_command_input, save_implementation_plan, upsert_task_list, and save_walkthrough. Do not invent alternate names like file_search or read_file.
 
-Artifacts are first-class outputs in this runtime, not just overflow containers. When the result should remain reviewable across turns, prefer the artifact tools over leaving the full content only in the transcript. Use save_implementation_plan for real implementation plans, upsert_task_list for live multi-step progress, and save_walkthrough for completed-work summaries. Oversized tool outputs may still be saved automatically as tool-log artifacts.
+Artifacts are first-class outputs in this runtime — durable, reviewable work products, not just overflow containers for long text. Use them intentionally:
+- save_implementation_plan: real implementation plans that the user will review before execution begins.
+- upsert_task_list: live multi-step progress tracking for ongoing work; update it as tasks complete.
+- save_walkthrough: completed-work summaries after finishing a task.
+- search-report and diff-preview artifacts are produced automatically for large web_fetch and git diff results.
+- Oversized tool outputs are saved automatically as tool-log artifacts.
+Do NOT save an artifact merely because a response is long. Save it when the content should persist for review, revision, or resumption across turns.
 
-Write artifact content in clean GitHub-flavored markdown so it renders well in the artifact panel. Keep artifact bodies self-contained, scannable, and revision-friendly with clear headings, short lists, tables, fenced code blocks, diff blocks, and GitHub alert blocks when they help. After saving a substantial artifact, summarize the key outcome briefly in the transcript instead of repeating the full artifact body there.`)
+Write artifact content in clean GitHub-flavored markdown optimized for the artifact panel: clear headings, short lists, tables, fenced code blocks with language tags, diff blocks, and GitHub alert blocks (> [!NOTE], > [!WARNING], > [!CAUTION]) for important review items. Keep artifact bodies self-contained and revision-friendly. After saving a substantial artifact, write a short transcript summary of the key outcome — do not repeat the full artifact body in the transcript.`)
 }
 
 func systemPromptForMode(mode agent.ExecutionMode) string {
 	prompt := defaultSystemPrompt()
 	if mode == agent.ModePlan {
-		return prompt + "\n\n" + strings.TrimSpace(`When plan mode is active, use read tools to explore before any writes. For implementation tasks, respond with a concrete markdown implementation plan before proposing file mutations, then save that plan with save_implementation_plan so it becomes the reviewable source of truth for the task. If the user asks for revisions, update the same plan artifact instead of creating a second full plan in chat. Once the plan artifact is saved, keep the transcript response concise: call out the key decisions, open questions, and review points.
+		return prompt + "\n\n" + strings.TrimSpace(`When plan mode is active, use read tools to explore before any writes. For implementation tasks, produce a concrete markdown implementation plan and save it with save_implementation_plan — this makes the plan the explicit reviewable artifact for the task. The system will surface a review gate to the user after you save a final plan; they can approve it (which switches to fast mode for you), request revisions, or cancel. If the user sends revision feedback, update the same plan artifact in place rather than creating a new one.
 
-For research, explanation, review, or other non-implementation requests, answer directly and do not create a plan artifact. Keep real implementation plans actionable and review-friendly. When you produce a real implementation plan, prefer this structure when it fits the request: Goal Description, User Review Required, Proposed Changes, Open Questions, and Verification Plan. In Proposed Changes, group work by component or file and use [NEW], [MODIFY], and [DELETE] markers where they add clarity. Use GitHub alert blocks for critical review items or risky changes.`) + " " + agent.PlanModePromptHint()
+For research, explanation, review, or other non-implementation requests, answer directly and do not create a plan artifact. When you produce a real implementation plan, prefer this structure: Goal Description, Proposed Changes (grouped by component with [NEW]/[MODIFY]/[DELETE] markers), User Review Required, Open Questions, and Verification Plan. Use > [!CAUTION] or > [!WARNING] alert blocks for risky or irreversible changes that need explicit attention before approval.`) + " " + agent.PlanModePromptHint()
 	}
 	return prompt
 }
