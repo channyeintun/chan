@@ -62,4 +62,21 @@ Updated the GitHub Copilot integration so:
 This keeps the primary interactive session on GPT-5.4 while routing subagents to
 Claude Haiku 4.5 automatically when the active provider is GitHub Copilot.
 
+## Task 3 — Include time, pwd, OS, and branch in environment prompt context
+
+**Files**: `gocode/internal/agent/context_inject.go`, `progress.md`
+
+Expanded the environment block injected into the system prompt so the model now
+sees these fields explicitly on every turn:
+
+- current time in RFC3339 format
+- present working directory as `pwd`
+- OS name
+- architecture
+- current git branch with a fallback when not on a branch
+
+`gocode` already included git status, recent commits, and a working-directory
+listing, so this change keeps the existing context and makes the high-signal
+environment details explicit and easier for the model to use reliably.
+
 ---
