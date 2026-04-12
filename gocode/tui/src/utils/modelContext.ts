@@ -107,7 +107,7 @@ export function calculateTokenWarningState(
   );
   const warningThreshold = Math.max(
     0,
-    compactThreshold - APPROX_WARNING_THRESHOLD_BUFFER_TOKENS,
+    effectiveContextWindow - APPROX_WARNING_THRESHOLD_BUFFER_TOKENS,
   );
   const blockingLimit = Math.max(
     0,
