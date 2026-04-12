@@ -48,4 +48,18 @@ Verification completed:
 - ran `go build ./...`
 - ran `make release-local` in `gocode/tui`
 
+## Task 2 — Set GitHub Copilot model defaults to GPT-5.4 and Haiku 4.5
+
+**Files**: `gocode/internal/api/github_copilot.go`, `gocode/internal/config/config.go`, `gocode/internal/api/provider_config.go`, `gocode/cmd/gocode/slash_commands.go`, `gocode/cmd/gocode/subagent_runtime.go`, `progress.md`
+
+Updated the GitHub Copilot integration so:
+
+- the main Copilot model default is now `github-copilot/gpt-5.4`
+- `/connect` persists `github-copilot/claude-haiku-4.5` as the subagent model
+- Copilot subagents no longer inherit the main model; they resolve a dedicated
+  child client using the saved subagent model
+
+This keeps the primary interactive session on GPT-5.4 while routing subagents to
+Claude Haiku 4.5 automatically when the active provider is GitHub Copilot.
+
 ---

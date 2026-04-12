@@ -13,6 +13,7 @@ import (
 	"github.com/channyeintun/gocode/internal/agent"
 	"github.com/channyeintun/gocode/internal/api"
 	artifactspkg "github.com/channyeintun/gocode/internal/artifacts"
+	"github.com/channyeintun/gocode/internal/config"
 	costpkg "github.com/channyeintun/gocode/internal/cost"
 	"github.com/channyeintun/gocode/internal/hooks"
 	"github.com/channyeintun/gocode/internal/ipc"
@@ -84,6 +85,11 @@ func makeSubagentRunner(
 			return toolpkg.AgentRunResult{}, fmt.Errorf("agent tool is unavailable: model client is not initialized")
 		}
 
+		childClient, childActiveModelID, err := resolveSubagentClient(client, activeModelID)
+		if err != nil {
+			return toolpkg.AgentRunResult{}, err
+		}
+
 		subagentType := strings.TrimSpace(req.SubagentType)
 		if subagentType == "" {
 			subagentType = exploreSubagentType
@@ -98,11 +104,11 @@ func makeSubagentRunner(
 		}
 
 		execute := func(runCtx context.Context) (toolpkg.AgentRunResult, error) {
-			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, client, activeModelID, cwd, nil, nil)
+			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, cwd, nil, nil)
 		}
 		if req.Background {
 			launch := launchBackgroundAgent(ctx, bridge, strings.TrimSpace(req.Description), subagentType, invocationID, sessionStore, func(runCtx context.Context, stopControl *agent.StopController, reportStatus func(toolpkg.AgentRunResult)) (toolpkg.AgentRunResult, error) {
-				return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, client, activeModelID, cwd, stopControl, reportStatus)
+				return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, cwd, stopControl, reportStatus)
 			})
 			launch.SubagentType = subagentType
 			launch.Tools = subagentToolNames(subagentType)
@@ -114,6 +120,28 @@ func makeSubagentRunner(
 		}
 		return withChildMetadata(result, strings.TrimSpace(req.Description)), nil
 	}
+}
+
+func resolveSubagentClient(parent api.LLMClient, activeModelID string) (api.LLMClient, string, error) {
+	provider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
+	provider = normalizeProvider(provider)
+	if provider != "github-copilot" {
+		return parent, activeModelID, nil
+	}
+
+	cfg := config.Load()
+	selection := strings.TrimSpace(cfg.SubagentModel)
+	if selection == "" {
+		selection = modelRef(provider, api.GitHubCopilotDefaultSubagentModel)
+	}
+
+	childProvider, childModel := resolveModelSelection(selection, provider)
+	childClient, err := newLLMClient(childProvider, childModel, cfg)
+	if err != nil {
+		return nil, "", fmt.Errorf("initialize subagent model %q: %w", selection, err)
+	}
+
+	return childClient, modelRef(childProvider, childClient.ModelID()), nil
 }
 
 func executeSubagent(

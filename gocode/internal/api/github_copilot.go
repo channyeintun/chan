@@ -18,6 +18,8 @@ const (
 	githubCopilotDefaultBaseURL          = "https://api.individual.githubcopilot.com"
 	githubCopilotDefaultEnterpriseDomain = "github.com"
 	githubCopilotRefreshSkew             = 5 * time.Minute
+	GitHubCopilotDefaultMainModel        = "gpt-5.4"
+	GitHubCopilotDefaultSubagentModel    = "claude-haiku-4.5"
 )
 
 var githubCopilotClientID = mustDecodeBase64("SXYxLmI1MDdhMDhjODdlY2ZlOTg=")

@@ -121,7 +121,7 @@ var Presets = map[string]ProviderPreset{
 		ClientType:   OpenAICompatAPI,
 		BaseURL:      githubCopilotDefaultBaseURL,
 		EnvKeyVar:    "GITHUB_COPILOT_ACCESS_TOKEN",
-		DefaultModel: "gpt-4o",
+		DefaultModel: GitHubCopilotDefaultMainModel,
 		Capabilities: ModelCapabilities{
 			SupportsToolUse:  true,
 			SupportsVision:   true,

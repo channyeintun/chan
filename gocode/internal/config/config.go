@@ -12,7 +12,8 @@ import (
 // Config holds all CLI configuration.
 type Config struct {
 	// Model selection: provider/model-name format
-	Model string `json:"model,omitempty"`
+	Model         string `json:"model,omitempty"`
+	SubagentModel string `json:"subagent_model,omitempty"`
 
 	// Provider-level overrides
 	BaseURL string `json:"base_url,omitempty"`

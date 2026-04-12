@@ -128,6 +128,7 @@ func handleSlashCommand(
 
 			persisted.GitHubCopilot = copilotAuth
 			persisted.Model = modelRef("github-copilot", api.Presets["github-copilot"].DefaultModel)
+			persisted.SubagentModel = modelRef("github-copilot", api.GitHubCopilotDefaultSubagentModel)
 			if err := config.Save(persisted); err != nil {
 				if emitErr := emitTextResponse(bridge, fmt.Sprintf("save GitHub Copilot credentials: %v", err)); emitErr != nil {
 					return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
@@ -166,7 +167,7 @@ func handleSlashCommand(
 			if err := emitContextWindowUsage(bridge, *client, messages); err != nil {
 				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 			}
-			if err := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot connected. Set model to %s", activeModelID)); err != nil {
+			if err := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot connected. Set main model to %s and subagent model to github-copilot/%s", activeModelID, api.GitHubCopilotDefaultSubagentModel)); err != nil {
 				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 			}
 			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
