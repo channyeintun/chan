@@ -434,9 +434,9 @@ func buildGeminiTools(tools []ToolDefinition) []geminiTool {
 	decls := make([]geminiFunctionDeclaration, 0, len(tools))
 	for _, tool := range tools {
 		decls = append(decls, geminiFunctionDeclaration{
-			Name:        tool.Name,
-			Description: tool.Description,
-			Parameters:  sanitizeGeminiSchema(tool.InputSchema),
+			Name:                 tool.Name,
+			Description:          tool.Description,
+			ParametersJsonSchema: sanitizeGeminiSchema(tool.InputSchema),
 		})
 	}
 
@@ -858,9 +858,9 @@ type geminiTool struct {
 }
 
 type geminiFunctionDeclaration struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Parameters  any    `json:"parameters,omitempty"`
+	Name                 string `json:"name"`
+	Description          string `json:"description,omitempty"`
+	ParametersJsonSchema any    `json:"parametersJsonSchema,omitempty"`
 }
 
 type geminiGenerateContentResponse struct {
