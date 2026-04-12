@@ -2,76 +2,58 @@
 
 ## Current Phase
 
-Implementation complete. Root-level local release/install workflow is now being aligned with the documented commands.
+Phase 1: Bug fixes (Streams B & C). Not yet started.
 
 ## Completed
 
-- [x] Compared the current TUI prompt against the requested screenshot.
-- [x] Located the current gocode input and submit path in `tui/src/components/Input.tsx`, `tui/src/App.tsx`, and `tui/src/hooks/usePromptHistory.ts`.
-- [x] Confirmed that gocode currently has no slash-command preview path; slash commands are only recognized on submit.
-- [x] Reviewed the original source references in:
-  - `sourcecode/components/PromptInput/PromptInput.tsx`
-  - `sourcecode/components/PromptInput/PromptInputFooter.tsx`
-  - `sourcecode/components/PromptInput/PromptInputFooterSuggestions.tsx`
-  - `sourcecode/utils/suggestions/commandSuggestions.ts`
-  - `sourcecode/context/promptOverlayContext.tsx`
-  - `sourcecode/components/FullscreenLayout.tsx`
-- [x] Determined that the existing `plan.md` and `progress.md` were stale for this task and replaced the planning docs with slash-preview work.
-- [x] Wrote a task-specific implementation plan for slash preview and the prompt chrome restyle.
+- [x] Reviewed implementation-plan.md (subagent specialization).
+- [x] Investigated OpenAI Responses tool input JSON decode error (Stream B root cause identified).
+- [x] Investigated thinking messages shown in conversation (Stream C root cause identified).
+- [x] Created plan.md covering all three work streams.
+- [x] Created progress.md.
+
+## In Progress
+
+None.
 
 ## Pending
 
-- [x] Expose slash command metadata from the Go engine to the TUI.
-- [x] Add TUI slash preview state and rendering.
-- [x] Restyle the input border and padding to match the screenshot.
-- [ ] Manually verify key handling and narrow-terminal behavior.
-- [x] Update user-facing docs only if the final implementation changes visible prompt behavior or keybindings.
+### Phase 1: Bug Fixes
 
-## Completed This Pass
+- [x] **B1** Fix `decodeToolInput` error handling in `internal/api/openai_responses.go` (`handleOutputItemDone` and `buildOpenAIResponsesInput`).
+- [ ] **C1** Add `ReasoningContent` field to `Message` struct in `internal/api/client.go`.
+- [ ] **C2** Update streaming handlers (`openai_compat.go`, `openai_responses.go`, `anthropic.go`) to write thinking to `ReasoningContent` instead of `Content`.
+- [ ] **C3** Update `buildOpenAICompatMessages`, `buildOpenAIResponsesInput`, `buildAnthropicMessages` to exclude `ReasoningContent`.
+- [ ] **C4** Update TUI to hide/collapse past thinking blocks.
+- [ ] Build, format, verify.
 
-- Added Go-side slash command descriptors to the ready payload so the TUI consumes backend-authoritative command metadata.
-- Added TUI slash preview filtering, selection, and apply behavior for leading slash commands.
-- Updated the input prompt chrome to use top-and-bottom-only borders with larger padding.
-- Ran `gofmt` and `prettier` on the changed files.
-- Verified the implementation compiles with `go build ./cmd/gocode` and `cd tui && bun run build`.
-- Added a repo-root `Makefile` so `make release-local` and `make install` work from the documented root directory.
-- Made the install target honor `PREFIX` instead of hardcoding `/usr/local/bin`.
+### Phase 2: Subagent Type Model (A1–A3)
+
+- [ ] **A1** Add `search` and `execution` subagent type enum values and routing.
+- [ ] **A2** Define tool allowlists per subagent type.
+- [ ] **A3** Add per-type system prompts.
+
+### Phase 3: Parent Guidance & Result Formatting (A4–A5)
+
+- [ ] **A4** Update `agent` tool descriptions with use-case guidance.
+- [ ] **A5** Add subagent-type-aware result postprocessing.
+
+### Phase 4: Permissions, TUI, Docs, Tests (A6–A9)
+
+- [ ] **A6** Tighten permission behavior per subagent type.
+- [ ] **A7** TUI-friendly labels and summaries for new types.
+- [ ] **A8** Documentation.
+- [ ] **A9** Tests.
 
 ## Notes
 
-- No user-facing documentation changes were needed for this pass.
-- Interactive verification of Up/Down, Tab, Enter, Escape, and narrow-terminal rendering still needs a live TUI check.
+- Stream B root cause: `decodeToolInput()` in `internal/api/anthropic.go` does strict `json.Unmarshal`. Called from `openai_responses.go:730` (handleOutputItemDone) and `:452` (buildOpenAIResponsesInput). Fails when accumulated tool arguments are incomplete JSON.
+- Stream B implementation: `openai_responses.go` now prefers a valid final `output_item.done` arguments payload when the streamed buffer is incomplete, and degrades malformed historical tool-call inputs to `{}` instead of aborting request construction.
+- Stream C root cause: thinking/reasoning content is accumulated into `Message.Content`. All message-building functions (`buildOpenAICompatMessages`, `buildOpenAIResponsesInput`, `buildAnthropicMessages`) re-send full Content including thinking on subsequent turns. No separate storage field exists.
 
 ## Decisions
 
-- Backend-provided slash command metadata is the preferred source of truth.
-- The upstream fullscreen overlay system is reference material, not a required first implementation step for gocode.
-- The first implementation should target screenshot parity with a preview list rendered separately from the bordered prompt row.
-- No tests will be added.
-
-## Detailed Step Log
-
-### Task 1: Planning Assessment
-
-Status: Completed
-
-Steps completed:
-
-1. Read the current TUI input flow and confirmed the absence of preview behavior.
-2. Read the upstream source files that implement the relevant prompt chrome and suggestion behavior.
-3. Mapped the visual requirements from the screenshot to the closest upstream prompt/input components.
-4. Identified the current single source of truth for built-in slash commands in Go.
-5. Replaced the stale planning docs with a task-specific plan for this feature.
-
-Outcome:
-
-- The top-and-bottom-only border treatment should follow the upstream prompt chrome pattern rather than the current all-sides border.
-- Slash preview should be a pre-submit TUI concern, not more submit-time branching in `App.tsx`.
-- The recommended architecture is a Go-emitted slash command catalog plus a small dedicated TUI preview hook and renderer.
-
-## Working Rules
-
-- Do not proceed to implementation during this planning phase.
-- Do not add tests.
-- Follow `plan.md` and `progress.md` for the implementation phase.
-- After each later implementation task, update `progress.md`, run formatting for code changes, and commit with git commands.
+- Bug fixes (Phase 1) take priority over subagent work since they affect daily usability.
+- Subagent: `explore` remains the default type for backward compatibility.
+- Subagent: `search` should be workspace-only (no web_search/web_fetch).
+- Subagent: `execution` should be terminal-focused, non-writing by default.

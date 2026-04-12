@@ -444,12 +444,9 @@ func buildOpenAIResponsesInput(systemPrompt string, messages []Message, develope
 				assistantIndex++
 			}
 			for _, toolCall := range msg.ToolCalls {
-				arguments := toolCall.Input
-				if strings.TrimSpace(arguments) == "" {
+				arguments, err := sanitizeOpenAIResponsesToolArguments(toolCall.Input)
+				if err != nil {
 					arguments = "{}"
-				}
-				if _, err := decodeToolInput(arguments); err != nil {
-					return nil, fmt.Errorf("decode OpenAI Responses tool input: %w", err)
 				}
 				items = append(items, map[string]any{
 					"type":      "function_call",
@@ -722,11 +719,8 @@ func (s *openAIResponsesStreamState) handleOutputItemDone(data string, yield fun
 		tool.Name = strings.TrimSpace(evt.Item.Name)
 	}
 
-	arguments := tool.Arguments.String()
-	if strings.TrimSpace(arguments) == "" {
-		arguments = "{}"
-	}
-	if _, err := decodeToolInput(arguments); err != nil {
+	arguments, err := resolveOpenAIResponsesToolArguments(tool.Arguments.String(), evt.Item.Arguments)
+	if err != nil {
 		return fmt.Errorf("decode OpenAI Responses tool input: %w", err)
 	}
 
@@ -758,6 +752,38 @@ func (s *openAIResponsesStreamState) emitMessageSuffix(item openAIResponsesOutpu
 		return errStopStream
 	}
 	return nil
+}
+
+func resolveOpenAIResponsesToolArguments(streamed string, final string) (string, error) {
+	candidates := []string{streamed}
+	if final != streamed {
+		candidates = append(candidates, final)
+	}
+
+	var lastErr error
+	for _, candidate := range candidates {
+		normalized, err := sanitizeOpenAIResponsesToolArguments(candidate)
+		if err == nil {
+			return normalized, nil
+		}
+		lastErr = err
+	}
+
+	if lastErr == nil {
+		return "{}", nil
+	}
+	return "", lastErr
+}
+
+func sanitizeOpenAIResponsesToolArguments(arguments string) (string, error) {
+	normalized := strings.TrimSpace(arguments)
+	if normalized == "" {
+		normalized = "{}"
+	}
+	if _, err := decodeToolInput(normalized); err != nil {
+		return "", err
+	}
+	return normalized, nil
 }
 
 func joinOpenAIResponsesMessageContent(content []openAIResponsesMessageContent) string {
