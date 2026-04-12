@@ -61,3 +61,16 @@ and only injects `"skip_thought_signature_validator"` when the major version is 
 On Gemini 2.x, thought signatures are optional so the sentinel is suppressed.
 
 ---
+
+## Task 31 — Parse Retry-After / X-RateLimit-Reset headers
+
+**Files**: `gocode/internal/api/gemini.go`, `gocode/internal/api/retry.go`
+
+Added `geminiRetryAfterDelay(resp, body)` that checks `Retry-After`,
+`X-RateLimit-Reset`, `X-RateLimit-Reset-After` headers and body patterns
+(`"Please retry in Xs"`, `"retryDelay":"Xs"`) in priority order.
+Added `RetryAfter time.Duration` field to `APIError`; `RetryWithBackoff` now uses
+it when set. Delays exceeding `geminiMaxRetryAfter` (60 s) cause immediate failure
+rather than a long wait.
+
+---

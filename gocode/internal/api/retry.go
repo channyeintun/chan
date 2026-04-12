@@ -25,6 +25,7 @@ type APIError struct {
 	Type       APIErrorType
 	StatusCode int
 	Message    string
+	RetryAfter time.Duration // server-specified retry delay (0 = use backoff)
 	Err        error
 }
 
@@ -88,6 +89,11 @@ func RetryWithBackoff(ctx context.Context, policy RetryPolicy, fn func() error) 
 		}
 		if attempt < policy.MaxAttempts-1 {
 			delay := BackoffDelay(policy, attempt)
+			// Prefer server-specified retry delay when present.
+			var apiErr *APIError
+			if errors.As(lastErr, &apiErr) && apiErr.RetryAfter > 0 {
+				delay = apiErr.RetryAfter
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

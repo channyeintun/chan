@@ -11,8 +11,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // GeminiClient implements the native Gemini streaming GenerateContent API.
@@ -93,6 +96,59 @@ func (c *GeminiClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[
 	}, nil
 }
 
+// geminiMaxRetryAfter caps the server-specified Retry-After delay.
+// If the server asks us to wait longer than this, we fail immediately.
+const geminiMaxRetryAfter = 60 * time.Second
+
+// geminiRetryAfterDelay extracts the server-requested retry delay from a
+// 429 (or 503) response. Sources are checked in priority order:
+//  1. Retry-After header (seconds integer or HTTP-date)
+//  2. X-RateLimit-Reset header (unix timestamp seconds)
+//  3. X-RateLimit-Reset-After header (seconds float)
+//  4. Body text: "Please retry in Xs" or retryDelay JSON field
+//
+// Returns 0 if no usable delay hint is found.
+var geminiRetryDelayBodyRe = regexp.MustCompile(`(?i)(?:please retry in\s+(\d+(?:\.\d+)?)\s*s|"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s")`)
+
+func geminiRetryAfterDelay(resp *http.Response, body []byte) time.Duration {
+	// 1. Retry-After
+	if v := resp.Header.Get("Retry-After"); v != "" {
+		if secs, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && secs > 0 {
+			return time.Duration(secs * float64(time.Second))
+		}
+		if t, err := http.ParseTime(v); err == nil {
+			if d := time.Until(t); d > 0 {
+				return d
+			}
+		}
+	}
+	// 2. X-RateLimit-Reset (unix timestamp)
+	if v := resp.Header.Get("X-RateLimit-Reset"); v != "" {
+		if ts, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil && ts > 0 {
+			if d := time.Until(time.Unix(ts, 0)); d > 0 {
+				return d
+			}
+		}
+	}
+	// 3. X-RateLimit-Reset-After (seconds)
+	if v := resp.Header.Get("X-RateLimit-Reset-After"); v != "" {
+		if secs, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && secs > 0 {
+			return time.Duration(secs * float64(time.Second))
+		}
+	}
+	// 4. Body patterns
+	if m := geminiRetryDelayBodyRe.FindSubmatch(body); m != nil {
+		raw := string(m[1])
+		if raw == "" {
+			raw = string(m[2])
+		}
+		if secs, err := strconv.ParseFloat(raw, 64); err == nil && secs > 0 {
+			return time.Duration(secs * float64(time.Second))
+		}
+	}
+	return 0
+}
+
 func (c *GeminiClient) openStream(ctx context.Context, payload geminiGenerateContentRequest) (*http.Response, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -121,7 +177,20 @@ func (c *GeminiClient) openStream(ctx context.Context, payload geminiGenerateCon
 		if currentResp.StatusCode >= http.StatusMultipleChoices {
 			defer currentResp.Body.Close()
 			bodyBytes, _ := io.ReadAll(io.LimitReader(currentResp.Body, 1<<20))
-			return classifyGeminiStatus(currentResp.StatusCode, bodyBytes)
+			apiErr := classifyGeminiStatus(currentResp.StatusCode, bodyBytes)
+			// Attach server-specified retry delay so RetryWithBackoff honours it.
+			if d := geminiRetryAfterDelay(currentResp, bodyBytes); d > 0 {
+				var ae *APIError
+				if errors.As(apiErr, &ae) {
+					if d > geminiMaxRetryAfter {
+						// Server wants us to wait too long — fail immediately.
+						ae.RetryAfter = 0
+						return ae
+					}
+					ae.RetryAfter = d
+				}
+			}
+			return apiErr
 		}
 
 		mu.Lock()
