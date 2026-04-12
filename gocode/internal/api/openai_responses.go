@@ -237,8 +237,34 @@ func (c *OpenAIResponsesClient) handleEvent(data string, state *openAIResponsesS
 			return nil
 		}
 		state.currentText.WriteString(evt.Delta)
+		state.sawContentText = true
 		if !yield(ModelEvent{Type: ModelEventToken, Text: evt.Delta}, nil) {
 			return errStopStream
+		}
+		return nil
+	case "response.output_text.done":
+		var evt openAIResponsesOutputTextDoneEvent
+		if err := json.Unmarshal([]byte(trimmed), &evt); err != nil {
+			return fmt.Errorf("decode OpenAI Responses output text done: %w", err)
+		}
+		if evt.Text == "" {
+			return nil
+		}
+		streamed := state.currentText.String()
+		if streamed == "" {
+			state.currentText.WriteString(evt.Text)
+			state.sawContentText = true
+			if !yield(ModelEvent{Type: ModelEventToken, Text: evt.Text}, nil) {
+				return errStopStream
+			}
+		} else if strings.HasPrefix(evt.Text, streamed) {
+			suffix := evt.Text[len(streamed):]
+			if suffix != "" {
+				state.currentText.WriteString(suffix)
+				if !yield(ModelEvent{Type: ModelEventToken, Text: suffix}, nil) {
+					return errStopStream
+				}
+			}
 		}
 		return nil
 	case "response.refusal.delta":
@@ -250,6 +276,7 @@ func (c *OpenAIResponsesClient) handleEvent(data string, state *openAIResponsesS
 			return nil
 		}
 		state.currentText.WriteString(evt.Delta)
+		state.sawContentText = true
 		if !yield(ModelEvent{Type: ModelEventToken, Text: evt.Delta}, nil) {
 			return errStopStream
 		}
@@ -270,10 +297,26 @@ func (c *OpenAIResponsesClient) handleEvent(data string, state *openAIResponsesS
 		return nil
 	case "response.output_item.done":
 		return state.handleOutputItemDone(trimmed, yield)
-	case "response.completed", "response.incomplete":
+	case "response.completed", "response.incomplete", "response.done":
 		var evt openAIResponsesCompletedEvent
 		if err := json.Unmarshal([]byte(trimmed), &evt); err != nil {
 			return fmt.Errorf("decode OpenAI Responses completed event: %w", err)
+		}
+		if !state.sawContentText && !state.sawToolCall {
+			for _, item := range evt.Response.Output {
+				if item.Type != "message" {
+					continue
+				}
+				text := strings.TrimSpace(joinOpenAIResponsesMessageContent(item.Content))
+				if text == "" {
+					continue
+				}
+				state.sawContentText = true
+				if !yield(ModelEvent{Type: ModelEventToken, Text: text}, nil) {
+					return errStopStream
+				}
+				break
+			}
 		}
 		usage := evt.Response.Usage.toUsage()
 		if usage != nil {
@@ -528,10 +571,15 @@ type openAIResponsesToolArgumentsDoneEvent struct {
 	Arguments string `json:"arguments"`
 }
 
+type openAIResponsesOutputTextDoneEvent struct {
+	Text string `json:"text"`
+}
+
 type openAIResponsesCompletedEvent struct {
 	Response struct {
-		Status string               `json:"status"`
-		Usage  openAIResponsesUsage `json:"usage"`
+		Status string                      `json:"status"`
+		Usage  openAIResponsesUsage        `json:"usage"`
+		Output []openAIResponsesOutputItem `json:"output,omitempty"`
 	} `json:"response"`
 }
 
@@ -580,6 +628,7 @@ type openAIResponsesStreamState struct {
 	currentTool      *openAIResponsesToolCallState
 	currentText      strings.Builder
 	sawReasoningText bool
+	sawContentText   bool
 	sawToolCall      bool
 	sentStop         bool
 }
@@ -694,6 +743,7 @@ func (s *openAIResponsesStreamState) emitMessageSuffix(item openAIResponsesOutpu
 	if suffix == "" {
 		return nil
 	}
+	s.sawContentText = true
 	if !yield(ModelEvent{Type: ModelEventToken, Text: suffix}, nil) {
 		return errStopStream
 	}

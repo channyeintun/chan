@@ -353,4 +353,51 @@ Verification completed:
 - ran `go build ./...`
 - ran `make release-local` in `gocode/tui`
 
+## Task 13 — Fix Responses parser missing terminal events and text recovery
+
+**Files**: `gocode/internal/api/openai_responses.go`, `progress.md`
+
+Fixed the `(Model returned an empty response)` failure that occurred when asking
+Copilot GPT-5.4 to review commits or other prompts where the final answer was
+produced but never surfaced to the UI.
+
+Root causes (three separate gaps in the Responses stream parser):
+
+1. **Missing `response.done` terminal event** — the Codex/Responses API can send
+   `response.done` as an alias for `response.completed`. Pi-mono's codex
+   provider handles it; gocode silently dropped it via `default: return nil`,
+   so no `ModelEventStop` was ever emitted for those turns.
+
+2. **Missing `response.output_text.done` handler** — this event carries the
+   final full text of a text output part, sent after all delta events. If deltas
+   were incomplete or skipped, this was the second chance to capture the text.
+   gocode dropped it silently.
+
+3. **No last-resort text recovery from the `response.completed` body** — the
+   completed event includes the full `response.output` array with all message
+   content. If all earlier text events were missed, this was the final fallback.
+   gocode only extracted `status` and `usage`, ignoring the output entirely.
+
+Implementation completed:
+
+- added a `sawContentText` tracking flag to the stream state so the terminal
+  handler knows whether any real content text was emitted during the stream
+- set the flag in all existing text-emission paths: `output_text.delta`,
+  `refusal.delta`, and `emitMessageSuffix`
+- added `response.output_text.done` handler that emits any text not already
+  covered by delta events
+- added `response.done` to the terminal event case alongside
+  `response.completed` and `response.incomplete`
+- expanded the `openAIResponsesCompletedEvent` struct to include the response
+  `Output` array
+- added last-resort text extraction in the terminal handler: when no content
+  text was emitted and no tool calls were seen, scan the response output for
+  message items and emit their text before the stop event
+
+Verification completed:
+
+- ran `gofmt -w` on the changed Go file
+- ran `go build ./...`
+- ran `make release-local` in `gocode/tui`
+
 ---
