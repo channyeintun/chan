@@ -190,21 +190,6 @@ Fixes ordered by severity and dependency. Each task is self-contained and can be
 
 ---
 
-### Task 13: Add Foundational Tests
-
-**Problem:** Zero test coverage.
-
-**Fix (incremental):**
-- `internal/api/retry_test.go` — test retry logic and backoff.
-- `internal/compact/tokens_test.go` — test token estimation and thresholds.
-- `internal/tools/path_resolution_test.go` — test path traversal prevention.
-- `internal/tools/bash_test.go` — test security validation patterns.
-- `internal/permissions/gating_test.go` — test permission decision logic.
-- `internal/agent/token_budget_test.go` — test continuation tracker.
-
-**Scope:** Large — but each test file is independent.
-
----
 
 ## Execution Order
 
@@ -222,4 +207,3 @@ Fixes ordered by severity and dependency. Each task is self-contained and can be
 | 10 | Task 10 — Remove builtin shadows | Low | Tiny |
 | 11 | Task 11 — Expand bash security | Medium | Small |
 | 12 | Task 12 — Extract main.go (optional) | Medium | Large |
-| 13 | Task 13 — Add foundational tests (optional) | High | Large |
