@@ -2,32 +2,37 @@
 
 ## Current Phase
 
-Future-proofing complete.
+Planning complete. Implementation has not started.
 
 ## Completed
 
-- [x] Reviewed the reference examples in `golang-design-patterns` to anchor the pattern vocabulary.
-- [x] Inspected `gocode` hotspots where classic patterns could help without changing behavior.
-- [x] Selected recommended pattern opportunities and explicitly rejected several low-value applications.
-- [x] Wrote `plan.md` with implementation guidance and guardrails.
-- [x] Implemented Phase 1: slash command dispatch now uses a handler registry plus a structured slash-command state object instead of the 8-value return tuple.
-- [x] Implemented Phase 2: provider client construction now uses an API-side client factory keyed by `ClientType`, with GitHub Copilot special-case routing left explicit in `newLLMClient`.
+- [x] Compared the current TUI prompt against the requested screenshot.
+- [x] Located the current gocode input and submit path in `tui/src/components/Input.tsx`, `tui/src/App.tsx`, and `tui/src/hooks/usePromptHistory.ts`.
+- [x] Confirmed that gocode currently has no slash-command preview path; slash commands are only recognized on submit.
+- [x] Reviewed the original source references in:
+	- `sourcecode/components/PromptInput/PromptInput.tsx`
+	- `sourcecode/components/PromptInput/PromptInputFooter.tsx`
+	- `sourcecode/components/PromptInput/PromptInputFooterSuggestions.tsx`
+	- `sourcecode/utils/suggestions/commandSuggestions.ts`
+	- `sourcecode/context/promptOverlayContext.tsx`
+	- `sourcecode/components/FullscreenLayout.tsx`
+- [x] Determined that the existing `plan.md` and `progress.md` were stale for this task and replaced the planning docs with slash-preview work.
+- [x] Wrote a task-specific implementation plan for slash preview and the prompt chrome restyle.
 
 ## Pending
 
-None.
+- [ ] Expose slash command metadata from the Go engine to the TUI.
+- [ ] Add TUI slash preview state and rendering.
+- [ ] Restyle the input border and padding to match the screenshot.
+- [ ] Manually verify key handling and narrow-terminal behavior.
+- [ ] Update user-facing docs only if the final implementation changes visible prompt behavior or keybindings.
 
-### Task 4: Connect Provider Registry Extraction
+## Decisions
 
-Status: Completed
-
-Steps completed:
-
-1. Introduced `connectResult`, `connectProviderFunc`, and `connectProviderRegistry` types.
-2. Extracted the GitHub Copilot OAuth flow into `connectGitHubCopilot`.
-3. Refactored `handleConnectSlashCommand` into a registry lookup + common finalization (client creation, debug proxy, state persist, event emission).
-4. Adding a new provider's connect flow now requires one function + one map entry; no changes to the dispatcher.
-5. Verified the CLI still builds with `go build ./cmd/gocode`.
+- Backend-provided slash command metadata is the preferred source of truth.
+- The upstream fullscreen overlay system is reference material, not a required first implementation step for gocode.
+- The first implementation should target screenshot parity with a preview list rendered separately from the bordered prompt row.
+- No tests will be added.
 
 ## Detailed Step Log
 
@@ -37,51 +42,21 @@ Status: Completed
 
 Steps completed:
 
-1. Surveyed the available GoF examples in `golang-design-patterns`.
-2. Reviewed the highest-leverage `gocode` areas for branching, duplication, and extension pressure.
-3. Chose only low-risk, behavior-preserving opportunities.
-4. Documented which areas should stay simple and should not be refactored into patterns right now.
+1. Read the current TUI input flow and confirmed the absence of preview behavior.
+2. Read the upstream source files that implement the relevant prompt chrome and suggestion behavior.
+3. Mapped the visual requirements from the screenshot to the closest upstream prompt/input components.
+4. Identified the current single source of truth for built-in slash commands in Go.
+5. Replaced the stale planning docs with a task-specific plan for this feature.
 
 Outcome:
 
-- Two patterns are worth applying: Command for slash command handling, and Factory Method for client creation.
-- Three others were evaluated and rejected: Chain of Responsibility for permissions (40-line method is already clear), Strategy for compaction (35-line cascade is already clear), and Decorator for tool execution (cross-cutting is already handled via function injection).
-
-### Task 2: Phase 1 Implementation
-
-Status: Completed
-
-Steps completed:
-
-1. Replaced the large `handleSlashCommand` switch with a registry-based dispatcher.
-2. Introduced a structured slash-command state object carrying session, model, mode, cwd, and messages.
-3. Moved each slash command branch into a focused handler function.
-4. Updated the engine call site to consume the structured state instead of an 8-value return tuple.
-5. Verified the CLI still builds with `go build ./cmd/gocode`.
-
-Outcome:
-
-- Slash command behavior remains centralized but no longer depends on a single 500+ line switch.
-- Session/model state updates are now passed through a single explicit state object, which makes later maintenance safer.
-
-### Task 3: Phase 2 Implementation
-
-Status: Completed
-
-Steps completed:
-
-1. Added an API-side client factory keyed by `ClientType`.
-2. Moved generic provider selection out of `newLLMClient` in `engine.go` into that factory layer.
-3. Kept GitHub Copilot routing explicit for the Anthropic Messages vs OpenAI Responses split.
-4. Verified the CLI still builds with `go build ./cmd/gocode`.
-
-Outcome:
-
-- Generic provider construction now lives beside provider metadata in `internal/api`, which narrows `newLLMClient` to config resolution plus the GitHub Copilot special case.
-- Provider lookup now fails explicitly on unknown providers instead of depending on zero-value `ClientType` behavior.
+- The top-and-bottom-only border treatment should follow the upstream prompt chrome pattern rather than the current all-sides border.
+- Slash preview should be a pre-submit TUI concern, not more submit-time branching in `App.tsx`.
+- The recommended architecture is a Go-emitted slash command catalog plus a small dedicated TUI preview hook and renderer.
 
 ## Working Rules
 
-- If a refactor increases indirection without removing meaningful complexity, do not apply it.
-- Preserve existing functionality and behavior.
+- Do not proceed to implementation during this planning phase.
 - Do not add tests.
+- Follow `plan.md` and `progress.md` for the implementation phase.
+- After each later implementation task, update `progress.md`, run formatting for code changes, and commit with git commands.
