@@ -97,6 +97,15 @@ func runIteration(
 		state.MaxTokens = nextOutputBudget(state.MaxTokens, state.MaxOutputCeiling, postTurnPressure)
 	}
 
+	if shouldRetryWithoutToolUse(state, currentUserPrompt, turn) {
+		state.NoToolRetryUsed = true
+		state.Messages = append(state.Messages, api.Message{
+			Role:    api.RoleUser,
+			Content: strings.TrimSpace(`Continue working on the user's implementation request. Tools are available, and you should make reasonable assumptions instead of asking routine clarifying questions. Use the relevant file and search tools now if you can make progress safely. Only ask a clarifying question if a missing detail makes any concrete file change impossible or unsafe.`),
+		})
+		return nil
+	}
+
 	if turn.stopReason == "tool_use" && len(turn.toolCalls) > 0 {
 		results, err := deps.ExecuteToolBatch(ctx, turn.toolCalls)
 		if err != nil {
@@ -428,6 +437,42 @@ func warnUnsupportedThinking(
 		return context.Canceled
 	}
 	return nil
+}
+
+var clarificationResponseTerms = []string{
+	"need more information",
+	"need a bit more information",
+	"could you tell me",
+	"can you tell me",
+	"i need to know",
+	"what is the purpose",
+	"what content should it include",
+	"what are you looking for",
+	"what would you like",
+	"do you have any design requirements",
+	"too vague",
+	"to create the best possible",
+	"tell me what",
+}
+
+func shouldRetryWithoutToolUse(state *QueryState, userPrompt string, turn modelTurn) bool {
+	if state == nil || state.NoToolRetryUsed || !state.Capabilities.SupportsToolUse {
+		return false
+	}
+	if len(state.Tools) == 0 || len(turn.toolCalls) > 0 {
+		return false
+	}
+	if normalizeStopReason(turn.stopReason) != "end_turn" {
+		return false
+	}
+	if looksLikeQuestion(userPrompt) || !containsAny(normalizeIntentText(userPrompt), implementationIntentTerms) {
+		return false
+	}
+	response := normalizeIntentText(turn.assistantText)
+	if response == "" {
+		return false
+	}
+	return looksLikeQuestion(turn.assistantText) || containsAny(response, clarificationResponseTerms)
 }
 
 func requestsExtendedThinking(prompt string) bool {

@@ -47,105 +47,12 @@ func NewPlanner(mode ExecutionMode, sessionID string, artifactManager *artifacts
 
 // BeginTurn creates or refreshes session-scoped planning artifacts for the current turn.
 func (p *Planner) BeginTurn(ctx context.Context, userRequest string) ([]ArtifactUpdate, error) {
-	if p == nil || strings.TrimSpace(p.sessionID) == "" || p.artifactManager == nil {
-		return nil, nil
-	}
-
-	updates := make([]ArtifactUpdate, 0, 2)
-	if shouldMaintainTaskList(userRequest) {
-		owned, err := p.shouldManageSessionArtifact(ctx, artifactspkg.KindTaskList, taskListArtifactSlot)
-		if err != nil {
-			return nil, err
-		}
-		if owned {
-			content := artifactspkg.DraftTaskListMarkdown(userRequest)
-			artifact, _, created, err := p.artifactManager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
-				Kind:    artifactspkg.KindTaskList,
-				Scope:   artifactspkg.ScopeSession,
-				Title:   taskListArtifactTitle,
-				Source:  plannerSource,
-				Content: content,
-				Metadata: map[string]any{
-					"mode":   string(p.mode),
-					"status": planStatusDraft,
-				},
-			}, p.sessionID, taskListArtifactSlot)
-			if err != nil {
-				return nil, err
-			}
-			updates = append(updates, ArtifactUpdate{Artifact: artifact, Content: content, Created: created})
-		}
-	}
-
-	if !p.enabled() || !shouldMaintainPlanDraft(userRequest) {
-		if len(updates) == 0 {
-			return nil, nil
-		}
-		return updates, nil
-	}
-
-	content := artifactspkg.DraftImplementationPlanMarkdown(userRequest)
-	artifact, _, created, err := p.artifactManager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
-		Kind:    artifactspkg.KindImplementationPlan,
-		Scope:   artifactspkg.ScopeSession,
-		Title:   planArtifactTitle,
-		Source:  plannerSource,
-		Content: content,
-		Metadata: map[string]any{
-			"mode":   string(ModePlan),
-			"status": planStatusDraft,
-		},
-	}, p.sessionID, planArtifactSlot)
-	if err != nil {
-		return nil, err
-	}
-
-	// Keep the draft persisted for permission gating and resume flows, but avoid
-	// immediately reopening the plan panel with placeholder content.
-	updates = append(updates, ArtifactUpdate{Artifact: artifact, Content: "", Created: created})
-	return updates, nil
+	return nil, nil
 }
 
 // FinalizeTurn persists the plan text produced during the current turn.
 func (p *Planner) FinalizeTurn(ctx context.Context, artifactID string, userRequest string, messages []api.Message, fromIndex int) ([]ArtifactUpdate, error) {
-	if !p.enabled() {
-		return nil, nil
-	}
-	if turnUsedToolSince(messages, fromIndex, saveImplementationPlanToolName) {
-		return nil, nil
-	}
-
-	assistantResponse := latestAssistantPlanSince(messages, fromIndex)
-	if !shouldUpdateDraftPlan(userRequest, assistantResponse) {
-		return nil, nil
-	}
-
-	owned, err := p.shouldManageSessionArtifact(ctx, artifactspkg.KindImplementationPlan, planArtifactSlot)
-	if err != nil {
-		return nil, err
-	}
-	if !owned {
-		return nil, nil
-	}
-
-	content := artifactspkg.RenderImplementationPlanMarkdown(userRequest, assistantResponse)
-	artifact, _, created, err := p.artifactManager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
-		ID:      strings.TrimSpace(artifactID),
-		Kind:    artifactspkg.KindImplementationPlan,
-		Scope:   artifactspkg.ScopeSession,
-		Title:   planArtifactTitle,
-		Source:  plannerSource,
-		Content: content,
-		Metadata: map[string]any{
-			"mode":   string(ModePlan),
-			"status": planStatusDraft,
-		},
-	}, p.sessionID, planArtifactSlot)
-	if err != nil {
-		return nil, err
-	}
-
-	return []ArtifactUpdate{{Artifact: artifact, Content: content, Created: created}}, nil
+	return nil, nil
 }
 
 // ValidateTool blocks write tools while plan mode is active.

@@ -80,6 +80,7 @@ type QueryState struct {
 	TurnCount           int
 	MaxTurns            int
 	StopRequested       bool
+	NoToolRetryUsed     bool
 	AutoCompactFailures int
 	Continuation        ContinuationTracker
 }
