@@ -98,10 +98,16 @@ func runIteration(
 	}
 
 	if shouldRetryWithoutToolUse(state, currentUserPrompt, turn) {
+		if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
+			Message:     "Model asked a routine clarification for a concrete implementation task; retrying with a stronger directive.",
+			Recoverable: true,
+		}), nil) {
+			return context.Canceled
+		}
 		state.NoToolRetryUsed = true
 		state.Messages = append(state.Messages, api.Message{
 			Role:    api.RoleUser,
-			Content: strings.TrimSpace(`Continue working on the user's implementation request. Tools are available, and you should make reasonable assumptions instead of asking routine clarifying questions. Use the relevant file and search tools now if you can make progress safely. Only ask a clarifying question if a missing detail makes any concrete file change impossible or unsafe.`),
+			Content: strings.TrimSpace(`Continue working on the user's implementation request. The request is concrete enough to act on now. Do not ask routine clarifying questions, and do not use web search for basic syntax, examples, or small scaffold tasks that you can complete from standard coding knowledge. Make the simplest safe assumption, inspect local files if needed, and perform the relevant file changes directly. Only ask a clarifying question if a missing detail makes a concrete file change impossible or unsafe.`),
 		})
 		return nil
 	}

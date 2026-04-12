@@ -554,7 +554,7 @@ func decodeToolInput(call api.ToolCall) (toolpkg.ToolInput, error) {
 func normalizeToolCall(call api.ToolCall) (api.ToolCall, error) {
 	alias := strings.TrimSpace(call.Name)
 	switch alias {
-	case "file_search", "grep_search", "read_file":
+	case "file_search", "grep_search", "read_file", "google:search", "google_search", "google.search":
 	default:
 		return call, nil
 	}
@@ -613,6 +613,14 @@ func normalizeToolCall(call api.ToolCall) (api.ToolCall, error) {
 		renameToolParam(normalizedParams, "filePath", "file_path")
 		renameToolParam(normalizedParams, "startLine", "start_line")
 		renameToolParam(normalizedParams, "endLine", "end_line")
+	case "google:search", "google_search", "google.search":
+		normalized.Name = "web_search"
+		if query, ok := stringParamFromMap(normalizedParams, "query"); !ok || strings.TrimSpace(query) == "" {
+			if firstQuery, ok := firstStringInArrayParamFromMap(normalizedParams, "queries"); ok {
+				normalizedParams["query"] = firstQuery
+			}
+		}
+		renameToolParam(normalizedParams, "max_results", "limit")
 	}
 
 	encoded, err := json.Marshal(normalizedParams)
@@ -680,4 +688,22 @@ func intParamFromMap(params map[string]any, key string) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func firstStringInArrayParamFromMap(params map[string]any, key string) (string, bool) {
+	value, ok := params[key]
+	if !ok {
+		return "", false
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return "", false
+	}
+	for _, item := range items {
+		text, ok := item.(string)
+		if ok && strings.TrimSpace(text) != "" {
+			return text, true
+		}
+	}
+	return "", false
 }

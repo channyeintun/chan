@@ -103,3 +103,9 @@ Tracking fixes per plan.md.
 
 ### Task 13 — Add Foundational Tests ⏭️
 - Skipped per project policy.
+
+### Task 14 — Reduce Simple-Task Retry Thrash and Search Alias Errors ✅
+- **Files:** `gocode/cmd/gocode/tool_executor.go`, `gocode/internal/agent/loop.go`, `gocode/cmd/gocode/engine.go`
+- Normalized invented tool names like `google:search`/`google_search` into the native `web_search` tool and mapped `queries[0]` to `query` so local-model compatibility errors stop derailing turns.
+- When the model asks a routine clarification for a concrete implementation request, the engine now emits a visible recoverable status and retries once with a stronger directive that forbids unnecessary web search for basic scaffold/syntax tasks.
+- Tightened the default system prompt so simple self-contained requests are handled by direct file edits instead of pointless browsing or clarification loops.
