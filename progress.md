@@ -85,3 +85,14 @@ doubles per attempt. If all retries are exhausted with an empty body, an
 `ErrOverloaded` error is propagated instead of silently yielding nothing.
 
 ---
+
+## Task 33 — Rebuild and reinstall
+
+Ran `make release-local` in `gocode/tui`, then installed both binaries:
+
+- `~/.local/bin/gocode` (TUI launcher)
+- `~/.local/bin/gocode-engine` (Go backend)
+
+`gocode --help` confirms the updated binary resolves correctly.
+
+---
