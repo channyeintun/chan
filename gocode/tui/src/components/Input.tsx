@@ -169,19 +169,15 @@ const Input: FC<InputProps> = ({
         return;
       }
 
-      if (slashPreview.visible) {
-        if (slashPreview.selectedCommand?.takesArguments) {
-          const nextValue = slashPreview.applySelection();
-          if (nextValue) {
-            prompt.setValue(nextValue);
-          }
-          return;
+      if (slashPreview.visible && slashPreview.selectedCommand) {
+        const nextValue = slashPreview.applySelection();
+        if (nextValue) {
+          prompt.setValue(nextValue);
         }
-
-        if (slashPreview.selectedCommand) {
+        if (!slashPreview.selectedCommand.takesArguments) {
           onSubmit();
-          return;
         }
+        return;
       }
 
       onSubmit();
@@ -318,34 +314,38 @@ const Input: FC<InputProps> = ({
   );
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor="cyan"
-      borderLeft={false}
-      borderRight={false}
-      paddingX={2}
-      paddingY={1}
-    >
-      <Box flexDirection="column">
-        {showPlaceholder ? (
-          <Box>
-            <Text color="cyan" bold>
-              {"> "}
-            </Text>
-            <Text color="gray">Ask gocode to inspect, plan, or edit code</Text>
-            <Text color="gray">{"█"}</Text>
-          </Box>
-        ) : (
-          renderedLines.map((line, index) => (
-            <Box key={index}>
-              <Text color={index === 0 ? "cyan" : "gray"} bold={index === 0}>
-                {index === 0 ? "> " : "  "}
+    <Box flexDirection="column" marginTop={1}>
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor="cyan"
+        borderLeft={false}
+        borderRight={false}
+        paddingX={2}
+        paddingY={0.5}
+      >
+        <Box flexDirection="column">
+          {showPlaceholder ? (
+            <Box>
+              <Text color="cyan" bold>
+                {"> "}
               </Text>
-              <Text>{line.length > 0 ? line : " "}</Text>
+              <Text color="gray">
+                Ask gocode to inspect, plan, or edit code
+              </Text>
+              <Text color="gray">{"█"}</Text>
             </Box>
-          ))
-        )}
+          ) : (
+            renderedLines.map((line, index) => (
+              <Box key={index}>
+                <Text color={index === 0 ? "cyan" : "gray"} bold={index === 0}>
+                  {index === 0 ? "> " : "  "}
+                </Text>
+                <Text>{line.length > 0 ? line : " "}</Text>
+              </Box>
+            ))
+          )}
+        </Box>
       </Box>
       {slashPreview.visible && slashPreview.matches.length > 0 && (
         <SlashCommandPreview
