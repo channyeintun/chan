@@ -142,15 +142,17 @@ const PromptFooter: FC<PromptFooterProps> = ({
         flexDirection={footerLayout}
         justifyContent="space-between"
       >
-        <Text dimColor>
+        <Box flexDirection="row">
           {renderModeBadge(mode)}
-          {"  "}
-          <Text>{activityLabel}</Text>
-          {activityDetails ? `  ${activityDetails}` : ""}
-          {latencyText ? `  ${latencyText}` : ""}
-          {showWrappedIndicator ? `  wrapped:${wrappedLineCount}` : ""}
-          {promptMetrics ? `  ${promptMetrics}` : ""}
-        </Text>
+          <Text dimColor>
+            {"  "}
+            <Text>{activityLabel}</Text>
+            {activityDetails ? `  ${activityDetails}` : ""}
+            {latencyText ? `  ${latencyText}` : ""}
+            {showWrappedIndicator ? `  wrapped:${wrappedLineCount}` : ""}
+            {promptMetrics ? `  ${promptMetrics}` : ""}
+          </Text>
+        </Box>
         <Text dimColor>{hint}</Text>
       </Box>
     </Box>
@@ -168,7 +170,7 @@ function renderModeBadge(mode: string) {
 
   if (mode === "plan") {
     return (
-      <Text color="black" backgroundColor="cyan" bold>
+      <Text color="white" backgroundColor="blue" bold>
         {label}
       </Text>
     );
@@ -176,7 +178,7 @@ function renderModeBadge(mode: string) {
 
   if (mode === "fast") {
     return (
-      <Text color="black" backgroundColor="yellow" bold>
+      <Text color="white" backgroundColor="green" bold>
         {label}
       </Text>
     );
