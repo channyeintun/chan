@@ -280,6 +280,8 @@ Environment variables override the config file:
 
 If you use GitHub Copilot, the config file will also persist Copilot credentials and may include a `subagent_model` field after `/connect` completes.
 
+By default, `chan` rings the terminal bell when a turn finishes. If your terminal is configured to request attention on bell, that will bounce the host terminal app in the Dock.
+
 ### Debug Logging
 
 To capture low-level runtime diagnostics for provider streams, tool traffic, IPC, and model-event sequencing from launch, start `chan` with:

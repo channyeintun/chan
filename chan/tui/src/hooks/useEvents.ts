@@ -32,6 +32,15 @@ import type {
   ToolStartPayload,
 } from "../protocol/types.js";
 
+const BEL = "\u0007";
+
+function ringTerminalBell() {
+  if (!process.stdout.isTTY) {
+    return;
+  }
+  process.stdout.write(BEL);
+}
+
 export interface UIArtifactReview {
   requestId: string;
   id: string;
@@ -441,6 +450,9 @@ export function useEvents(initialModel: string, initialMode: string) {
             ),
           };
         });
+        if (p.stop_reason !== "cancelled") {
+          ringTerminalBell();
+        }
         break;
       }
       case "turn_timing": {
