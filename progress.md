@@ -2,6 +2,7 @@
 
 ## Active Task
 
+- Completed: hid `file_read` content from the chat transcript so read operations show only a terse completion message instead of file contents.
 - Completed: added an `Opt+A` shortcut to toggle inline artifact visibility in the transcript, with footer discoverability and hidden-state feedback.
 - Completed: hid non-thinking streaming status from the chat transcript entirely, including the label, while keeping thinking visible when relevant.
 - Completed: limited the chat transcript spinner to thinking-only status rows while leaving non-thinking chat states as plain text.

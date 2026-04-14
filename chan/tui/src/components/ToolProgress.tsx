@@ -294,11 +294,7 @@ function renderSuccess(toolCall: UIToolCall) {
     case "multi_replace_file_content":
       return renderFileMutation(toolCall);
     case "file_read":
-      return (
-        <MarkdownText
-          text={summarizeFileRead(toolCall.output, toolCall.truncated)}
-        />
-      );
+      return <Text dimColor>{summarizeFileRead(toolCall.output, toolCall.truncated)}</Text>;
     case "grep":
       return (
         <MarkdownText
@@ -582,10 +578,13 @@ function summarizeDiagnostics(raw?: string): string {
 }
 
 function summarizeFileRead(raw?: string, truncated?: boolean): string {
-  if (!raw) {
-    return truncated ? "Read completed. Output truncated." : "Read completed.";
+  if (truncated) {
+    return "Read completed. Content hidden in chat. Output truncated.";
   }
-  return summarizeOutput(raw, truncated);
+  if (!raw) {
+    return "Read completed. Content hidden in chat.";
+  }
+  return "Read completed. Content hidden in chat.";
 }
 
 function summarizeSearchMatches(
