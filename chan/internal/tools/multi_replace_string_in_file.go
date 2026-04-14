@@ -17,7 +17,7 @@ func (t *MultiReplaceStringInFileTool) Name() string {
 }
 
 func (t *MultiReplaceStringInFileTool) Description() string {
-	return "Apply multiple replace_string_in_file operations in a single call. Use this when several exact literal replacements are needed across one file or a small set of files and you want to avoid many separate edit calls."
+	return "Apply multiple replace_string_in_file operations in a single call. Prefer this as the first choice when several exact literal replacements are needed across one file or a small set of files and you want to avoid many separate edit calls."
 }
 
 func (t *MultiReplaceStringInFileTool) InputSchema() any {

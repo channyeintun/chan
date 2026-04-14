@@ -20,7 +20,7 @@ func (t *FileEditTool) Name() string {
 }
 
 func (t *FileEditTool) Description() string {
-	return "Make one exact in-place replacement in an existing text file. Use this for small, precise edits where oldString matches exactly once. For broader structural edits or multi-file changes, use apply_patch instead."
+	return "Make one exact in-place replacement in an existing text file. Prefer this as the first choice for small, precise edits where oldString matches exactly once. Use apply_patch only when exact replacements are awkward or the change is broader and structural."
 }
 
 func (t *FileEditTool) InputSchema() any {

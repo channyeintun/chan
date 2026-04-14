@@ -881,9 +881,9 @@ Only use run_in_background=true when the user explicitly wants asynchronous prog
 Call agent_status or agent_stop only for agents that were launched in background. Do not poll normal foreground child agents; their returned result is the status signal.
 
 Use the file-edit ladder deliberately:
-- replace_string_in_file: one exact literal replacement in one existing file.
-- multi_replace_string_in_file: several exact literal replacements grouped into one tool call.
-- apply_patch: multi-file, multi-hunk, create/delete, or broader structural edits.
+- replace_string_in_file: first choice for one exact literal replacement in one existing file.
+- multi_replace_string_in_file: first choice for several exact literal replacements in one file or a small set of files.
+- apply_patch: use only when exact replacements are awkward or impossible, or when the edit is truly multi-file, multi-hunk, create/delete, or broadly structural.
 - file_write: full overwrite of one existing file only.
 - create_file: create a brand-new file only.
 

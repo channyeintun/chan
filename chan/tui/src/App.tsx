@@ -1,6 +1,14 @@
-import React, { type FC, useCallback, useEffect, useState } from "react";
-import { Spinner } from "silvery";
-import { Box, Screen, Text } from "silvery";
+import React, { type FC, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Box,
+  Screen,
+  Spinner,
+  Text,
+  ToastContainer,
+  disableBracketedPaste,
+  enableBracketedPaste,
+  useToast,
+} from "silvery";
 import { useEngine } from "./hooks/useEngine.js";
 import { useEvents, type UIArtifact } from "./hooks/useEvents.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
@@ -65,6 +73,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     useState(0);
   const [showThinking, setShowThinking] = useState(false);
   const [showArtifacts, setShowArtifacts] = useState(true);
+  const previousStreamingRef = useRef(false);
+  const { toast, toasts, dismissAll } = useToast();
   const {
     uiState,
     handleEvent,
@@ -85,6 +95,49 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       )
     : [];
   const isEngineReady = uiState.ready || engine.ready;
+
+  useEffect(() => {
+    enableBracketedPaste(process.stdout);
+    return () => {
+      disableBracketedPaste(process.stdout);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (uiState.isStreaming) {
+      dismissAll();
+    }
+  }, [dismissAll, uiState.isStreaming]);
+
+  useEffect(() => {
+    const wasStreaming = previousStreamingRef.current;
+    previousStreamingRef.current = uiState.isStreaming;
+
+    if (!wasStreaming || uiState.isStreaming || uiState.error) {
+      return;
+    }
+
+    if (
+      !uiState.statusLine?.startsWith("Turn complete (") ||
+      uiState.statusLine.includes("(cancelled)")
+    ) {
+      return;
+    }
+
+    const lastUserMessage = [...uiState.messages]
+      .reverse()
+      .find((message) => message.role === "user");
+    if (lastUserMessage?.text.trim().startsWith("/")) {
+      return;
+    }
+
+    toast({
+      title: "Turn complete",
+      description: "Ready for your next prompt.",
+      variant: "success",
+      duration: 4000,
+    });
+  }, [toast, uiState.error, uiState.isStreaming, uiState.messages, uiState.statusLine]);
 
   const submitPrompt = useCallback(
     (text: string, images: UserInputImagePayload[]) => {
@@ -559,6 +612,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           />
         </Box>
       )}
+
+      <ToastContainer toasts={toasts} marginTop={1} />
     </Screen>
   );
 };
