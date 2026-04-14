@@ -496,7 +496,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					titleMessages := api.DeepCopyMessages(messages)
 					go func() {
 						modelRouter := localmodel.NewRouter(titleClient)
-						title := session.GenerateTitle(modelRouter, titleMessages)
+						title := session.GenerateTitle(modelRouter, titleClient, titleMessages)
 						if title != "" {
 							_ = sessionStore.SaveMetadata(session.Metadata{
 								SessionID:    titleSessionID,
