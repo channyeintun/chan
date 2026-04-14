@@ -92,12 +92,15 @@ type QueryState struct {
 	// RetrievalTouched accumulates file paths touched via tools this session
 	// to boost their retrieval score on subsequent turns.
 	RetrievalTouched []string
+	// Graph is the session-scoped retrieval graph for structural cross-references.
+	Graph *RetrievalGraph
 }
 
 // NewQueryState creates initial state from a request.
 func NewQueryState(req QueryRequest) *QueryState {
 	initialOutputBudget := defaultOutputBudget(req.MaxTokens)
-	return &QueryState{
+	ctx := LoadTurnContext()
+	state := &QueryState{
 		Messages:         req.Messages,
 		BasePrompt:       req.SystemPrompt,
 		SystemPrompt:     req.SystemPrompt,
@@ -115,7 +118,9 @@ func NewQueryState(req QueryRequest) *QueryState {
 		MaxOutputCeiling: req.MaxTokens,
 		MaxTurns:         50,
 		Continuation:     NewContinuationTracker(req.MaxTokens),
+		Graph:            NewRetrievalGraph(ctx.CurrentDir),
 	}
+	return state
 }
 
 // ShouldContinue returns true if the query loop should keep iterating.

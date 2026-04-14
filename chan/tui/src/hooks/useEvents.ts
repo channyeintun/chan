@@ -794,6 +794,10 @@ export function useEvents(initialModel: string, initialMode: string) {
         // Telemetry-only event; no UI state change needed.
         break;
       }
+      case "attempt_repeated": {
+        // Telemetry-only event; no UI state change needed.
+        break;
+      }
       case "rate_limit_update": {
         const p = event.payload as RateLimitUpdatePayload;
         setUIState((s) => ({

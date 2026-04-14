@@ -139,12 +139,12 @@ The retrieval objective is not “most related memory.” It is “highest-value
 4. Fewer repeated failed tool attempts within a single session.
 5. No known cases where stale cached code outranks live repository reads.
 
-## Open Questions
+## Open Questions (Resolved)
 
-1. Whether symbol-level indexing is needed in phase 1 or whether file-level plus git and tool anchors are enough.
-2. Whether `git blame` and deeper history should be first-class retrieval sources or remain explicitly on-demand.
-3. Whether preferences should continue to live in `MEMORY.md` or move to a clearer dedicated format later.
-4. How much of the retrieval graph can be built incrementally without noticeable startup or turn latency.
+1. Symbol-level indexing is included in phase 1. For most languages chan supports (Python, Rust, TS, Ruby, Java, C...) there are no dedicated symbol navigation tools. The retrieval graph provides cheap cross-references that would otherwise require expensive grep + read_file tool turns.
+2. `git blame` and deeper history remain explicitly on-demand. Not a first-class retrieval source.
+3. Preferences continue in `MEMORY.md` for now with preference-framed injection. A dedicated format is future work.
+4. The retrieval graph is session-scoped in memory, built lazily on first file access, and invalidated per file on mod-time change. No noticeable per-turn latency for typical file counts.
 
 ## Future Task: Session Snapshot Export/Import
 

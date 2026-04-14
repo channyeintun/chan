@@ -33,6 +33,7 @@ const (
 	EventMemoryRecalled     EventType = "memory_recalled"
 	EventRetrievalUsed      EventType = "retrieval_used"
 	EventAttemptLogSurfaced EventType = "attempt_log_surfaced"
+	EventAttemptRepeated    EventType = "attempt_repeated"
 	EventRateLimitUpdate    EventType = "rate_limit_update"
 	EventTurnTiming         EventType = "turn_timing"
 	EventCompactStart       EventType = "compact_start"
@@ -220,6 +221,12 @@ type AttemptLogSurfacedPayload struct {
 	EntryCount int  `json:"entry_count"`
 	TokensUsed int  `json:"tokens_used"`
 	Injected   bool `json:"injected"`
+}
+
+// AttemptRepeatedPayload is emitted when a new tool failure matches a
+// previously logged attempt-log signature.
+type AttemptRepeatedPayload struct {
+	RepeatedCount int `json:"repeated_count"`
 }
 
 type ArtifactCreatedPayload struct {

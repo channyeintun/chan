@@ -48,7 +48,7 @@ type LiveSnippet struct {
 
 // ExtractAnchors extracts exact anchors from the current user prompt, git diff,
 // and recent tool output. Results are deduplicated.
-func ExtractAnchors(userPrompt, gitStatus, toolOutputs string) []RetrievalAnchor {
+func ExtractAnchors(userPrompt, gitStatus, toolOutputs string, graph *RetrievalGraph) []RetrievalAnchor {
 	combined := strings.Join([]string{userPrompt, gitStatus, toolOutputs}, "\n")
 	anchors := make([]RetrievalAnchor, 0, 8)
 	seen := make(map[string]struct{})
@@ -79,13 +79,34 @@ func ExtractAnchors(userPrompt, gitStatus, toolOutputs string) []RetrievalAnchor
 		anchors = append(anchors, RetrievalAnchor{ErrorString: sig})
 	}
 
+	// Extract symbol anchors if a graph is available.
+	if graph != nil {
+		for _, sym := range graph.ExtractSymbolAnchors(combined) {
+			if _, ok := seen["sym:"+sym]; ok {
+				continue
+			}
+			seen["sym:"+sym] = struct{}{}
+			anchors = append(anchors, RetrievalAnchor{Symbol: sym})
+		}
+	}
+
 	return anchors
 }
 
 // ScoreCandidates scores repository file paths based on anchors, git status,
-// session-touched files, and structural edges. The second return value is
-// the number of new candidates added through structural edge expansion.
-func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string, sessionTouched []string) ([]RetrievalCandidate, int) {
+// session-touched files, and structural edges. When a graph is provided, it
+// uses the persistent session-scoped graph for multi-hop expansion. Falls back
+// to the flat expansion path when graph is nil.
+// The second return value is the number of new candidates added through expansion.
+func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string, sessionTouched []string, graph *RetrievalGraph) ([]RetrievalCandidate, int) {
+	// Use graph-based scoring when available.
+	if graph != nil {
+		graph.InvalidateGitOverlay(gitStatusText)
+		graph.Seed(anchors, sessionTouched)
+		return graph.Score(anchors, gitStatusText, sessionTouched)
+	}
+
+	// Fallback: flat stateless scoring (no graph).
 	if len(anchors) == 0 && len(sessionTouched) == 0 && strings.TrimSpace(gitStatusText) == "" {
 		return nil, 0
 	}

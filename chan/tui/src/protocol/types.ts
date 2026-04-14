@@ -15,6 +15,7 @@ export type EventType =
   | "memory_recalled"
   | "retrieval_used"
   | "attempt_log_surfaced"
+  | "attempt_repeated"
   | "turn_timing"
   | "rate_limit_update"
   | "compact_start"
@@ -192,6 +193,10 @@ export interface AttemptLogSurfacedPayload {
   entry_count: number;
   tokens_used: number;
   injected: boolean;
+}
+
+export interface AttemptRepeatedPayload {
+  repeated_count: number;
 }
 
 export interface RateLimitWindowPayload {

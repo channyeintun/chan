@@ -152,8 +152,13 @@ func runIteration(
 		}
 		// Collect file paths touched by tools for future retrieval scoring.
 		collectTouchedFiles(state, turn.toolCalls, results)
+		// Invalidate graph nodes for touched files so they are re-parsed next turn.
+		invalidateGraphFiles(state, turn.toolCalls, results)
 		// Record failed commands into the attempt log.
-		recordFailedAttempts(deps.AttemptLog, turn.toolCalls, results)
+		repeated := recordFailedAttempts(deps.AttemptLog, turn.toolCalls, results)
+		if repeated > 0 {
+			_ = emitAttemptRepeatedTelemetry(deps.EmitTelemetry, repeated)
+		}
 		return nil
 	}
 
@@ -667,8 +672,8 @@ func runLiveRetrieval(state *QueryState, currentUserPrompt string, pressure Cont
 	// Gather tool output from the most recent tool turn for anchor extraction.
 	recentToolOutput := latestToolOutput(state.Messages)
 
-	anchors := ExtractAnchors(currentUserPrompt, state.TurnContext.GitStatus, recentToolOutput)
-	candidates, edgesExpanded := ScoreCandidates(anchors, state.TurnContext.CurrentDir, state.TurnContext.GitStatus, state.RetrievalTouched)
+	anchors := ExtractAnchors(currentUserPrompt, state.TurnContext.GitStatus, recentToolOutput, state.Graph)
+	candidates, edgesExpanded := ScoreCandidates(anchors, state.TurnContext.CurrentDir, state.TurnContext.GitStatus, state.RetrievalTouched, state.Graph)
 	snippets := ReadLiveSnippets(candidates, pressure.RetrievalBudgetTokens)
 
 	section := FormatLiveRetrievalSection(snippets)
@@ -712,6 +717,17 @@ func emitAttemptLogTelemetry(emit func(ipc.StreamEvent) error, entries []Attempt
 	}))
 }
 
+// emitAttemptRepeatedTelemetry emits the EventAttemptRepeated event when a new
+// tool failure matches a previously logged attempt-log signature.
+func emitAttemptRepeatedTelemetry(emit func(ipc.StreamEvent) error, repeatedCount int) error {
+	if emit == nil || repeatedCount <= 0 {
+		return nil
+	}
+	return emit(newEvent(ipc.EventAttemptRepeated, ipc.AttemptRepeatedPayload{
+		RepeatedCount: repeatedCount,
+	}))
+}
+
 // collectTouchedFiles appends file paths referenced by tool calls and tool
 // results to the session-scoped retrieval touched list so they score higher in
 // future turns.
@@ -751,6 +767,33 @@ func collectTouchedFiles(state *QueryState, calls []api.ToolCall, results []api.
 	}
 }
 
+// invalidateGraphFiles marks files touched by tool calls as dirty in the
+// retrieval graph so they are re-parsed on the next retrieval turn.
+func invalidateGraphFiles(state *QueryState, calls []api.ToolCall, results []api.ToolResult) {
+	if state == nil || state.Graph == nil {
+		return
+	}
+	cwd := state.TurnContext.CurrentDir
+	invalidated := make(map[string]struct{})
+	invalidate := func(path string) {
+		for _, resolved := range resolveFilePath(path, cwd) {
+			if _, done := invalidated[resolved]; done {
+				continue
+			}
+			invalidated[resolved] = struct{}{}
+			state.Graph.Invalidate(resolved)
+		}
+	}
+	for _, call := range calls {
+		for _, p := range extractFilePathsFromToolCall(call) {
+			invalidate(p)
+		}
+	}
+	for _, result := range results {
+		invalidate(result.FilePath)
+	}
+}
+
 // extractFilePathsFromToolCall extracts file path arguments from common tool calls.
 func extractFilePathsFromToolCall(call api.ToolCall) []string {
 	// Tool inputs are JSON; try common field names used across tool implementations.
@@ -780,9 +823,19 @@ func extractFilePathsFromToolCall(call api.ToolCall) []string {
 }
 
 // recordFailedAttempts inspects tool results for errors and records them to the attempt log.
-func recordFailedAttempts(log *AttemptLog, calls []api.ToolCall, results []api.ToolResult) {
+// Returns the number of repeated failures (matching previously logged signatures).
+func recordFailedAttempts(log *AttemptLog, calls []api.ToolCall, results []api.ToolResult) int {
 	if log == nil || len(results) == 0 {
-		return
+		return 0
+	}
+
+	// Load existing entries to detect repeats.
+	existing, _ := log.Load()
+	existingSigs := make(map[string]struct{}, len(existing))
+	for _, entry := range existing {
+		if entry.ErrorSignature != "" {
+			existingSigs[entry.ErrorSignature] = struct{}{}
+		}
 	}
 
 	callByID := make(map[string]api.ToolCall, len(calls))
@@ -790,18 +843,25 @@ func recordFailedAttempts(log *AttemptLog, calls []api.ToolCall, results []api.T
 		callByID[call.ID] = call
 	}
 
+	repeated := 0
 	for _, result := range results {
 		if !result.IsError {
 			continue
 		}
 		call := callByID[result.ToolCallID]
 		sig := errorSignatureFromOutput(result.Output)
+		if sig != "" {
+			if _, wasLogged := existingSigs[sig]; wasLogged {
+				repeated++
+			}
+		}
 		entry := AttemptEntry{
 			Command:        call.Name,
 			ErrorSignature: sig,
 		}
 		_ = log.Record(entry)
 	}
+	return repeated
 }
 
 // errorSignatureFromOutput extracts a compact error signature from tool output.
