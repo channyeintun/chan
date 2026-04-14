@@ -12,6 +12,12 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 
 ![Agentic Coding CLI Architecture](./docs/architecture.png)
 
+## Architecture Docs
+
+- [Lean Retrieval Architecture](./docs/lean-retrieval-architecture.md)
+- [Silvery Guide For Chan](./docs/silvery-guide.md)
+- [OpenRouter + Ollama Guide](./docs/openrouter-ollama-guide.md)
+
 ## Prerequisites
 
 - macOS or Linux
