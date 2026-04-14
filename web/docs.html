@@ -350,6 +350,20 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
                     <p class="text-sm text-gray-400 leading-relaxed mb-6">
                         Chan uses a split-process architecture designed for high performance and safety.
                     </p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-sm text-gray-300">
+                        <div class="p-5 border border-[#1a1a1a] rounded-md bg-subtle">
+                            <div class="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-3">Live Context</div>
+                            <p class="leading-relaxed">Each turn favors fresh repository reads. Retrieval starts from exact anchors in the prompt, git state, and recent tool output, then reads live file snippets from disk instead of relying on cached code summaries.</p>
+                        </div>
+                        <div class="p-5 border border-[#1a1a1a] rounded-md bg-subtle">
+                            <div class="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-3">Structural Expansion</div>
+                            <p class="leading-relaxed">The retrieval pass expands one hop through cheap structural edges, including local Go import relationships and test-to-source pairings such as <code>foo.go</code> ↔ <code>foo_test.go</code>.</p>
+                        </div>
+                        <div class="p-5 border border-[#1a1a1a] rounded-md bg-subtle">
+                            <div class="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-3">Preference + Retry Guard</div>
+                            <p class="leading-relaxed">Durable memory is framed as preferences and conventions, while a session-scoped attempt log records failed commands so the agent avoids repeating the same broken step inside one task.</p>
+                        </div>
+                    </div>
                     <div class="arch-overview mb-8">
                         <div class="arch-shell-card">
                             <div class="arch-shell-eyebrow">Launcher Layer</div>
@@ -373,7 +387,7 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
                                 <div class="engine-map-eyebrow">Go Engine Component Map</div>
                                 <h3 class="engine-map-title">Full components included inside <code>chan-engine</code></h3>
                             </div>
-                            <p class="engine-map-copy">Curated visual grouping of the engine surface so readers can see the full runtime, not just the top-level binary split.</p>
+                            <p class="engine-map-copy">Curated visual grouping of the engine surface so readers can see the full runtime, not just the top-level binary split. The current retrieval path is deterministic, prompt-pressure-aware, and instrumented so the TUI can show snippet count, anchor count, and structural-edge expansion per turn.</p>
                         </div>
 
                         <div class="engine-map-grid">

@@ -5,6 +5,7 @@
 - Completed: lean retrieval architecture implementation for the agent harness.
 - Completed: review-driven corrections for retrieval, preference recall, and telemetry wiring.
 - Completed: structural edge expansion, test-covers edges, and attempt-log surfaced telemetry.
+- Completed: architecture docs sync for structural retrieval edges and surfaced telemetry.
 
 ## Notes
 
@@ -12,6 +13,7 @@
 - Added attempt_log_surfaced telemetry event emitted each turn when attempt-log entries are loaded into the prompt.
 - Added edges_expanded field to retrieval telemetry payload and TUI footer display.
 - Added a session-scoped attempt log and wired failed tool-attempt recording into the query loop.
+- Updated web docs architecture copy to describe exact-anchor retrieval, 1-hop structural expansion, preference-framed durable memory, and surfaced retrieval telemetry.
 - Added live retrieval with anchor extraction, candidate scoring, live snippet reads, prompt injection, and retrieval telemetry.
 - Narrowed durable memory framing toward preferences and conventions instead of repo facts.
 - Shared retrieval token budgeting with context-pressure handling and wired attempt-log creation from the engine session directory.
