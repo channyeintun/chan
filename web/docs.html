@@ -347,191 +347,270 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
                 <!-- Arch / Build -->
                 <section id="arch" class="mb-24">
                     <h2 class="subsection-title text-3xl font-bold mb-6">Architecture</h2>
-                    <p class="text-sm text-gray-400 leading-relaxed mb-6">
-                        Chan uses a split-process architecture designed for high performance and safety.
+                    <p class="text-sm text-gray-400 leading-relaxed mb-8">
+                        Chan uses a split-process architecture. A Bun-powered TUI communicates with a Go
+                        engine over NDJSON. Every turn, the engine selects live context through a
+                        session-scoped retrieval graph — no cached code summaries.
                     </p>
 
-                    <!-- Retrieval Pipeline Visual -->
-                    <div class="retrieval-pipeline mb-10">
-                        <div class="retrieval-pipeline-header">
-                            <div class="retrieval-pipeline-eyebrow">Per-Turn Retrieval Pipeline</div>
-                            <h3 class="retrieval-pipeline-title">Live context selected fresh every turn — no cached code summaries</h3>
-                        </div>
-                        <div class="retrieval-stages">
-                            <div class="retrieval-stage">
-                                <div class="retrieval-stage-num">1</div>
-                                <div class="retrieval-stage-label">Extract Anchors</div>
-                                <div class="retrieval-stage-detail">File paths, symbol names, and error signatures from the user prompt, git state, and recent tool output.</div>
-                            </div>
-                            <div class="retrieval-stage-arrow">→</div>
-                            <div class="retrieval-stage">
-                                <div class="retrieval-stage-num">2</div>
-                                <div class="retrieval-stage-label">Graph Expand</div>
-                                <div class="retrieval-stage-detail">Walk structural edges — imports, test pairing, symbol containment — across 7 languages. 2nd hop when sparse.</div>
-                            </div>
-                            <div class="retrieval-stage-arrow">→</div>
-                            <div class="retrieval-stage">
-                                <div class="retrieval-stage-num">3</div>
-                                <div class="retrieval-stage-label">Score + Budget</div>
-                                <div class="retrieval-stage-detail">Rank by utility-per-token. Budget shrinks under context pressure. Top 4 snippets read live from disk.</div>
-                            </div>
+                    <!-- ═══ Diagram 1: Engine Architecture Flow ═══ -->
+                    <div class="diagram-wrap mb-14">
+                        <div class="diagram-eyebrow">System Architecture</div>
+                        <div class="diagram-subtitle">How the TUI, engine loop, and subsystems connect</div>
+                        <div class="diagram-scroll">
+                            <svg class="arch-svg" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <marker id="ao" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                        <polygon points="0 0, 8 3, 0 6" fill="#ff4000" opacity="0.7"/>
+                                    </marker>
+                                    <marker id="ag" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                        <polygon points="0 0, 8 3, 0 6" fill="#555" opacity="0.5"/>
+                                    </marker>
+                                    <marker id="ap" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                        <polygon points="0 0, 8 3, 0 6" fill="#fb7185" opacity="0.6"/>
+                                    </marker>
+                                    <marker id="ab" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                        <polygon points="0 0, 8 3, 0 6" fill="#60a5fa" opacity="0.6"/>
+                                    </marker>
+                                </defs>
+
+                                <!-- ── Tier 0: TUI ── -->
+                                <rect x="280" y="10" width="240" height="46" rx="8" fill="#0c0c0c" stroke="#252525" stroke-width="1.2"/>
+                                <text x="400" y="28" text-anchor="middle" fill="#777" font-size="8" font-weight="700" letter-spacing="1.5" font-family="sans-serif">LAUNCHER</text>
+                                <text x="400" y="44" text-anchor="middle" fill="#d0d0d0" font-size="12.5" font-weight="700" font-family="'Outfit',sans-serif">TUI · Bun · React Ink</text>
+
+                                <!-- NDJSON bridge arrow -->
+                                <line x1="400" y1="56" x2="400" y2="95" stroke="#ff4000" stroke-width="1.5" opacity="0.45" marker-end="url(#ao)"/>
+                                <rect x="372" y="64" width="56" height="16" rx="8" fill="#080808" stroke="rgba(255,64,0,0.25)"/>
+                                <text x="400" y="75" text-anchor="middle" fill="#ff9b79" font-size="7" font-weight="800" letter-spacing="1" font-family="sans-serif">NDJSON</text>
+
+                                <!-- ── Tier 1: Turn Loop ── -->
+                                <rect x="300" y="95" width="200" height="48" rx="10" fill="#0f0a05" stroke="rgba(255,64,0,0.3)" stroke-width="1.5"/>
+                                <text x="400" y="124" text-anchor="middle" fill="#e8e8e8" font-size="14" font-weight="800" font-family="'Outfit',sans-serif">Turn Loop</text>
+
+                                <!-- ── Dispatch bus line ── -->
+                                <line x1="400" y1="143" x2="400" y2="165" stroke="#ff4000" stroke-width="1.2" opacity="0.35"/>
+                                <line x1="62" y1="165" x2="738" y2="165" stroke="#ff4000" stroke-width="1.2" opacity="0.2"/>
+                                <!-- tick marks down from bus -->
+                                <line x1="62" y1="165" x2="62" y2="185" stroke="#ff4000" stroke-width="1.2" opacity="0.35" marker-end="url(#ao)"/>
+                                <line x1="175" y1="165" x2="175" y2="185" stroke="#ff4000" stroke-width="1.2" opacity="0.35" marker-end="url(#ao)"/>
+                                <line x1="288" y1="165" x2="288" y2="185" stroke="#ff4000" stroke-width="1.2" opacity="0.35" marker-end="url(#ao)"/>
+                                <line x1="400" y1="165" x2="400" y2="185" stroke="#ff4000" stroke-width="1.2" opacity="0.35" marker-end="url(#ao)"/>
+                                <line x1="512" y1="165" x2="512" y2="185" stroke="#ff4000" stroke-width="1.2" opacity="0.35" marker-end="url(#ao)"/>
+                                <line x1="625" y1="165" x2="625" y2="185" stroke="#ff4000" stroke-width="1.2" opacity="0.35" marker-end="url(#ao)"/>
+                                <line x1="738" y1="165" x2="738" y2="185" stroke="#ff4000" stroke-width="1.2" opacity="0.35" marker-end="url(#ao)"/>
+
+                                <!-- ── Tier 2: Core Subsystems ── -->
+                                <!-- Retrieval Graph (highlighted) -->
+                                <rect x="12" y="192" width="100" height="40" rx="6" fill="#0f0a05" stroke="rgba(255,64,0,0.28)" stroke-width="1.2"/>
+                                <text x="62" y="216" text-anchor="middle" fill="#e0e0e0" font-size="9.5" font-weight="700" font-family="sans-serif">Retrieval Graph</text>
+
+                                <rect x="128" y="192" width="95" height="40" rx="6" fill="#0f0f0f" stroke="#222"/>
+                                <text x="175" y="216" text-anchor="middle" fill="#ccc" font-size="9.5" font-weight="600" font-family="sans-serif">Memory Recall</text>
+
+                                <rect x="240" y="192" width="95" height="40" rx="6" fill="#0f0f0f" stroke="#222"/>
+                                <text x="288" y="216" text-anchor="middle" fill="#ccc" font-size="9.5" font-weight="600" font-family="sans-serif">Planner</text>
+
+                                <rect x="352" y="192" width="95" height="40" rx="6" fill="#0f0f0f" stroke="#222"/>
+                                <text x="400" y="216" text-anchor="middle" fill="#ccc" font-size="9.5" font-weight="600" font-family="sans-serif">Skills</text>
+
+                                <rect x="465" y="192" width="95" height="40" rx="6" fill="#0f0f0f" stroke="#222"/>
+                                <text x="512" y="216" text-anchor="middle" fill="#ccc" font-size="9.5" font-weight="600" font-family="sans-serif">Compaction</text>
+
+                                <rect x="578" y="192" width="95" height="40" rx="6" fill="#0f0f0f" stroke="#222"/>
+                                <text x="625" y="216" text-anchor="middle" fill="#ccc" font-size="9.5" font-weight="600" font-family="sans-serif">Attempt Log</text>
+
+                                <rect x="690" y="192" width="95" height="40" rx="6" fill="#0f0f0f" stroke="#222"/>
+                                <text x="738" y="216" text-anchor="middle" fill="#ccc" font-size="9.5" font-weight="600" font-family="sans-serif">Config</text>
+
+                                <!-- ── Label: compose prompt ── -->
+                                <text x="400" y="254" text-anchor="middle" fill="#555" font-size="8" font-style="italic" font-family="sans-serif">compose prompt → call model</text>
+                                <line x1="400" y1="258" x2="400" y2="278" stroke="#ff4000" stroke-width="1.2" opacity="0.3" marker-end="url(#ao)"/>
+
+                                <!-- ── Tier 3: LLM Client (wide box) ── -->
+                                <rect x="95" y="280" width="290" height="50" rx="8" fill="#0f0f0f" stroke="rgba(255,64,0,0.2)" stroke-width="1.2"/>
+                                <text x="240" y="300" text-anchor="middle" fill="#e0e0e0" font-size="12" font-weight="700" font-family="sans-serif">LLM Client</text>
+                                <text x="240" y="318" text-anchor="middle" fill="#666" font-size="8.5" font-family="sans-serif">Anthropic · OpenAI-compat · Gemini · Ollama · Local</text>
+
+                                <!-- ── Label: model response ── -->
+                                <text x="400" y="348" text-anchor="middle" fill="#555" font-size="8" font-style="italic" font-family="sans-serif">model response → tool calls</text>
+                                <line x1="400" y1="352" x2="400" y2="370" stroke="#ff4000" stroke-width="1.2" opacity="0.3" marker-end="url(#ao)"/>
+
+                                <!-- ── Tier 3b: Tool Executor (wide box) ── -->
+                                <rect x="95" y="372" width="290" height="50" rx="8" fill="#0f0f0f" stroke="rgba(255,64,0,0.2)" stroke-width="1.2"/>
+                                <text x="240" y="392" text-anchor="middle" fill="#e0e0e0" font-size="12" font-weight="700" font-family="sans-serif">Tool Executor</text>
+                                <text x="240" y="410" text-anchor="middle" fill="#666" font-size="8.5" font-family="sans-serif">bash · file ops · git / grep · child agents</text>
+
+                                <!-- ── Return arrow: Tool Executor → Turn Loop (right side curve) ── -->
+                                <path d="M 385,397 Q 520,397 540,350 Q 560,260 540,175 Q 530,143 500,131" stroke="#60a5fa" stroke-width="1.5" fill="none" opacity="0.35" stroke-dasharray="6,3" marker-end="url(#ab)"/>
+                                <text x="562" y="270" fill="#60a5fa" font-size="8" opacity="0.7" font-family="sans-serif" transform="rotate(-90,562,270)">tool results → next turn</text>
+
+                                <!-- ── Invalidation arrow: Tool Executor → Retrieval Graph ── -->
+                                <path d="M 95,397 Q 40,397 30,350 Q 20,290 35,245 Q 42,232 50,232" stroke="#fb7185" stroke-width="1.3" fill="none" opacity="0.4" stroke-dasharray="5,3" marker-end="url(#ap)"/>
+                                <text x="10" y="320" fill="#fb7185" font-size="7.5" opacity="0.7" font-family="sans-serif" transform="rotate(-90,10,320)">invalidation</text>
+
+                                <!-- ── Bottom: Session + Safety bar ── -->
+                                <line x1="95" y1="445" x2="700" y2="445" stroke="#1a1a1a" stroke-width="1"/>
+                                <text x="400" y="468" text-anchor="middle" fill="#444" font-size="8" font-weight="700" letter-spacing="1.5" font-family="sans-serif">SESSION · PERMISSIONS · HOOKS · IPC BRIDGE · DEBUG LOG · COST TRACKING</text>
+
+                                <!-- dashed verticals to bottom bar -->
+                                <line x1="175" y1="232" x2="175" y2="445" stroke="#222" stroke-width="0.6" stroke-dasharray="2,5" opacity="0.35"/>
+                                <line x1="625" y1="232" x2="625" y2="445" stroke="#222" stroke-width="0.6" stroke-dasharray="2,5" opacity="0.35"/>
+                                <line x1="240" y1="422" x2="240" y2="445" stroke="#222" stroke-width="0.6" stroke-dasharray="2,5" opacity="0.35"/>
+
+                                <!-- ── Right-side label cluster ── -->
+                                <rect x="600" y="285" width="185" height="120" rx="10" fill="rgba(255,255,255,0.015)" stroke="#1a1a1a"/>
+                                <text x="692" y="303" text-anchor="middle" fill="#555" font-size="7.5" font-weight="700" letter-spacing="1" font-family="sans-serif">PERSISTENCE</text>
+                                <text x="692" y="322" text-anchor="middle" fill="#777" font-size="9" font-family="sans-serif">session store</text>
+                                <text x="692" y="339" text-anchor="middle" fill="#777" font-size="9" font-family="sans-serif">artifacts · history</text>
+                                <text x="692" y="356" text-anchor="middle" fill="#777" font-size="9" font-family="sans-serif">memory files</text>
+                                <text x="692" y="373" text-anchor="middle" fill="#777" font-size="9" font-family="sans-serif">attempt log</text>
+                                <text x="692" y="393" text-anchor="middle" fill="#777" font-size="9" font-family="sans-serif">retrieval telemetry</text>
+
+                                <!-- connect persistence to tool executor -->
+                                <line x1="385" y1="397" x2="600" y2="350" stroke="#333" stroke-width="0.8" opacity="0.3" marker-end="url(#ag)"/>
+                            </svg>
                         </div>
                     </div>
 
-                    <!-- Three-pillar cards -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-sm text-gray-300">
-                        <div class="p-5 border border-[#1a1a1a] rounded-md bg-subtle">
-                            <div class="text-[10px] uppercase tracking-widest text-brand font-bold mb-3">Session Graph</div>
-                            <p class="leading-relaxed">A persistent in-memory graph survives across turns, lazily indexing files on first access. Nodes: files, symbols, tests, errors. Edges: imports, contains, test-covers, diff-active.</p>
-                        </div>
-                        <div class="p-5 border border-[#1a1a1a] rounded-md bg-subtle">
-                            <div class="text-[10px] uppercase tracking-widest text-brand font-bold mb-3">7-Language Support</div>
-                            <p class="leading-relaxed">Regex parsers extract symbols, imports, and test functions for Go, TypeScript/JS, Python, Rust, Ruby, Java, and C/C++ — giving every language structural navigation without tool turns.</p>
-                        </div>
-                        <div class="p-5 border border-[#1a1a1a] rounded-md bg-subtle">
-                            <div class="text-[10px] uppercase tracking-widest text-brand font-bold mb-3">Invalidation + Retry Guard</div>
-                            <p class="leading-relaxed">Touched files are invalidated and re-parsed next turn. A session-scoped attempt log records failures and emits telemetry when the same error signature repeats.</p>
-                        </div>
-                    </div>
+                    <!-- ═══ Diagram 2: Retrieval Pipeline Flow ═══ -->
+                    <div class="diagram-wrap mb-14">
+                        <div class="diagram-eyebrow">Per-Turn Retrieval Pipeline</div>
+                        <div class="diagram-subtitle">Live context selected fresh every turn — no cached code summaries</div>
+                        <div class="diagram-scroll">
+                            <svg class="arch-svg" viewBox="0 0 880 400" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <marker id="ro" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                        <polygon points="0 0, 8 3, 0 6" fill="#ff4000" opacity="0.7"/>
+                                    </marker>
+                                    <marker id="rp" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                        <polygon points="0 0, 8 3, 0 6" fill="#fb7185" opacity="0.6"/>
+                                    </marker>
+                                    <marker id="rg" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                        <polygon points="0 0, 8 3, 0 6" fill="#555" opacity="0.5"/>
+                                    </marker>
+                                </defs>
 
-                    <!-- Graph node/edge legend -->
-                    <div class="retrieval-legend mb-10">
-                        <div class="retrieval-legend-section">
-                            <div class="retrieval-legend-title">Node Types</div>
-                            <div class="retrieval-legend-items">
-                                <span class="legend-chip legend-chip-file">File</span>
-                                <span class="legend-chip legend-chip-symbol">Symbol</span>
-                                <span class="legend-chip legend-chip-test">Test</span>
-                                <span class="legend-chip legend-chip-error">Error</span>
-                                <span class="legend-chip legend-chip-tool">Tool Result</span>
-                                <span class="legend-chip legend-chip-pref">Preference</span>
-                            </div>
-                        </div>
-                        <div class="retrieval-legend-section">
-                            <div class="retrieval-legend-title">Edge Types</div>
-                            <div class="retrieval-legend-items">
-                                <span class="legend-edge">imports</span>
-                                <span class="legend-edge">contains</span>
-                                <span class="legend-edge">test-covers</span>
-                                <span class="legend-edge">diff-active</span>
-                                <span class="legend-edge">session-touched</span>
-                                <span class="legend-edge">tool-mentions</span>
-                            </div>
-                        </div>
-                        <div class="retrieval-legend-section">
-                            <div class="retrieval-legend-title">Languages</div>
-                            <div class="retrieval-legend-items">
-                                <span class="legend-lang">Go</span>
-                                <span class="legend-lang">TS/JS</span>
-                                <span class="legend-lang">Python</span>
-                                <span class="legend-lang">Rust</span>
-                                <span class="legend-lang">Ruby</span>
-                                <span class="legend-lang">Java</span>
-                                <span class="legend-lang">C/C++</span>
-                            </div>
-                        </div>
-                    </div>
+                                <!-- ── Input Sources ── -->
+                                <rect x="10" y="48" width="118" height="36" rx="5" fill="#0f0f0f" stroke="#2a2a2a"/>
+                                <text x="69" y="70" text-anchor="middle" fill="#bbb" font-size="10" font-weight="600" font-family="sans-serif">User Prompt</text>
 
-                    <!-- Split process diagram -->
-                    <div class="arch-overview mb-8">
-                        <div class="arch-shell-card">
-                            <div class="arch-shell-eyebrow">Launcher Layer</div>
-                            <div class="arch-shell-title">chan</div>
-                            <div class="arch-shell-meta">Bun launcher + Terminal UI + React Ink</div>
-                        </div>
-                        <div class="arch-shell-flow">
-                            <span class="arch-shell-line"></span>
-                            <span class="arch-shell-pill">NDJSON stream</span>
-                        </div>
-                        <div class="arch-shell-card arch-shell-card-engine">
-                            <div class="arch-shell-eyebrow">Engine Layer</div>
-                            <div class="arch-shell-title">chan-engine</div>
-                            <div class="arch-shell-meta">Go runtime orchestrating models, tools, sessions, safety, and persistence</div>
-                        </div>
-                    </div>
+                                <rect x="10" y="104" width="118" height="36" rx="5" fill="#0f0f0f" stroke="#2a2a2a"/>
+                                <text x="69" y="126" text-anchor="middle" fill="#bbb" font-size="10" font-weight="600" font-family="sans-serif">Git Diff</text>
 
-                    <div class="engine-map">
-                        <div class="engine-map-header">
-                            <div>
-                                <div class="engine-map-eyebrow">Go Engine Component Map</div>
-                                <h3 class="engine-map-title">Full components included inside <code>chan-engine</code></h3>
-                            </div>
-                            <p class="engine-map-copy">The retrieval path is deterministic, session-graph-backed, prompt-pressure-aware, and instrumented with per-turn telemetry visible in the TUI footer.</p>
-                        </div>
+                                <rect x="10" y="160" width="118" height="36" rx="5" fill="#0f0f0f" stroke="#2a2a2a"/>
+                                <text x="69" y="182" text-anchor="middle" fill="#bbb" font-size="10" font-weight="600" font-family="sans-serif">Tool Output</text>
 
-                        <div class="engine-map-grid">
-                            <article class="engine-cluster">
-                                <div class="engine-cluster-label">Entry + Bootstrap</div>
-                                <div class="engine-cluster-items">
-                                    <span class="engine-chip">CLI flags</span>
-                                    <span class="engine-chip">config load</span>
-                                    <span class="engine-chip">stdio engine</span>
-                                    <span class="engine-chip">TUI launch</span>
-                                    <span class="engine-chip">signal handling</span>
-                                </div>
-                            </article>
+                                <!-- Merge arrows to Extract -->
+                                <path d="M 128,66 Q 158,66 190,108" stroke="#ff4000" stroke-width="1.3" fill="none" opacity="0.35" marker-end="url(#ro)"/>
+                                <path d="M 128,122 L 190,122" stroke="#ff4000" stroke-width="1.3" fill="none" opacity="0.35" marker-end="url(#ro)"/>
+                                <path d="M 128,178 Q 158,178 190,136" stroke="#ff4000" stroke-width="1.3" fill="none" opacity="0.35" marker-end="url(#ro)"/>
 
-                            <article class="engine-cluster engine-cluster-core">
-                                <div class="engine-cluster-label">Agent Runtime Core</div>
-                                <div class="engine-cluster-items">
-                                    <span class="engine-chip">turn loop</span>
-                                    <span class="engine-chip">planner</span>
-                                    <span class="engine-chip">retrieval graph</span>
-                                    <span class="engine-chip">live retrieval</span>
-                                    <span class="engine-chip">memory recall</span>
-                                    <span class="engine-chip">attempt log</span>
-                                    <span class="engine-chip">skill selection</span>
-                                    <span class="engine-chip">compaction</span>
-                                </div>
-                            </article>
+                                <!-- ── Extract Anchors ── -->
+                                <rect x="190" y="92" width="145" height="62" rx="8" fill="#0f0a05" stroke="rgba(255,64,0,0.3)" stroke-width="1.3"/>
+                                <text x="262" y="117" text-anchor="middle" fill="#e0e0e0" font-size="11.5" font-weight="700" font-family="sans-serif">Extract Anchors</text>
+                                <text x="262" y="137" text-anchor="middle" fill="#666" font-size="8" font-family="sans-serif">paths · symbols · errors</text>
 
-                            <article class="engine-cluster">
-                                <div class="engine-cluster-label">Tooling Layer</div>
-                                <div class="engine-cluster-items">
-                                    <span class="engine-chip">tool registry</span>
-                                    <span class="engine-chip">tool executor</span>
-                                    <span class="engine-chip">bash</span>
-                                    <span class="engine-chip">file ops</span>
-                                    <span class="engine-chip">git / grep</span>
-                                    <span class="engine-chip">child agents</span>
-                                </div>
-                            </article>
+                                <!-- Arrow: Extract → Graph -->
+                                <path d="M 335,123 L 398,123" stroke="#ff4000" stroke-width="1.5" fill="none" opacity="0.4" marker-end="url(#ro)"/>
 
-                            <article class="engine-cluster">
-                                <div class="engine-cluster-label">Model + Provider Layer</div>
-                                <div class="engine-cluster-items">
-                                    <span class="engine-chip">LLM client</span>
-                                    <span class="engine-chip">Anthropic</span>
-                                    <span class="engine-chip">OpenAI-compatible</span>
-                                    <span class="engine-chip">Gemini</span>
-                                    <span class="engine-chip">Ollama</span>
-                                    <span class="engine-chip">local model runner</span>
-                                </div>
-                            </article>
+                                <!-- ── Session Graph (central, large) ── -->
+                                <rect x="398" y="18" width="210" height="225" rx="12" fill="#0a0805" stroke="rgba(255,64,0,0.22)" stroke-width="1.5"/>
+                                <text x="503" y="42" text-anchor="middle" fill="#ff4000" font-size="9" font-weight="800" letter-spacing="1.5" font-family="sans-serif">SESSION GRAPH</text>
 
-                            <article class="engine-cluster">
-                                <div class="engine-cluster-label">Session + Persistence</div>
-                                <div class="engine-cluster-items">
-                                    <span class="engine-chip">session store</span>
-                                    <span class="engine-chip">titles</span>
-                                    <span class="engine-chip">artifacts</span>
-                                    <span class="engine-chip">history snapshots</span>
-                                    <span class="engine-chip">memory files</span>
-                                </div>
-                            </article>
+                                <!-- Mini graph: node circles -->
+                                <!-- File (blue) -->
+                                <circle cx="435" cy="78" r="10" fill="rgba(96,165,250,0.12)" stroke="#60a5fa" stroke-width="1.2"/>
+                                <text x="435" y="82" text-anchor="middle" fill="#60a5fa" font-size="7" font-weight="700" font-family="sans-serif">F</text>
 
-                            <article class="engine-cluster">
-                                <div class="engine-cluster-label">Safety + Observability + Transport</div>
-                                <div class="engine-cluster-items">
-                                    <span class="engine-chip">permissions</span>
-                                    <span class="engine-chip">command gating</span>
-                                    <span class="engine-chip">hooks</span>
-                                    <span class="engine-chip">debug logging</span>
-                                    <span class="engine-chip">IPC bridge</span>
-                                    <span class="engine-chip">timing + cost</span>
-                                    <span class="engine-chip">retrieval telemetry</span>
-                                </div>
-                            </article>
+                                <!-- Symbol (purple) -->
+                                <circle cx="503" cy="68" r="10" fill="rgba(167,139,250,0.12)" stroke="#a78bfa" stroke-width="1.2"/>
+                                <text x="503" y="72" text-anchor="middle" fill="#a78bfa" font-size="7" font-weight="700" font-family="sans-serif">S</text>
+
+                                <!-- Test (green) -->
+                                <circle cx="571" cy="78" r="10" fill="rgba(52,211,153,0.12)" stroke="#34d399" stroke-width="1.2"/>
+                                <text x="571" y="82" text-anchor="middle" fill="#34d399" font-size="7" font-weight="700" font-family="sans-serif">T</text>
+
+                                <!-- Error (pink) -->
+                                <circle cx="455" cy="132" r="10" fill="rgba(251,113,133,0.12)" stroke="#fb7185" stroke-width="1.2"/>
+                                <text x="455" y="136" text-anchor="middle" fill="#fb7185" font-size="7" font-weight="700" font-family="sans-serif">E</text>
+
+                                <!-- ToolResult (yellow) -->
+                                <circle cx="551" cy="132" r="10" fill="rgba(251,191,36,0.12)" stroke="#fbbf24" stroke-width="1.2"/>
+                                <text x="551" y="136" text-anchor="middle" fill="#fbbf24" font-size="7" font-weight="700" font-family="sans-serif">R</text>
+
+                                <!-- Edge lines between nodes (dashed) -->
+                                <line x1="445" y1="78" x2="493" y2="68" stroke="#444" stroke-width="0.9" stroke-dasharray="3,2"/>
+                                <line x1="513" y1="68" x2="561" y2="78" stroke="#444" stroke-width="0.9" stroke-dasharray="3,2"/>
+                                <line x1="435" y1="88" x2="455" y2="122" stroke="#444" stroke-width="0.9" stroke-dasharray="3,2"/>
+                                <line x1="503" y1="78" x2="551" y2="122" stroke="#444" stroke-width="0.9" stroke-dasharray="3,2"/>
+                                <line x1="465" y1="132" x2="541" y2="132" stroke="#444" stroke-width="0.9" stroke-dasharray="3,2"/>
+                                <line x1="571" y1="88" x2="551" y2="122" stroke="#444" stroke-width="0.9" stroke-dasharray="3,2"/>
+
+                                <!-- Edge labels (small, inside box) -->
+                                <text x="470" y="62" text-anchor="middle" fill="#555" font-size="6.5" font-family="sans-serif">imports</text>
+                                <text x="537" y="62" text-anchor="middle" fill="#555" font-size="6.5" font-family="sans-serif">test-covers</text>
+                                <text x="503" y="148" text-anchor="middle" fill="#555" font-size="6.5" font-family="sans-serif">contains · diff-active</text>
+
+                                <!-- Node legend inside graph box -->
+                                <text x="432" y="170" fill="#60a5fa" font-size="7" font-family="sans-serif">F = File</text>
+                                <text x="432" y="182" fill="#a78bfa" font-size="7" font-family="sans-serif">S = Symbol</text>
+                                <text x="432" y="194" fill="#34d399" font-size="7" font-family="sans-serif">T = Test</text>
+                                <text x="520" y="170" fill="#fb7185" font-size="7" font-family="sans-serif">E = Error</text>
+                                <text x="520" y="182" fill="#fbbf24" font-size="7" font-family="sans-serif">R = ToolResult</text>
+
+                                <!-- Language line -->
+                                <text x="503" y="226" text-anchor="middle" fill="#884400" font-size="7.5" font-weight="600" font-family="sans-serif">Go · TS/JS · Python · Rust · Ruby · Java · C/C++</text>
+
+                                <!-- Arrow: Graph → Score -->
+                                <path d="M 608,123 L 670,123" stroke="#ff4000" stroke-width="1.5" fill="none" opacity="0.4" marker-end="url(#ro)"/>
+                                <!-- Label: 1-hop + conditional 2-hop -->
+                                <text x="639" y="115" text-anchor="middle" fill="#555" font-size="7" font-family="sans-serif">1-hop</text>
+                                <text x="639" y="107" text-anchor="middle" fill="#555" font-size="6" font-family="sans-serif">(+ 2-hop if sparse)</text>
+
+                                <!-- ── Score + Budget ── -->
+                                <rect x="670" y="92" width="130" height="62" rx="8" fill="#0f0a05" stroke="rgba(255,64,0,0.3)" stroke-width="1.3"/>
+                                <text x="735" y="117" text-anchor="middle" fill="#e0e0e0" font-size="11.5" font-weight="700" font-family="sans-serif">Score + Budget</text>
+                                <text x="735" y="137" text-anchor="middle" fill="#666" font-size="8" font-family="sans-serif">top 4 · pressure-gated</text>
+
+                                <!-- Arrow: Score → LLM -->
+                                <path d="M 800,123 L 842,123" stroke="#ff4000" stroke-width="1.5" fill="none" opacity="0.5" marker-end="url(#ro)"/>
+
+                                <!-- ── LLM output ── -->
+                                <rect x="842" y="105" width="34" height="36" rx="6" fill="rgba(255,64,0,0.08)" stroke="rgba(255,64,0,0.3)"/>
+                                <text x="859" y="121" text-anchor="middle" fill="#ff4000" font-size="10" font-weight="800" font-family="sans-serif">→</text>
+                                <text x="859" y="134" text-anchor="middle" fill="#ff4000" font-size="7.5" font-weight="600" font-family="sans-serif">LLM</text>
+
+                                <!-- ── Pressure Gate ── -->
+                                <rect x="690" y="175" width="90" height="30" rx="5" fill="#0f0f0f" stroke="#222"/>
+                                <text x="735" y="194" text-anchor="middle" fill="#888" font-size="8.5" font-weight="600" font-family="sans-serif">Pressure Gate</text>
+                                <!-- arrow from pressure gate up to score -->
+                                <line x1="735" y1="175" x2="735" y2="154" stroke="#555" stroke-width="0.8" opacity="0.4" marker-end="url(#rg)"/>
+                                <text x="760" y="168" fill="#555" font-size="6.5" font-family="sans-serif">halves budget</text>
+
+                                <!-- ═══ Feedback Loop (bottom) ═══ -->
+                                <!-- Tool Execution -->
+                                <rect x="620" y="310" width="140" height="40" rx="6" fill="#0f0f0f" stroke="#2a2a2a"/>
+                                <text x="690" y="334" text-anchor="middle" fill="#aaa" font-size="10.5" font-weight="600" font-family="sans-serif">Tool Execution</text>
+
+                                <!-- Score → Tool Exec (next turn tools run) -->
+                                <path d="M 735,154 Q 735,270 710,310" stroke="#555" stroke-width="1" fill="none" stroke-dasharray="4,3" opacity="0.3" marker-end="url(#rg)"/>
+
+                                <!-- Invalidation -->
+                                <rect x="410" y="310" width="130" height="40" rx="6" fill="#0f0f0f" stroke="rgba(251,113,133,0.25)"/>
+                                <text x="475" y="334" text-anchor="middle" fill="#fb7185" font-size="10.5" font-weight="600" font-family="sans-serif">Invalidation</text>
+
+                                <!-- Tool Exec → Invalidation -->
+                                <path d="M 620,330 L 540,330" stroke="#fb7185" stroke-width="1.3" fill="none" opacity="0.4" marker-end="url(#rp)"/>
+                                <text x="580" y="324" text-anchor="middle" fill="#666" font-size="7" font-family="sans-serif">touched files</text>
+
+                                <!-- Invalidation → Graph (upward) -->
+                                <path d="M 475,310 Q 490,275 500,243" stroke="#fb7185" stroke-width="1.3" fill="none" opacity="0.4" stroke-dasharray="4,3" marker-end="url(#rp)"/>
+                                <text x="505" y="280" fill="#fb7185" font-size="7" opacity="0.7" font-family="sans-serif">re-parse</text>
+
+                                <!-- ── Annotation: session-scoped ── -->
+                                <text x="118" y="240" fill="#333" font-size="7.5" font-style="italic" font-family="sans-serif">graph persists across turns within session</text>
+                            </svg>
                         </div>
                     </div>
                 </section>
