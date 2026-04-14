@@ -26,14 +26,9 @@ const AssistantTextMessage: FC<AssistantTextMessageProps> = ({
 
   return (
     <MessageRow
-      markerColor="green"
-      label={
-        continuation ? null : (
-          <Text color="green" bold>
-            Assistant
-          </Text>
-        )
-      }
+      marker=" "
+      markerColor="$muted"
+      label={null}
       meta={renderMetadata(message)}
     >
       <Box flexDirection="column">

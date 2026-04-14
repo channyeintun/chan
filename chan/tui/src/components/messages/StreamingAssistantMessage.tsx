@@ -39,18 +39,15 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
 
   return (
     <MessageRow
-      markerColor="green"
+      marker=" "
+      markerColor="$muted"
       markerDim
-      label={
-        <Text color="green" dimColor>
-          Assistant
-        </Text>
-      }
+      label={null}
       meta={model ? <Text dimColor>{model}</Text> : null}
     >
       <Box flexDirection="column">
         {showStatusRow ? (
-          <Text color="gray">
+          <Text color="$muted">
             <Spinner type="dots" /> {statusText}
           </Text>
         ) : null}

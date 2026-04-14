@@ -199,14 +199,14 @@ function renderModeBadge(mode: string) {
   );
 }
 
-function modeLabelColor(mode: string): "cyan" | "yellow" | "white" {
+function modeLabelColor(mode: string): "$primary" | "$accent" | undefined {
   if (mode === "plan") {
-    return "cyan";
+    return "$primary";
   }
   if (mode === "fast") {
-    return "yellow";
+    return "$accent";
   }
-  return "white";
+  return undefined;
 }
 
 function getPromptTextColumns(terminalColumns: number): number {

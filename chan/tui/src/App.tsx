@@ -1,4 +1,5 @@
 import React, { type FC, useCallback, useEffect, useState } from "react";
+import { Spinner } from "silvery";
 import { Box, Screen, Text } from "silvery";
 import { useEngine } from "./hooks/useEngine.js";
 import { useEvents, type UIArtifact } from "./hooks/useEvents.js";
@@ -14,6 +15,7 @@ import {
   parseImageReferenceIds,
   type PastedImageData,
 } from "./utils/imagePaste.js";
+import { activeTurnStatusLabel } from "./utils/activeTurnStatus.js";
 import type {
   PermissionResponseDecision,
   UserInputImagePayload,
@@ -234,6 +236,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     transcriptSearchActive,
     isStreaming: uiState.isStreaming,
   });
+  const promptActivityLabel = uiState.isStreaming
+    ? activeTurnStatusLabel(uiState.liveAssistantBlocks, uiState.activeTurnStatus)
+    : null;
 
   const openTranscriptSearch = useCallback(() => {
     setTranscriptSearchActive(true);
@@ -335,23 +340,25 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           {engine.error && !uiState.error && (
             <Box
               borderStyle="round"
-              borderColor="red"
+              borderColor="$error"
               paddingX={1}
               marginTop={1}
             >
-              <Text color="red">{engine.error}</Text>
+              <Text color="$error">{engine.error}</Text>
             </Box>
           )}
 
           {!isEngineReady && !engine.error && (
             <Box paddingLeft={1} marginTop={1}>
-              <Text color="gray">Starting Go engine...</Text>
+              <Text color="$muted">
+                <Spinner type="dots" /> Starting Go engine...
+              </Text>
             </Box>
           )}
 
           {uiState.statusLine && (
             <Box paddingLeft={1} marginTop={1}>
-              <Text color={uiState.error ? "red" : "cyan"}>
+              <Text color={uiState.error ? "$error" : "$primary"}>
                 {uiState.statusLine}
               </Text>
             </Box>
@@ -359,7 +366,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
           {uiState.compact && (
             <Box paddingLeft={1} marginTop={1}>
-              <Text color="yellow">
+              <Text color="$warning">
                 {uiState.compact.active
                   ? `Compacting conversation (${uiState.compact.strategy}, ${uiState.compact.tokensBefore} tokens)...`
                   : `Compaction complete (${uiState.compact.tokensAfter} tokens)`}
@@ -386,11 +393,11 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           {uiState.error && (
             <Box
               borderStyle="round"
-              borderColor="red"
+              borderColor="$error"
               paddingX={1}
               marginTop={1}
             >
-              <Text color="red">{uiState.error}</Text>
+              <Text color="$error">{uiState.error}</Text>
             </Box>
           )}
         </Box>
@@ -469,6 +476,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
               mode={uiState.mode}
               slashCommands={uiState.slashCommands}
               isLoading={uiState.isStreaming}
+              statusLabel={promptActivityLabel}
               onSubmit={handleSubmit}
               onOpenTranscriptSearch={openTranscriptSearch}
               onImagePaste={handleImagePaste}
@@ -481,7 +489,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           )}
           {pasteWarning && (
             <Box paddingLeft={1} marginTop={1}>
-              <Text color="yellow">{pasteWarning}</Text>
+              <Text color="$warning">{pasteWarning}</Text>
             </Box>
           )}
           <PromptFooter

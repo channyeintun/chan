@@ -1,5 +1,6 @@
 import React, { type FC } from "react";
 import { Text } from "silvery";
+import { DEFAULT_PROMPT_MARKER } from "../../constants/prompt.js";
 import type { UIUserMessage } from "../../hooks/useEvents.js";
 import MessageRow from "../MessageRow.js";
 
@@ -14,14 +15,9 @@ const UserTextMessage: FC<UserTextMessageProps> = ({
 }) => {
   return (
     <MessageRow
-      markerColor="cyan"
-      label={
-        continuation ? null : (
-          <Text color="cyan" bold>
-            You
-          </Text>
-        )
-      }
+      marker={DEFAULT_PROMPT_MARKER.trimEnd()}
+      markerColor="$primary"
+      label={null}
     >
       <Text>{message.text}</Text>
     </MessageRow>

@@ -67,7 +67,7 @@ const StatusBar: FC<StatusBarProps> = ({
   queuedPromptCount = 0,
 }) => {
   const readinessLabel = ready ? "READY" : "BOOTING";
-  const readinessColor = ready ? "green" : "yellow";
+  const readinessColor = ready ? "$success" : "$warning";
   const workspaceLabel = path.basename(process.cwd());
   const sessionLabel = sessionTitle?.trim()
     ? sessionTitle.trim()
@@ -86,7 +86,11 @@ const StatusBar: FC<StatusBarProps> = ({
     contextWindow > 0 ? Math.round((contextTokens / contextWindow) * 100) : 0,
   );
   const contextColor =
-    contextPercent >= 90 ? "red" : contextPercent >= 70 ? "yellow" : "gray";
+    contextPercent >= 90
+      ? "$error"
+      : contextPercent >= 70
+        ? "$warning"
+        : "$muted";
   const hasRateLimits = !!rateLimits.fiveHour || !!rateLimits.sevenDay;
   const hasMemoryRecallCost =
     memoryRecallUsd > 0 ||
@@ -109,27 +113,27 @@ const StatusBar: FC<StatusBarProps> = ({
     <Box paddingX={1} paddingY={0}>
       <Text wrap="truncate-end">
         <Text color={readinessColor}>{readinessLabel.toLowerCase()}</Text>
-        <Text color="gray"> · </Text>
+        <Text color="$muted"> · </Text>
         <Text bold>{workspaceLabel}</Text>
         {sessionLabel ? (
           <>
-            <Text color="gray"> · </Text>
-            <Text color="gray">{sessionLabel}</Text>
+            <Text color="$muted"> · </Text>
+            <Text color="$muted">{sessionLabel}</Text>
           </>
         ) : null}
-        <Text color="gray"> · </Text>
+        <Text color="$muted"> · </Text>
         <Text color={modeLabelColor(mode)} bold>
           {formatModeLabel(mode)}
         </Text>
-        <Text color="gray"> · </Text>
-        <Text color="yellow">{modelLabel}</Text>
-        <Text color="gray"> · </Text>
+        <Text color="$muted"> · </Text>
+        <Text color="$accent">{modelLabel}</Text>
+        <Text color="$muted"> · </Text>
         <Text color={contextColor}>{`ctx ~${contextPercent}%`}</Text>
-        <Text color="gray"> {formatTokenCount(contextTokens)}/</Text>
-        <Text color="gray">{formatTokenCount(contextWindow)}</Text>
+        <Text color="$muted"> {formatTokenCount(contextTokens)}/</Text>
+        <Text color="$muted">{formatTokenCount(contextWindow)}</Text>
         {hasRateLimits ? (
           <>
-            <Text color="gray"> · </Text>
+            <Text color="$muted"> · </Text>
             {rateLimits.fiveHour ? (
               <>
                 <Text
@@ -140,7 +144,7 @@ const StatusBar: FC<StatusBarProps> = ({
                     rateLimits.fiveHour.usedPercentage,
                   )}
                 </Text>
-                {rateLimits.sevenDay ? <Text color="gray"> </Text> : null}
+                {rateLimits.sevenDay ? <Text color="$muted"> </Text> : null}
               </>
             ) : null}
             {rateLimits.sevenDay ? (
@@ -153,13 +157,13 @@ const StatusBar: FC<StatusBarProps> = ({
             ) : null}
           </>
         ) : null}
-        <Text color="gray"> · </Text>
-        <Text color="gray">{`${formatTokenCount(inputTokens)}↑ ${formatTokenCount(outputTokens)}↓`}</Text>
+        <Text color="$muted"> · </Text>
+        <Text color="$muted">{`${formatTokenCount(inputTokens)}↑ ${formatTokenCount(outputTokens)}↓`}</Text>
         {hasMemoryRecallCost ? (
           <>
-            <Text color="gray"> · </Text>
-            <Text color="cyan">mem</Text>
-            <Text color="gray">
+            <Text color="$muted"> · </Text>
+            <Text color="$primary">mem</Text>
+            <Text color="$muted">
               {" "}
               {`${formatTokenCount(memoryRecallInputTokens)}↑ ${formatTokenCount(memoryRecallOutputTokens)}↓ $${memoryRecallUsd.toFixed(4)}`}
             </Text>
@@ -167,9 +171,9 @@ const StatusBar: FC<StatusBarProps> = ({
         ) : null}
         {hasChildAgentCost ? (
           <>
-            <Text color="gray"> · </Text>
-            <Text color="cyan">agent</Text>
-            <Text color="gray">
+            <Text color="$muted"> · </Text>
+            <Text color="$primary">agent</Text>
+            <Text color="$muted">
               {" "}
               {`${formatTokenCount(childAgentInputTokens)}↑ ${formatTokenCount(childAgentOutputTokens)}↓ $${childAgentUsd.toFixed(4)}`}
             </Text>
@@ -177,23 +181,23 @@ const StatusBar: FC<StatusBarProps> = ({
         ) : null}
         {backgroundAgentSummary ? (
           <>
-            <Text color="gray"> · </Text>
-            <Text color="cyan">bg</Text>
-            <Text color="gray"> {backgroundAgentSummary}</Text>
+            <Text color="$muted"> · </Text>
+            <Text color="$primary">bg</Text>
+            <Text color="$muted"> {backgroundAgentSummary}</Text>
           </>
         ) : null}
         {backgroundCommandSummary ? (
           <>
-            <Text color="gray"> · </Text>
-            <Text color="yellow">cmd</Text>
-            <Text color="gray"> {backgroundCommandSummary}</Text>
+            <Text color="$muted"> · </Text>
+            <Text color="$accent">cmd</Text>
+            <Text color="$muted"> {backgroundCommandSummary}</Text>
           </>
         ) : null}
         {queuedPromptCount > 0 ? (
           <>
-            <Text color="gray"> · </Text>
-            <Text color="yellow">queue</Text>
-            <Text color="gray">
+            <Text color="$muted"> · </Text>
+            <Text color="$warning">queue</Text>
+            <Text color="$muted">
               {queuedPromptCount === 1
                 ? " 1 prompt"
                 : ` ${queuedPromptCount} prompts`}
@@ -202,13 +206,13 @@ const StatusBar: FC<StatusBarProps> = ({
         ) : null}
         {artifactSummary ? (
           <>
-            <Text color="gray"> · </Text>
-            <Text color="cyan">art</Text>
-            <Text color="gray"> {artifactSummary}</Text>
+            <Text color="$muted"> · </Text>
+            <Text color="$primary">art</Text>
+            <Text color="$muted"> {artifactSummary}</Text>
           </>
         ) : null}
-        <Text color="gray"> · </Text>
-        <Text color="gray">{`$${totalCostUsd.toFixed(4)}`}</Text>
+        <Text color="$muted"> · </Text>
+        <Text color="$muted">{`$${totalCostUsd.toFixed(4)}`}</Text>
       </Text>
     </Box>
   );
@@ -220,14 +224,14 @@ function formatModeLabel(mode: string): string {
   return `[${mode.toUpperCase()}]`;
 }
 
-function modeLabelColor(mode: string): "cyan" | "yellow" | "white" {
+function modeLabelColor(mode: string): "$primary" | "$accent" | undefined {
   if (mode === "plan") {
-    return "cyan";
+    return "$primary";
   }
   if (mode === "fast") {
-    return "yellow";
+    return "$accent";
   }
-  return "white";
+  return undefined;
 }
 
 function formatModelLabel(model: string): string {
@@ -259,14 +263,16 @@ function formatRateLimitWindow(label: string, usedPercentage: number): string {
   return `${label} ${rounded}%`;
 }
 
-function rateLimitColor(usedPercentage: number): "gray" | "yellow" | "red" {
+function rateLimitColor(
+  usedPercentage: number,
+): "$muted" | "$warning" | "$error" {
   if (usedPercentage >= 90) {
-    return "red";
+    return "$error";
   }
   if (usedPercentage >= 70) {
-    return "yellow";
+    return "$warning";
   }
-  return "gray";
+  return "$muted";
 }
 
 function summarizeBackgroundAgents(

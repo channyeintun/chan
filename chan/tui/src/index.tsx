@@ -1,10 +1,17 @@
 import React from "react";
+import { ThemeProvider } from "silvery";
 import { run } from "silvery/runtime";
+import { presetTheme, type Theme } from "silvery/theme";
 import App from "./App.js";
 
 const enginePath = process.env["CHAN_ENGINE_PATH"] ?? "chan-engine";
 const model = process.env["CHAN_MODEL"] ?? "anthropic/claude-sonnet-4-20250514";
 const mode = process.env["CHAN_MODE"] ?? "plan";
+const theme: Theme = presetTheme("nord");
 
-const handle = await run(<App enginePath={enginePath} model={model} mode={mode} />);
+const handle = await run(
+	<ThemeProvider theme={theme}>
+		<App enginePath={enginePath} model={model} mode={mode} />
+	</ThemeProvider>,
+);
 await handle.waitUntilExit();

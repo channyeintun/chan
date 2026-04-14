@@ -15,6 +15,7 @@ import ArtifactView from "./ArtifactView.js";
 import GroupedToolCalls, { type ToolCallGroup } from "./GroupedToolCalls.js";
 import PlanPanel from "./PlanPanel.js";
 import ToolProgress from "./ToolProgress.js";
+import { activeTurnStatusLabel } from "../utils/activeTurnStatus.js";
 import AssistantTextMessage from "./messages/AssistantTextMessage.js";
 import StreamingAssistantMessage from "./messages/StreamingAssistantMessage.js";
 import SystemTextMessage from "./messages/SystemTextMessage.js";
@@ -217,7 +218,6 @@ const StreamOutput: FC<StreamOutputProps> = ({
         cursorKey={cursorIndex}
         onCursor={handleCursorChange}
         active={!searchQuery}
-        overflowIndicator
         estimateHeight={(index) =>
           estimateDisplayBlockHeight(displayBlocks[index])
         }
@@ -275,7 +275,7 @@ function renderTranscriptBlock(
     return (
       <Box key={block.key} flexDirection="column">
         {isSelectedSearchMatch ? (
-          <Text color="cyan">Search match</Text>
+          <Text color="$primary">Search match</Text>
         ) : isSearchMatch ? (
           <Text dimColor>match</Text>
         ) : null}
@@ -288,7 +288,7 @@ function renderTranscriptBlock(
     return (
       <Box key={block.key} flexDirection="column">
         {isSelectedSearchMatch ? (
-          <Text color="cyan">Search match</Text>
+          <Text color="$primary">Search match</Text>
         ) : isSearchMatch ? (
           <Text dimColor>match</Text>
         ) : null}
@@ -301,7 +301,7 @@ function renderTranscriptBlock(
     return (
       <Box key={block.key} flexDirection="column">
         {isSelectedSearchMatch ? (
-          <Text color="cyan">Search match</Text>
+          <Text color="$primary">Search match</Text>
         ) : isSearchMatch ? (
           <Text dimColor>match</Text>
         ) : null}
@@ -329,7 +329,7 @@ function renderTranscriptBlock(
   return (
     <Box key={block.key} flexDirection="column">
       {isSelectedSearchMatch ? (
-        <Text color="cyan">Search match</Text>
+        <Text color="$primary">Search match</Text>
       ) : isSearchMatch ? (
         <Text dimColor>match</Text>
       ) : null}
@@ -438,34 +438,6 @@ function buildTranscriptBlocks(
   }
 
   return blocks;
-}
-
-function activeTurnStatusLabel(
-  blocks: UIAssistantBlock[],
-  activeTurnStatus: UIActiveTurnStatus,
-): string {
-  switch (activeTurnStatus) {
-    case "thinking":
-      return "Thinking";
-    case "responding":
-      return "Responding";
-    case "running_tools":
-      return "Running tools";
-    case "waiting_permission":
-      return "Waiting for permission";
-    case "cancelling":
-      return "Cancelling";
-    case "working":
-    case "idle":
-    default:
-      break;
-  }
-
-  const lastBlock = blocks[blocks.length - 1];
-  if (!lastBlock) {
-    return "Working";
-  }
-  return lastBlock.kind === "thinking" ? "Thinking" : "Responding";
 }
 
 function buildToolBlocks(toolCalls: UIToolCall[]): TranscriptBlock[] {

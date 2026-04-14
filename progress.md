@@ -2,6 +2,7 @@
 
 ## Active Task
 
+- Completed: refreshed the Silvery TUI chat chrome with theme-based colors, hidden transcript overflow arrows, prompt-marker user labels, and a persistent spinner above the composer during active turns.
 - Completed: lean retrieval architecture implementation for the agent harness.
 - Completed: review-driven corrections for retrieval, preference recall, and telemetry wiring.
 - Completed: structural edge expansion, test-covers edges, and attempt-log surfaced telemetry.
@@ -26,6 +27,7 @@
 
 ## Notes
 
+- The TUI now runs inside a Silvery ThemeProvider using semantic color tokens in the main chat surfaces, with `nord` applied by default.
 - Implemented session-scoped RetrievalGraph on QueryState with lazy file parsing, mod-time invalidation, and multi-hop scoring.
 - Added language parsers for Go, TS/JS, Python, Rust, Ruby, Java, and C/C++ — extracting symbols, imports, and test functions via line-by-line regex.
 - Multi-language test pairing: Go (_test.go), TS/JS (.test.ts/.spec.ts), Python (test\_\_.py/_\_test.py), Ruby (\_spec.rb), Java (\*Test.java).

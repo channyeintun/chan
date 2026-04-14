@@ -62,8 +62,8 @@ const TranscriptSearchPrompt: FC<TranscriptSearchPromptProps> = ({
 
   return (
     <Box flexDirection="column">
-      <Box borderStyle="round" borderColor="cyan" paddingX={1}>
-        <Text color="cyan">Transcript Search</Text>
+      <Box borderStyle="round" borderColor="$primary" paddingX={1}>
+        <Text color="$primary">Transcript Search</Text>
         <Text dimColor>{"  "}</Text>
         <Text>{query.length > 0 ? query : "█"}</Text>
       </Box>

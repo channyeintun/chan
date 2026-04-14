@@ -22,13 +22,13 @@ const SlashCommandPreview: FC<SlashCommandPreviewProps> = ({
 
         return (
           <Box key={command.name} paddingLeft={1}>
-            <Text color={selected ? "cyan" : "gray"}>
+            <Text color={selected ? "$primary" : "$muted"}>
               {selected ? "›" : " "}
             </Text>
-            <Text color={selected ? "cyan" : "white"} bold>
+            <Text color={selected ? "$primary" : undefined} bold>
               {` /${command.name}`}
             </Text>
-            <Text color="gray">{`  ${command.description}`}</Text>
+            <Text color="$muted">{`  ${command.description}`}</Text>
           </Box>
         );
       })}

@@ -1,6 +1,7 @@
 import React, { type FC, useEffect, useMemo, useState } from "react";
-import { Box, Text, useInput } from "silvery";
+import { Box, Spinner, Text, useInput } from "silvery";
 import { usePaste } from "silvery/runtime";
+import { DEFAULT_PROMPT_MARKER } from "../constants/prompt.js";
 import type { PromptController } from "../hooks/usePromptHistory.js";
 import type { UISlashCommand } from "../hooks/useEvents.js";
 import { useSlashCommandPreview } from "../hooks/useSlashCommandPreview.js";
@@ -12,6 +13,7 @@ interface InputProps {
   mode: string;
   slashCommands: UISlashCommand[];
   isLoading: boolean;
+  statusLabel?: string | null;
   onSubmit: () => void;
   onOpenTranscriptSearch: () => void;
   onImagePaste: (images: PastedImageData[]) => void;
@@ -26,7 +28,6 @@ interface InputProps {
 // still leaving a minimally usable wrapped editor width on narrow terminals.
 const PROMPT_CHROME_COLUMNS = 8;
 const MIN_PROMPT_TEXT_COLUMNS = 8;
-const DEFAULT_PROMPT_MARKER = "❯ ";
 
 function getPromptTextColumns(terminalColumns: number): number {
   return Math.max(
@@ -107,6 +108,7 @@ const Input: FC<InputProps> = ({
   mode,
   slashCommands,
   isLoading,
+  statusLabel,
   onSubmit,
   onOpenTranscriptSearch,
   onImagePaste,
@@ -328,26 +330,42 @@ const Input: FC<InputProps> = ({
 
   return (
     <Box flexDirection="column" marginTop={1}>
+      {isLoading ? (
+        <Box paddingLeft={1} marginBottom={1}>
+          <Text color="$muted">
+            <Spinner type="dots" /> {statusLabel ?? "Working"}
+          </Text>
+        </Box>
+      ) : null}
       <Box
         flexDirection="column"
         borderStyle="round"
-        borderColor="gray"
+        borderColor="$border"
         borderLeft={false}
         borderRight={false}
       >
         <Box flexDirection="column">
           {showPlaceholder ? (
             <Box>
-              <Text color="cyan" bold>
+              <Text color={mode === "bash" ? "$accent" : "$primary"} bold>
                 {promptMarker}
               </Text>
-              <Text color="gray">Ask chan to inspect, plan, or edit code</Text>
-              <Text color="gray">{"█"}</Text>
+              <Text color="$muted">Ask chan to inspect, plan, or edit code</Text>
+              <Text color="$muted">{"█"}</Text>
             </Box>
           ) : (
             renderedLines.map((line, index) => (
               <Box key={index}>
-                <Text color={index === 0 ? "cyan" : "gray"} bold={index === 0}>
+                <Text
+                  color={
+                    index === 0
+                      ? mode === "bash"
+                        ? "$accent"
+                        : "$primary"
+                      : "$muted"
+                  }
+                  bold={index === 0}
+                >
                   {index === 0 ? promptMarker : "  "}
                 </Text>
                 <Text>{line.length > 0 ? line : " "}</Text>
