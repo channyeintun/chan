@@ -247,7 +247,7 @@ func executeSubagent(
 			return result.Messages, nil
 		},
 		RecallMemory: func(callCtx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
-			selector := memoryRecallSelector{bridge: childBridge, tracker: childTracker, client: client}
+			selector := memoryRecallSelector{}
 			return selector.Select(callCtx, files, userPrompt)
 		},
 		BeforeStop: func(callCtx context.Context, stopReq agent.StopRequest) (agent.StopDecision, error) {
@@ -752,7 +752,7 @@ func executeToolCallsForSubagent(
 		}
 		for _, result := range batchResults {
 			call := calls[result.Index]
-			toolResult := api.ToolResult{ToolCallID: call.ID}
+			toolResult := api.ToolResult{ToolCallID: call.ID, FilePath: result.Output.FilePath}
 			if result.Err != nil {
 				toolResult.Output = result.Err.Error()
 				toolResult.IsError = true

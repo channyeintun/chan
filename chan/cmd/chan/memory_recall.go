@@ -2,32 +2,29 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/channyeintun/chan/internal/agent"
-	"github.com/channyeintun/chan/internal/api"
-	costpkg "github.com/channyeintun/chan/internal/cost"
-	"github.com/channyeintun/chan/internal/ipc"
 )
 
 const (
 	memoryRecallMaxCandidates = 32
 	memoryRecallMaxSelections = 8
-	memoryRecallMaxTokens     = 256
+	memoryRecallMaxTerms      = 12
 )
 
-type memoryRecallSelector struct {
-	bridge  *ipc.Bridge
-	tracker *costpkg.Tracker
-	client  api.LLMClient
-}
+var memoryRecallTermPattern = regexp.MustCompile(`[a-z0-9][a-z0-9_./\-]{1,}`)
+
+type memoryRecallSelector struct{}
 
 type memoryRecallCandidate struct {
 	ID       string
+	Scope    string
 	FilePath string
 	Line     string
 	Title    string
@@ -37,12 +34,9 @@ type memoryRecallCandidate struct {
 	Index    int
 }
 
-type memoryRecallResponse struct {
-	SelectedIDs []string `json:"selected_ids"`
-}
-
 func (s memoryRecallSelector) Select(ctx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
-	if s.client == nil || strings.TrimSpace(userPrompt) == "" {
+	_ = ctx
+	if strings.TrimSpace(userPrompt) == "" {
 		return nil, nil
 	}
 
@@ -50,91 +44,13 @@ func (s memoryRecallSelector) Select(ctx context.Context, files []agent.MemoryFi
 	if len(candidates) == 0 {
 		return nil, nil
 	}
-	if len(candidates) <= memoryRecallMaxSelections {
-		return buildMemoryRecallResults(candidates, "bounded candidate passthrough"), nil
-	}
 
-	raw, _, err := s.queryMemoryRecall(ctx, userPrompt, candidates)
-	if err != nil {
-		return nil, nil
-	}
-
-	selectedIDs := parseMemoryRecallResponse(raw)
-	if len(selectedIDs) == 0 {
-		return nil, nil
-	}
-
-	selectedSet := make(map[string]struct{}, len(selectedIDs))
-	for _, id := range selectedIDs {
-		selectedSet[id] = struct{}{}
-	}
-
-	selected := make([]memoryRecallCandidate, 0, len(selectedSet))
-	for _, candidate := range candidates {
-		if _, ok := selectedSet[candidate.ID]; ok {
-			selected = append(selected, candidate)
-		}
-	}
+	selected := selectMemoryRecallCandidates(candidates, userPrompt)
 	if len(selected) == 0 {
 		return nil, nil
 	}
 
-	return buildMemoryRecallResults(selected, "model side-query"), nil
-}
-
-func (s memoryRecallSelector) queryMemoryRecall(ctx context.Context, userPrompt string, candidates []memoryRecallCandidate) (string, api.Usage, error) {
-	request := api.ModelRequest{
-		Messages: []api.Message{{
-			Role:    api.RoleUser,
-			Content: renderMemoryRecallPrompt(userPrompt, candidates),
-		}},
-		SystemPrompt: memoryRecallSystemPrompt,
-		MaxTokens:    memoryRecallMaxTokens,
-	}
-
-	stream, err := s.client.Stream(ctx, request)
-	if err != nil {
-		return "", api.Usage{}, err
-	}
-
-	startedAt := time.Now()
-	var usage api.Usage
-	var builder strings.Builder
-
-	for event, streamErr := range stream {
-		if streamErr != nil {
-			return "", api.Usage{}, streamErr
-		}
-		switch event.Type {
-		case api.ModelEventToken:
-			builder.WriteString(event.Text)
-		case api.ModelEventUsage:
-			if event.Usage != nil {
-				usage = mergeUsage(usage, *event.Usage)
-			}
-		case api.ModelEventRateLimits:
-			if s.bridge != nil && event.RateLimits != nil {
-				_ = emitRateLimitUpdate(s.bridge, event.RateLimits)
-			}
-		}
-	}
-
-	if s.tracker != nil && (usage.InputTokens > 0 || usage.OutputTokens > 0 || usage.CacheReadTokens > 0 || usage.CacheCreationTokens > 0) {
-		s.tracker.RecordMemoryRecallCall(
-			s.client.ModelID(),
-			usage.InputTokens,
-			usage.OutputTokens,
-			usage.CacheReadTokens,
-			usage.CacheCreationTokens,
-			time.Since(startedAt),
-			costpkg.CalculateUSDCost(s.client.ModelID(), usage),
-		)
-		if s.bridge != nil {
-			_ = emitCostUpdate(s.bridge, s.tracker)
-		}
-	}
-
-	return builder.String(), usage, nil
+	return buildMemoryRecallResults(selected, "deterministic preference match"), nil
 }
 
 func buildMemoryRecallCandidates(files []agent.MemoryFile) []memoryRecallCandidate {
@@ -151,6 +67,7 @@ func buildMemoryRecallCandidates(files []agent.MemoryFile) []memoryRecallCandida
 			}
 			candidates = append(candidates, memoryRecallCandidate{
 				ID:       fmt.Sprintf("m%d", len(candidates)+1),
+				Scope:    file.Type,
 				FilePath: file.Path,
 				Line:     line,
 				Title:    entry.Title,
@@ -165,6 +82,79 @@ func buildMemoryRecallCandidates(files []agent.MemoryFile) []memoryRecallCandida
 		}
 	}
 	return candidates
+}
+
+func selectMemoryRecallCandidates(candidates []memoryRecallCandidate, userPrompt string) []memoryRecallCandidate {
+	terms := extractMemoryRecallTerms(userPrompt)
+	if len(terms) == 0 {
+		return nil
+	}
+
+	type scoredCandidate struct {
+		candidate memoryRecallCandidate
+		score     int
+	}
+
+	scored := make([]scoredCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		score := scoreMemoryRecallCandidate(candidate, terms)
+		if score <= 0 {
+			continue
+		}
+		scored = append(scored, scoredCandidate{candidate: candidate, score: score})
+	}
+	if len(scored) == 0 {
+		return nil
+	}
+
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		if memoryRecallScopeRank(scored[i].candidate.Scope) != memoryRecallScopeRank(scored[j].candidate.Scope) {
+			return memoryRecallScopeRank(scored[i].candidate.Scope) < memoryRecallScopeRank(scored[j].candidate.Scope)
+		}
+		if !scored[i].candidate.Updated.Equal(scored[j].candidate.Updated) {
+			return scored[i].candidate.Updated.After(scored[j].candidate.Updated)
+		}
+		if scored[i].candidate.FilePath != scored[j].candidate.FilePath {
+			return scored[i].candidate.FilePath < scored[j].candidate.FilePath
+		}
+		return scored[i].candidate.Index < scored[j].candidate.Index
+	})
+
+	limit := min(memoryRecallMaxSelections, len(scored))
+	selected := make([]memoryRecallCandidate, 0, limit)
+	for _, candidate := range scored[:limit] {
+		selected = append(selected, candidate.candidate)
+	}
+	return selected
+}
+
+func scoreMemoryRecallCandidate(candidate memoryRecallCandidate, terms []string) int {
+	line := strings.ToLower(candidate.Line)
+	title := strings.ToLower(candidate.Title)
+	noteType := strings.ToLower(candidate.FileType)
+	notePath := strings.ToLower(candidate.NotePath)
+	noteBase := strings.ToLower(filepath.Base(candidate.NotePath))
+
+	score := 0
+	for _, term := range terms {
+		switch {
+		case noteBase != "." && strings.Contains(noteBase, term):
+			score += 5
+		case strings.Contains(title, term):
+			score += 4
+		case strings.Contains(line, term):
+			score += 3
+		case strings.Contains(noteType, term) || strings.Contains(notePath, term):
+			score += 2
+		}
+	}
+	if score > 0 && candidate.Scope == "project-index" {
+		score++
+	}
+	return score
 }
 
 func buildMemoryRecallResults(candidates []memoryRecallCandidate, source string) []agent.MemoryRecallResult {
@@ -201,71 +191,50 @@ func buildMemoryRecallResults(candidates []memoryRecallCandidate, source string)
 	return results
 }
 
-func parseMemoryRecallResponse(raw string) []string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
+func extractMemoryRecallTerms(prompt string) []string {
+	matches := memoryRecallTermPattern.FindAllString(strings.ToLower(prompt), -1)
+	if len(matches) == 0 {
 		return nil
 	}
 
-	start := strings.Index(raw, "{")
-	end := strings.LastIndex(raw, "}")
-	if start < 0 || end <= start {
-		return nil
-	}
-
-	var payload memoryRecallResponse
-	if err := json.Unmarshal([]byte(raw[start:end+1]), &payload); err != nil {
-		return nil
-	}
-	if len(payload.SelectedIDs) > memoryRecallMaxSelections {
-		payload.SelectedIDs = payload.SelectedIDs[:memoryRecallMaxSelections]
-	}
-
-	seen := make(map[string]struct{}, len(payload.SelectedIDs))
-	result := make([]string, 0, len(payload.SelectedIDs))
-	for _, id := range payload.SelectedIDs {
-		id = strings.TrimSpace(id)
-		if id == "" {
+	seen := make(map[string]struct{}, len(matches))
+	terms := make([]string, 0, min(memoryRecallMaxTerms, len(matches)))
+	for _, match := range matches {
+		if isLowSignalMemoryRecallTerm(match) {
 			continue
 		}
-		if _, ok := seen[id]; ok {
+		if _, ok := seen[match]; ok {
 			continue
 		}
-		seen[id] = struct{}{}
-		result = append(result, id)
+		seen[match] = struct{}{}
+		terms = append(terms, match)
+		if len(terms) >= memoryRecallMaxTerms {
+			break
+		}
 	}
-	return result
+	return terms
 }
 
-func renderMemoryRecallPrompt(userPrompt string, candidates []memoryRecallCandidate) string {
-	var b strings.Builder
-	b.WriteString("Current user request:\n")
-	b.WriteString(strings.TrimSpace(userPrompt))
-	b.WriteString("\n\nCandidate durable memory index entries:\n")
-	for _, candidate := range candidates {
-		b.WriteString("- id: ")
-		b.WriteString(candidate.ID)
-		b.WriteString(" | type: ")
-		b.WriteString(candidate.FileType)
-		if strings.TrimSpace(candidate.Title) != "" {
-			b.WriteString(" | title: ")
-			b.WriteString(candidate.Title)
-		}
-		if !candidate.Updated.IsZero() {
-			b.WriteString(" | updated: ")
-			b.WriteString(candidate.Updated.UTC().Format("2006-01-02"))
-		}
-		b.WriteString(" | path: ")
-		b.WriteString(candidate.FilePath)
-		if strings.TrimSpace(candidate.NotePath) != "" {
-			b.WriteString(" | note_path: ")
-			b.WriteString(candidate.NotePath)
-		}
-		b.WriteString("\n  ")
-		b.WriteString(candidate.Line)
-		b.WriteString("\n")
+func isLowSignalMemoryRecallTerm(term string) bool {
+	if len(term) < 3 {
+		return true
 	}
-	return strings.TrimSpace(b.String())
+	if strings.Contains(term, "/") || strings.Contains(term, ".") {
+		return false
+	}
+	switch term {
+	case "the", "and", "for", "with", "from", "into", "that", "this", "when", "then", "than", "have", "will", "want", "need", "make", "adds", "add", "use", "using", "used", "show", "help", "continue", "please", "user", "request", "current", "repo", "repository", "project", "code", "file", "files":
+		return true
+	default:
+		return false
+	}
+}
+
+func memoryRecallScopeRank(scope string) int {
+	if scope == "project-index" {
+		return 0
+	}
+	return 1
 }
 
 func memoryRecallFirstNonEmpty(values ...string) string {
@@ -276,16 +245,3 @@ func memoryRecallFirstNonEmpty(values ...string) string {
 	}
 	return ""
 }
-
-const memoryRecallSystemPrompt = `Select the most relevant durable memory index entries for the current coding request.
-
-Return ONLY valid JSON with this exact schema:
-{"selected_ids":["m1","m2"]}
-
-Rules:
-- Select at most 8 ids.
-- Prefer entries that directly affect implementation choices, workflow constraints, or repository-specific guidance.
-- Prefer project-specific entries over generic user-level entries when both are relevant.
-- Prefer newer entries when relevance is otherwise similar.
-- Do not invent ids.
-- If nothing is relevant, return {"selected_ids":[]}.`

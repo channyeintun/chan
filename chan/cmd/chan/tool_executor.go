@@ -149,7 +149,7 @@ func executeToolCalls(
 		tracker.RecordToolDuration(time.Since(batchStart))
 		for _, result := range batchResults {
 			call := calls[result.Index]
-			toolResult := api.ToolResult{ToolCallID: call.ID}
+			toolResult := api.ToolResult{ToolCallID: call.ID, FilePath: result.Output.FilePath}
 			feedback := approvalFeedback[result.Index]
 
 			if result.Err != nil {

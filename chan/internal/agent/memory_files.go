@@ -228,20 +228,34 @@ func FormatMemoryPrompt(files []MemoryFile, currentUserPrompt string, recalls []
 	}
 
 	if len(memoryIndexes) > 0 {
-		b.WriteString("Durable preferences and conventions are shown below. These capture non-derivable user or project guidance such as workflow constraints and style decisions. Treat them as selectively relevant context, not as unconditional instructions. Always verify code facts against the live repository rather than relying on these entries.\n\n")
-
+		renderedIndexes := make([]string, 0, len(memoryIndexes))
 		for _, f := range memoryIndexes {
-			recalledContent := formatRelevantMemoryIndexContent(f, currentUserPrompt, recallByPath[f.Path])
+			recall, ok := recallByPath[f.Path]
+			if !ok {
+				continue
+			}
+			recalledContent := formatRelevantMemoryIndexContent(f, currentUserPrompt, recall)
 			if strings.TrimSpace(recalledContent) == "" {
 				continue
 			}
-			b.WriteString("<memory_file path=\"")
-			b.WriteString(f.Path)
-			b.WriteString("\" type=\"")
-			b.WriteString(f.Type)
-			b.WriteString("\">\n")
-			b.WriteString(recalledContent)
-			b.WriteString("\n</memory_file>\n\n")
+
+			var section strings.Builder
+			section.WriteString("<memory_file path=\"")
+			section.WriteString(f.Path)
+			section.WriteString("\" type=\"")
+			section.WriteString(f.Type)
+			section.WriteString("\">\n")
+			section.WriteString(recalledContent)
+			section.WriteString("\n</memory_file>")
+			renderedIndexes = append(renderedIndexes, section.String())
+		}
+
+		if len(renderedIndexes) > 0 {
+			b.WriteString("Durable preferences and conventions are shown below. These capture non-derivable user or project guidance such as workflow constraints and style decisions. Treat them as selectively relevant context, not as unconditional instructions. Always verify code facts against the live repository rather than relying on these entries.\n\n")
+			for _, section := range renderedIndexes {
+				b.WriteString(section)
+				b.WriteString("\n\n")
+			}
 		}
 	}
 
@@ -323,11 +337,10 @@ func formatRelevantMemoryIndexContent(file MemoryFile, currentUserPrompt string,
 	selectedLines := recalled.Lines
 	selectionSource := strings.TrimSpace(recalled.Source)
 	if len(selectedLines) == 0 {
-		selectedLines = selectRelevantMemoryLines(file.Content, currentUserPrompt)
-		selectionSource = "heuristic fallback"
-	}
-	if len(selectedLines) == 0 {
 		return ""
+	}
+	if selectionSource == "" {
+		selectionSource = "deterministic selection"
 	}
 
 	parts := make([]string, 0, len(selectedLines)+2)

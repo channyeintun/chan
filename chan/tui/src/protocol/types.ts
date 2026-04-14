@@ -13,6 +13,7 @@ export type EventType =
   | "context_window"
   | "cost_update"
   | "memory_recalled"
+  | "retrieval_used"
   | "turn_timing"
   | "rate_limit_update"
   | "compact_start"
@@ -176,6 +177,13 @@ export interface MemoryRecalledPayload {
   count: number;
   source?: string;
   entries?: MemoryRecallEntryPayload[];
+}
+
+export interface RetrievalUsedPayload {
+  snippet_count: number;
+  tokens_used: number;
+  anchor_count: number;
+  skipped: boolean;
 }
 
 export interface RateLimitWindowPayload {

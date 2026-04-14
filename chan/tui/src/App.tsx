@@ -480,6 +480,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             inputTokens={uiState.cost.inputTokens}
             outputTokens={uiState.cost.outputTokens}
             memoryRecall={uiState.memoryRecall}
+            retrieval={uiState.retrieval}
             turnTiming={uiState.turnTiming}
             cursorOffset={prompt.cursorOffset}
             blockedReason={promptBlockedReason}

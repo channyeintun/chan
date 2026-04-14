@@ -87,6 +87,7 @@ type ToolResult struct {
 	ToolCallID string `json:"tool_call_id"`
 	Output     string `json:"output"`
 	IsError    bool   `json:"is_error,omitempty"`
+	FilePath   string `json:"file_path,omitempty"`
 }
 
 // ToolDefinition describes a tool for the model.

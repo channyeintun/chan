@@ -303,7 +303,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						return result.Messages, nil
 					},
 					RecallMemory: func(callCtx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
-						selector := memoryRecallSelector{bridge: bridge, tracker: tracker, client: client}
+						selector := memoryRecallSelector{}
 						return selector.Select(callCtx, files, userPrompt)
 					},
 					BeforeStop: func(callCtx context.Context, stopReq agent.StopRequest) (agent.StopDecision, error) {

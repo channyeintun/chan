@@ -18,6 +18,7 @@ import type {
   ModelChangedPayload,
   PermissionRequestPayload,
   RateLimitUpdatePayload,
+  RetrievalUsedPayload,
   ReadyPayload,
   SessionRestoredPayload,
   SlashCommandDescriptorPayload,
@@ -173,6 +174,13 @@ export interface UIMemoryRecallEntry {
   line?: string;
 }
 
+export interface UIRetrievalUsage {
+  snippetCount: number;
+  tokensUsed: number;
+  anchorCount: number;
+  skipped: boolean;
+}
+
 export interface UIRateLimitWindow {
   usedPercentage: number;
   resetsAt: number;
@@ -222,6 +230,7 @@ export interface EngineUIState {
     source: string | null;
     entries: UIMemoryRecallEntry[];
   };
+  retrieval: UIRetrievalUsage | null;
   rateLimits: UIRateLimits;
   artifacts: UIArtifact[];
   focusedArtifactId: string | null;
@@ -279,6 +288,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
     source: null,
     entries: [],
   },
+  retrieval: null,
   rateLimits: { fiveHour: null, sevenDay: null },
   artifacts: [],
   focusedArtifactId: null,
@@ -752,6 +762,28 @@ export function useEvents(initialModel: string, initialMode: string) {
         }));
         break;
       }
+      case "retrieval_used": {
+        const p = event.payload as RetrievalUsedPayload;
+        setUIState((s) => ({
+          ...s,
+          retrieval: {
+            snippetCount:
+              typeof p.snippet_count === "number" && p.snippet_count > 0
+                ? p.snippet_count
+                : 0,
+            tokensUsed:
+              typeof p.tokens_used === "number" && p.tokens_used > 0
+                ? p.tokens_used
+                : 0,
+            anchorCount:
+              typeof p.anchor_count === "number" && p.anchor_count > 0
+                ? p.anchor_count
+                : 0,
+            skipped: p.skipped === true,
+          },
+        }));
+        break;
+      }
       case "rate_limit_update": {
         const p = event.payload as RateLimitUpdatePayload;
         setUIState((s) => ({
@@ -1096,6 +1128,7 @@ export function useEvents(initialModel: string, initialMode: string) {
         source: null,
         entries: [],
       },
+      retrieval: null,
       error: null,
       statusLine: null,
       isStreaming: true,

@@ -4,7 +4,10 @@ import {
   calculateTokenWarningState,
   formatTokenCount,
 } from "../utils/modelContext.js";
-import type { UIMemoryRecallEntry } from "../hooks/useEvents.js";
+import type {
+  UIMemoryRecallEntry,
+  UIRetrievalUsage,
+} from "../hooks/useEvents.js";
 
 interface PromptFooterProps {
   mode: string;
@@ -22,6 +25,7 @@ interface PromptFooterProps {
     source: string | null;
     entries: UIMemoryRecallEntry[];
   };
+  retrieval: UIRetrievalUsage | null;
   turnTiming: {
     firstTokenMs: number | null;
     firstToolResultMs: number | null;
@@ -47,6 +51,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
   inputTokens,
   outputTokens,
   memoryRecall,
+  retrieval,
   turnTiming,
   cursorOffset = 0,
   blockedReason,
@@ -112,6 +117,10 @@ const PromptFooter: FC<PromptFooterProps> = ({
     () => buildMemoryRecallText(memoryRecall),
     [memoryRecall],
   );
+  const retrievalText = useMemo(
+    () => buildRetrievalText(retrieval),
+    [retrieval],
+  );
   const latencyText = useMemo(() => buildLatencyText(turnTiming), [turnTiming]);
   const warningText = tokenWarning.isWarning
     ? `Compact soon (~${tokenWarning.percentLeft}% until threshold) · ${formatTokenCount(tokenUsage)}/${formatTokenCount(tokenWarning.effectiveContextWindow)} used · Run /compact before the next long turn`
@@ -131,14 +140,26 @@ const PromptFooter: FC<PromptFooterProps> = ({
           </Text>
         </Box>
       ) : null}
-      {memoryRecallText ? (
+      {retrievalText ? (
         <Box paddingX={2} paddingTop={warningText || costWarningText ? 0 : 1}>
+          <Text dimColor>{retrievalText}</Text>
+        </Box>
+      ) : null}
+      {memoryRecallText ? (
+        <Box
+          paddingX={2}
+          paddingTop={warningText || costWarningText || retrievalText ? 0 : 1}
+        >
           <Text dimColor>{memoryRecallText}</Text>
         </Box>
       ) : null}
       <Box
         paddingX={2}
-        paddingTop={warningText || costWarningText || memoryRecallText ? 0 : 1}
+        paddingTop={
+          warningText || costWarningText || retrievalText || memoryRecallText
+            ? 0
+            : 1
+        }
         flexDirection={footerLayout}
         justifyContent="space-between"
       >
@@ -304,6 +325,33 @@ function buildMemoryRecallText(
   }
   if (memoryRecall.source) {
     parts.push(`via ${memoryRecall.source}`);
+  }
+  return parts.join(" · ");
+}
+
+function buildRetrievalText(
+  retrieval: PromptFooterProps["retrieval"],
+): string | null {
+  if (!retrieval) {
+    return null;
+  }
+  if (retrieval.skipped) {
+    return "Live retrieval: skipped under pressure";
+  }
+  if (retrieval.snippetCount <= 0) {
+    return null;
+  }
+
+  const parts = [
+    `Live retrieval: ${retrieval.snippetCount} ${retrieval.snippetCount === 1 ? "snippet" : "snippets"}`,
+  ];
+  if (retrieval.anchorCount > 0) {
+    parts.push(
+      `${retrieval.anchorCount} ${retrieval.anchorCount === 1 ? "anchor" : "anchors"}`,
+    );
+  }
+  if (retrieval.tokensUsed > 0) {
+    parts.push(`~${formatTokenCount(retrieval.tokensUsed)} tokens`);
   }
   return parts.join(" · ");
 }

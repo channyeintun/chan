@@ -53,15 +53,7 @@ func ExtractAnchors(userPrompt, gitStatus, toolOutputs string) []RetrievalAnchor
 	anchors := make([]RetrievalAnchor, 0, 8)
 	seen := make(map[string]struct{})
 
-	// File path anchors.
-	for _, match := range anchorPattern.FindAllStringSubmatch(combined, -1) {
-		if len(match) < 2 {
-			continue
-		}
-		path := strings.TrimSpace(match[1])
-		if path == "" || strings.HasPrefix(path, ".") {
-			continue
-		}
+	for _, path := range extractFilePathMatches(combined) {
 		if _, ok := seen["file:"+path]; ok {
 			continue
 		}
@@ -69,7 +61,6 @@ func ExtractAnchors(userPrompt, gitStatus, toolOutputs string) []RetrievalAnchor
 		anchors = append(anchors, RetrievalAnchor{FilePath: path})
 	}
 
-	// Error string anchors from tool outputs.
 	for _, match := range errorPattern.FindAllStringSubmatch(toolOutputs, -1) {
 		if len(match) < 2 {
 			continue
@@ -94,54 +85,34 @@ func ExtractAnchors(userPrompt, gitStatus, toolOutputs string) []RetrievalAnchor
 // ScoreCandidates scores repository file paths based on anchors, git status,
 // and session-touched files. Returns at most retrievalMaxCandidates candidates.
 func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string, sessionTouched []string) []RetrievalCandidate {
-	if len(anchors) == 0 && len(sessionTouched) == 0 {
+	if len(anchors) == 0 && len(sessionTouched) == 0 && strings.TrimSpace(gitStatusText) == "" {
 		return nil
 	}
 
 	scores := make(map[string]int)
 	reasons := make(map[string]string)
 
-	// Score from anchors — resolve relative paths against cwd.
 	for _, anchor := range anchors {
 		if anchor.FilePath == "" {
 			continue
 		}
-		candidates := resolveFilePath(anchor.FilePath, cwd)
-		for _, candidate := range candidates {
-			scores[candidate] += 3
-			reasons[candidate] = "exact anchor"
+		for _, candidate := range resolveFilePath(anchor.FilePath, cwd) {
+			addCandidateScore(scores, reasons, candidate, 3, "exact anchor")
 		}
 	}
 
-	// Score staged/modified files from git status.
-	for _, line := range strings.Split(gitStatusText, "\n") {
-		line = strings.TrimSpace(line)
-		if len(line) < 3 {
-			continue
-		}
-		// git status --short format: "XY path"
-		statusCode := strings.TrimSpace(line[:2])
-		path := strings.TrimSpace(line[2:])
-		if path == "" || statusCode == "??" {
-			continue
-		}
-		resolved := filepath.Join(cwd, path)
-		scores[resolved] += 4
-		reasons[resolved] = "staged or modified"
+	for _, path := range gitStatusPaths(gitStatusText, cwd) {
+		addCandidateScore(scores, reasons, path, 4, "staged or modified")
 	}
 
-	// Score session-touched files.
 	for _, path := range sessionTouched {
-		if path == "" {
-			continue
-		}
-		scores[path] += 2
-		if reasons[path] == "" {
-			reasons[path] = "recently touched"
+		for _, resolved := range resolveFilePath(path, cwd) {
+			addCandidateScore(scores, reasons, resolved, 2, "recently touched")
 		}
 	}
 
-	// Build and sort candidates.
+	scoreErrorAnchors(anchors, scores, reasons)
+
 	candidates := make([]RetrievalCandidate, 0, len(scores))
 	for path, score := range scores {
 		candidates = append(candidates, RetrievalCandidate{
@@ -150,8 +121,11 @@ func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string
 			Reason:   reasons[path],
 		})
 	}
-	sort.SliceStable(candidates, func(i, j int) bool {
-		return candidates[i].Score > candidates[j].Score
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].Score != candidates[j].Score {
+			return candidates[i].Score > candidates[j].Score
+		}
+		return candidates[i].FilePath < candidates[j].FilePath
 	})
 	if len(candidates) > retrievalMaxCandidates {
 		candidates = candidates[:retrievalMaxCandidates]
@@ -163,6 +137,9 @@ func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string
 func ReadLiveSnippets(candidates []RetrievalCandidate, budgetTokens int) []LiveSnippet {
 	if len(candidates) == 0 || budgetTokens <= 0 {
 		return nil
+	}
+	if budgetTokens > retrievalMaxTotalTokens {
+		budgetTokens = retrievalMaxTotalTokens
 	}
 
 	snippets := make([]LiveSnippet, 0, retrievalTopN)
@@ -180,7 +157,6 @@ func ReadLiveSnippets(candidates []RetrievalCandidate, budgetTokens int) []LiveS
 		if content == "" {
 			continue
 		}
-		// Rough token estimate: 4 chars per token.
 		tokens := len(content) / 4
 		if usedTokens+tokens > budgetTokens && len(snippets) > 0 {
 			break
@@ -221,19 +197,161 @@ func FormatLiveRetrievalSection(snippets []LiveSnippet) string {
 	return strings.TrimSpace(b.String())
 }
 
+func extractFilePathMatches(text string) []string {
+	matches := anchorPattern.FindAllStringSubmatch(text, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	paths := make([]string, 0, len(matches))
+	seen := make(map[string]struct{}, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		path := strings.TrimSpace(match[1])
+		if path == "" || path == "." || path == ".." {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
+	}
+	return paths
+}
+
+func gitStatusPaths(gitStatusText, cwd string) []string {
+	var paths []string
+	for _, line := range strings.Split(gitStatusText, "\n") {
+		line = strings.TrimSpace(line)
+		if len(line) < 3 {
+			continue
+		}
+		statusCode := strings.TrimSpace(line[:2])
+		if statusCode == "??" {
+			continue
+		}
+		path := parseGitStatusPath(line)
+		for _, resolved := range resolveFilePath(path, cwd) {
+			paths = append(paths, resolved)
+		}
+	}
+	return paths
+}
+
+func parseGitStatusPath(line string) string {
+	if len(line) < 3 {
+		return ""
+	}
+	path := strings.TrimSpace(line[2:])
+	if idx := strings.LastIndex(path, " -> "); idx >= 0 {
+		path = strings.TrimSpace(path[idx+4:])
+	}
+	return path
+}
+
+func scoreErrorAnchors(anchors []RetrievalAnchor, scores map[string]int, reasons map[string]string) {
+	if len(scores) == 0 {
+		return
+	}
+
+	contentCache := make(map[string]string, len(scores))
+	for _, anchor := range anchors {
+		if strings.TrimSpace(anchor.ErrorString) == "" {
+			continue
+		}
+		terms := extractRecallTerms(anchor.ErrorString)
+		if len(terms) == 0 {
+			continue
+		}
+		lowerError := strings.ToLower(anchor.ErrorString)
+
+		for path := range scores {
+			delta := 0
+			base := strings.ToLower(filepath.Base(path))
+			stem := strings.TrimSuffix(base, strings.ToLower(filepath.Ext(base)))
+			for _, term := range terms {
+				switch {
+				case strings.Contains(base, term):
+					delta += 3
+				case len(term) >= 4 && strings.Contains(stem, term):
+					delta += 2
+				}
+			}
+
+			if delta == 0 {
+				content, ok := contentCache[path]
+				if !ok {
+					content = strings.ToLower(readFileSnippet(path))
+					contentCache[path] = content
+				}
+				for _, term := range terms {
+					if len(term) < 4 || content == "" {
+						continue
+					}
+					if strings.Contains(content, term) {
+						delta++
+					}
+					if delta >= 2 {
+						break
+					}
+				}
+			}
+
+			if delta == 0 && base != "" && strings.Contains(lowerError, base) {
+				delta = 2
+			}
+			if delta > 4 {
+				delta = 4
+			}
+			if delta > 0 {
+				addCandidateScore(scores, reasons, path, delta, "error context")
+			}
+		}
+	}
+}
+
+func addCandidateScore(scores map[string]int, reasons map[string]string, path string, delta int, reason string) {
+	if path == "" || delta <= 0 {
+		return
+	}
+	scores[path] += delta
+	reasons[path] = mergeCandidateReason(reasons[path], reason)
+}
+
+func mergeCandidateReason(current, next string) string {
+	current = strings.TrimSpace(current)
+	next = strings.TrimSpace(next)
+	if current == "" {
+		return next
+	}
+	if next == "" || current == next || strings.Contains(current, next) {
+		return current
+	}
+	return current + "; " + next
+}
+
 // resolveFilePath attempts to find an absolute path for a potentially relative
 // file reference. Returns all plausible resolved paths.
 func resolveFilePath(ref, cwd string) []string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil
+	}
+	ref = strings.TrimPrefix(ref, "file://")
+
 	var results []string
-	// If already absolute.
 	if filepath.IsAbs(ref) {
-		if fileExists(ref) {
-			results = append(results, ref)
+		cleaned := filepath.Clean(ref)
+		if fileExists(cleaned) {
+			results = append(results, cleaned)
 		}
 		return results
 	}
-	// Resolve relative to cwd.
-	joined := filepath.Join(cwd, ref)
+
+	joined := filepath.Clean(filepath.Join(cwd, ref))
 	if fileExists(joined) {
 		results = append(results, joined)
 	}
@@ -258,7 +376,6 @@ func readFileSnippet(path string) string {
 		return ""
 	}
 	if len(content) > retrievalMaxSnippetBytes {
-		// Truncate at a newline boundary.
 		truncated := content[:retrievalMaxSnippetBytes]
 		if idx := strings.LastIndex(truncated, "\n"); idx > 0 {
 			truncated = truncated[:idx]

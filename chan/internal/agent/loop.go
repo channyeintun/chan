@@ -651,6 +651,8 @@ type retrievalMeta struct {
 	Skipped      bool
 }
 
+const retrievalTouchedLimit = 64
+
 // runLiveRetrieval builds a live retrieval section for the current turn.
 func runLiveRetrieval(state *QueryState, currentUserPrompt string, pressure ContextPressureDecision) (string, retrievalMeta) {
 	if pressure.SkipLiveRetrieval {
@@ -690,29 +692,42 @@ func emitRetrievalTelemetry(emit func(ipc.StreamEvent) error, meta retrievalMeta
 	}))
 }
 
-// collectTouchedFiles appends file paths referenced by tool calls to the
-// session-scoped retrieval touched list so they score higher in future turns.
+// collectTouchedFiles appends file paths referenced by tool calls and tool
+// results to the session-scoped retrieval touched list so they score higher in
+// future turns.
 func collectTouchedFiles(state *QueryState, calls []api.ToolCall, results []api.ToolResult) {
 	if state == nil {
 		return
 	}
+	cwd := state.TurnContext.CurrentDir
 	seen := make(map[string]struct{}, len(state.RetrievalTouched))
 	for _, p := range state.RetrievalTouched {
 		seen[p] = struct{}{}
+	}
+	addTouchedPath := func(path string) {
+		for _, resolved := range resolveFilePath(path, cwd) {
+			if _, ok := seen[resolved]; ok {
+				continue
+			}
+			seen[resolved] = struct{}{}
+			state.RetrievalTouched = append(state.RetrievalTouched, resolved)
+		}
 	}
 
 	for _, call := range calls {
 		paths := extractFilePathsFromToolCall(call)
 		for _, p := range paths {
-			if p == "" {
-				continue
-			}
-			if _, ok := seen[p]; ok {
-				continue
-			}
-			seen[p] = struct{}{}
-			state.RetrievalTouched = append(state.RetrievalTouched, p)
+			addTouchedPath(p)
 		}
+	}
+	for _, result := range results {
+		addTouchedPath(result.FilePath)
+		for _, path := range extractFilePathMatches(result.Output) {
+			addTouchedPath(path)
+		}
+	}
+	if len(state.RetrievalTouched) > retrievalTouchedLimit {
+		state.RetrievalTouched = append([]string(nil), state.RetrievalTouched[len(state.RetrievalTouched)-retrievalTouchedLimit:]...)
 	}
 }
 
@@ -720,17 +735,22 @@ func collectTouchedFiles(state *QueryState, calls []api.ToolCall, results []api.
 func extractFilePathsFromToolCall(call api.ToolCall) []string {
 	// Tool inputs are JSON; try common field names used across tool implementations.
 	type genericInput struct {
-		Path       string `json:"path"`
-		TargetFile string `json:"target_file"`
-		FilePath   string `json:"file_path"`
-		File       string `json:"file"`
+		Path            string `json:"path"`
+		TargetFile      string `json:"target_file"`
+		FilePath        string `json:"file_path"`
+		FilePathCompat  string `json:"filePath"`
+		File            string `json:"file"`
+		DirPath         string `json:"dirPath"`
+		WorkspaceFolder string `json:"workspaceFolder"`
+		RootPath        string `json:"rootPath"`
+		URI             string `json:"uri"`
 	}
 	var input genericInput
 	if err := json.Unmarshal([]byte(call.Input), &input); err != nil {
 		return nil
 	}
 	var paths []string
-	for _, p := range []string{input.Path, input.TargetFile, input.FilePath, input.File} {
+	for _, p := range []string{input.Path, input.TargetFile, input.FilePath, input.FilePathCompat, input.File, input.DirPath, input.WorkspaceFolder, input.RootPath, input.URI} {
 		p = strings.TrimSpace(p)
 		if p != "" {
 			paths = append(paths, p)
