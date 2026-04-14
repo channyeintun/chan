@@ -347,10 +347,13 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
                 <!-- Arch / Build -->
                 <section id="arch" class="mb-24">
                     <h2 class="subsection-title text-3xl font-bold mb-6">Architecture</h2>
-                    <p class="text-sm text-gray-400 leading-relaxed mb-8">
-                        Chan uses a split-process architecture. A Bun-powered TUI communicates with a Go
+                    <p class="text-sm text-gray-400 leading-relaxed mb-4">
+                        Chan uses a split-process architecture. A Silvery-powered terminal UI communicates with a Go
                         engine over NDJSON. Every turn, the engine selects live context through a
                         session-scoped retrieval graph — no cached code summaries.
+                    </p>
+                    <p class="text-xs uppercase tracking-widest text-brand/80 font-bold mb-8">
+                        The TUI has migrated from Ink to Silvery.
                     </p>
 
                     <!-- ═══ Diagram 1: The Core Harness (Architecture) ═══ -->
@@ -379,7 +382,7 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
                                 <!-- Satellite Nodes -->
                                 <g transform="translate(400, 60)">
                                     <path d="M 0 -30 L 26 -15 L 26 15 L 0 30 L -26 15 L -26 -15 Z" fill="#0a0a0a" stroke="#ffffff" stroke-width="1" opacity="0.6" />
-                                    <text y="4" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">TUI · BUN</text>
+                                    <text y="4" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">TUI · SILVERY</text>
                                     <path d="M 0 30 L 0 110" stroke="#ff4000" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.3" class="animate-flow" />
                                 </g>
 
@@ -580,7 +583,7 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
                 <section id="build" class="mb-24">
                     <h2 class="subsection-title text-3xl font-bold mb-6">Building from Source</h2>
                     <pre class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300"><code>bun run setup       # Build TS & compile Go
-bun run start       # Run dev TUI
+bun run start       # Run dev Silvery TUI
 make release-local  # Package per-platform bin
 make install        # Install to /usr/local/bin</code></pre>
                 </section>

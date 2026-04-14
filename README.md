@@ -6,7 +6,7 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 
 `Chan` is built on three core pillars:
 
-1.  **TUI (React/Ink):** A highly interactive terminal UI that provides real-time feedback, grouped tool execution transcripts, and dynamic progress indicators.
+1.  **TUI (Silvery):** A highly interactive terminal UI that provides real-time feedback, grouped tool execution transcripts, and dynamic progress indicators.
 2.  **Go Engine:** A high-performance backend that handles the agent loop, tool execution (bash, file system, git, search), and project-level orchestration with built-in permission gating.
 3.  **Artifacts:** First-class outputs in the runtime, not just overflow containers. Plans, task lists, walkthroughs, search reports, diff previews, and other structured work products are persisted, reviewable, and surfaced in a dedicated panel.
 
@@ -250,7 +250,7 @@ If you use GitHub Copilot, the config file will also persist Copilot credentials
 
 ```
 ┌──────────────────────────────┐
-│  chan (Bun launcher)         │  ← Terminal UI (React Ink)
+│  chan (Bun launcher)         │  ← Terminal UI (Silvery)
 │    Renders TUI, handles I/O  │
 │         │ stdin/stdout NDJSON│
 │  ┌──────▼─────────────────┐  │
