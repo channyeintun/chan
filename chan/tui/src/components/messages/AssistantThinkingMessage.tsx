@@ -38,13 +38,15 @@ const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
   }
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width="100%" minWidth={0}>
       <Text color="gray" italic>
         {streaming ? <Spinner type="dots" /> : null}
         {streaming ? " Thinking" : "Thinking"}
         {toggleHint ? ` (${toggleHint})` : ""}
       </Text>
-      <Text color="gray">{content}</Text>
+      <Text color="gray" wrap="wrap">
+        {content}
+      </Text>
     </Box>
   );
 };

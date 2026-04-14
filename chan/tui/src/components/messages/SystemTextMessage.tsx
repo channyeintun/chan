@@ -1,5 +1,5 @@
 import React, { type FC } from "react";
-import { Text } from "silvery";
+import { Box, Text } from "silvery";
 import type { UISystemMessage } from "../../hooks/useEvents.js";
 import MessageRow from "../MessageRow.js";
 
@@ -19,7 +19,11 @@ const SystemTextMessage: FC<SystemTextMessageProps> = ({ message }) => {
       }
       meta={renderMetadata(message.timestamp)}
     >
-      <Text color={toneColor(message.tone)}>{message.text}</Text>
+      <Box width="100%" minWidth={0}>
+        <Text color={toneColor(message.tone)} wrap="wrap">
+          {message.text}
+        </Text>
+      </Box>
     </MessageRow>
   );
 };

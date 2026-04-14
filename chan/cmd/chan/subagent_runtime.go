@@ -326,7 +326,7 @@ func executeSubagent(
 	parentTracker.RecordChildAgentSnapshot(childSnapshot)
 	_ = emitCostUpdate(bridge, parentTracker)
 
-	return toolpkg.AgentRunResult{
+	result := toolpkg.AgentRunResult{
 		Status:         status,
 		InvocationID:   invocationID,
 		SubagentType:   subagentType,
@@ -340,7 +340,9 @@ func executeSubagent(
 		OutputTokens:   childSnapshot.TotalOutputTokens,
 		Tools:          toolDefinitionNames(childRegistry.Definitions()),
 		Metadata:       lifecycle.metadata(),
-	}, nil
+	}
+	writeBackgroundAgentResultFile(result)
+	return result, nil
 }
 
 type childLifecycleTracker struct {
