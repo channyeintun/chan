@@ -88,13 +88,13 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     (text: string, images: UserInputImagePayload[]) => {
       appendUserMessage(text);
       clearStream();
-      beginAssistantTurn();
       if (text.startsWith("/") && images.length === 0) {
         const [cmd, ...rest] = text.slice(1).split(" ");
         engine.sendCommand(cmd!, rest.join(" "));
         return;
       }
 
+      beginAssistantTurn();
       engine.sendInput(text, images);
     },
     [appendUserMessage, beginAssistantTurn, clearStream, engine],
@@ -154,7 +154,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   };
 
   const handleSubmit = (overrideText?: string) => {
-    const text = prompt.submit(overrideText);
+    // Derive text before calling submit – silvery's renderer may defer
+    // setState callbacks, so prompt.submit()'s return value can be stale.
+    const text = (overrideText ?? prompt.value).trim();
+    prompt.submit(overrideText); // side-effect: clear prompt + add to history
     if (!text) {
       return;
     }
