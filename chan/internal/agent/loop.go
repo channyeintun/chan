@@ -83,7 +83,11 @@ func recordTurnOutput(state *QueryState, turn modelTurn) {
 		state.Continuation.Record(turn.outputTokens, len(turn.toolCalls) > 0)
 	}
 	if turn.stopReason == "max_tokens" {
-		postTurnPressure := EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation)
+		postTurnPressure := EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation, ContextPressureSignals{
+			SessionMemory:    state.SessionMemory,
+			RetrievalTouched: state.RetrievalTouched,
+			AttemptEntries:   state.AttemptEntries,
+		})
 		state.MaxTokens = nextOutputBudget(state.MaxTokens, state.MaxOutputCeiling, postTurnPressure)
 	}
 }
@@ -581,7 +585,11 @@ func runProactiveCompaction(
 		return nil
 	}
 
-	pressure := EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation)
+	pressure := EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation, ContextPressureSignals{
+		SessionMemory:    state.SessionMemory,
+		RetrievalTouched: state.RetrievalTouched,
+		AttemptEntries:   state.AttemptEntries,
+	})
 	hasSessionMemory := state.SessionMemory.HasContent()
 	hasFreshSessionMemory := state.SessionMemory.IsFresh(time.Now())
 	if !pressure.ShouldCompact && !(hasFreshSessionMemory && pressure.WarningThreshold > 0 && pressure.ConversationTokens >= pressure.WarningThreshold) {

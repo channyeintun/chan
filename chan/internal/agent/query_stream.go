@@ -99,6 +99,8 @@ type QueryState struct {
 	Graph *RetrievalGraph
 	// SessionMemory carries extracted session continuity state when available.
 	SessionMemory SessionMemorySnapshot
+	// AttemptEntries carries recent failed attempts for continuity-aware pressure decisions.
+	AttemptEntries []AttemptEntry
 }
 
 // NewQueryState creates initial state from a request.

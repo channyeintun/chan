@@ -25,11 +25,11 @@ type iterationStage func(context.Context, *QueryState, QueryDeps, *iterationRunt
 var defaultIterationStages = []iterationStage{
 	applyResultBudgetStage,
 	loadSessionMemoryStage,
+	loadAttemptLogStage,
 	runProactiveCompactionStage,
 	evaluateContextPressureStage,
 	recallMemoryStage,
 	runLiveRetrievalStage,
-	loadAttemptLogStage,
 	selectSkillsStage,
 	composeSystemPromptStage,
 	warnUnsupportedThinkingStage,
@@ -104,7 +104,11 @@ func evaluateContextPressureStage(
 	_ func(ipc.StreamEvent, error) bool,
 ) error {
 	runtime.currentUserPrompt = latestUserPrompt(state.Messages)
-	runtime.pressure = EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation)
+	runtime.pressure = EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation, ContextPressureSignals{
+		SessionMemory:    runtime.sessionMemory,
+		RetrievalTouched: state.RetrievalTouched,
+		AttemptEntries:   runtime.attemptEntries,
+	})
 	return nil
 }
 
@@ -140,7 +144,7 @@ func runLiveRetrievalStage(
 
 func loadAttemptLogStage(
 	_ context.Context,
-	_ *QueryState,
+	state *QueryState,
 	deps QueryDeps,
 	runtime *iterationRuntime,
 	_ func(ipc.StreamEvent, error) bool,
@@ -153,6 +157,7 @@ func loadAttemptLogStage(
 			}
 		} else {
 			runtime.attemptEntries = entries
+			state.AttemptEntries = entries
 			runtime.attemptLogSection = FormatAttemptLogSection(runtime.attemptEntries)
 		}
 	}
