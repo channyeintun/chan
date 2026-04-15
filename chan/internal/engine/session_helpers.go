@@ -205,6 +205,9 @@ func compactWithMetrics(
 	pipeline := newCompactionPipeline(bridge, tracker, client)
 	hasSessionMemory := sessionMemory.HasContent()
 	hasFreshSessionMemory := sessionMemory.IsFresh(time.Now())
+	if hasSessionMemory {
+		pipeline.SessionMemoryHint = sessionMemory.Content
+	}
 	result, err := pipeline.Compact(ctx, messages, reason)
 	if err != nil {
 		metrics.Mark("compact_failed")
@@ -234,6 +237,67 @@ func compactWithMetrics(
 		"microcompact_enabled":      config.Load().EnableMicrocompact,
 	})
 	return result, nil
+}
+
+func newSessionMemoryRefiner(bridge *ipc.Bridge, tracker *costpkg.Tracker, client api.LLMClient) sessionMemoryRefineFunc {
+	return func(ctx context.Context, draft string, recentUserMessages []string) (string, error) {
+		var prompt strings.Builder
+		prompt.WriteString(sessionMemoryRefinePrompt)
+		prompt.WriteString("\n\n## Heuristic Draft\n\n")
+		prompt.WriteString(draft)
+		if len(recentUserMessages) > 0 {
+			prompt.WriteString("\n\n## Recent User Messages (for reasoning context)\n\n")
+			for _, msg := range recentUserMessages {
+				prompt.WriteString("- ")
+				prompt.WriteString(msg)
+				prompt.WriteString("\n")
+			}
+		}
+
+		stream, err := client.Stream(ctx, api.ModelRequest{
+			Messages: []api.Message{
+				{Role: api.RoleUser, Content: prompt.String()},
+			},
+			SystemPrompt: "You refine session memory documents. Return only the refined markdown.",
+			MaxTokens:    1536,
+		})
+		if err != nil {
+			return "", err
+		}
+
+		startedAt := time.Now()
+		var usage api.Usage
+		var result strings.Builder
+
+		for event, streamErr := range stream {
+			if streamErr != nil {
+				return "", streamErr
+			}
+			switch event.Type {
+			case api.ModelEventToken:
+				result.WriteString(event.Text)
+			case api.ModelEventUsage:
+				if event.Usage != nil {
+					usage = mergeUsage(usage, *event.Usage)
+				}
+			}
+		}
+
+		tracker.RecordAPICall(
+			client.ModelID(),
+			usage.InputTokens,
+			usage.OutputTokens,
+			usage.CacheReadTokens,
+			usage.CacheCreationTokens,
+			time.Since(startedAt),
+			costpkg.CalculateUSDCost(client.ModelID(), usage),
+		)
+		if err := emitCostUpdate(bridge, tracker); err != nil {
+			return "", err
+		}
+
+		return strings.TrimSpace(result.String()), nil
+	}
 }
 
 func (s compactionSummarizer) Summarize(ctx context.Context, messages []api.Message) (string, error) {

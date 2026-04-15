@@ -28,7 +28,27 @@ const (
 	sessionMemoryMaxSectionTokens        = 2000
 	sessionMemoryMaxTotalTokens          = 12000
 	sessionMemoryTranscriptDedupeWindow  = 8
+	// sessionMemoryLLMRefineThreshold is the minimum token delta since the
+	// last update before we spend an LLM call to refine the heuristic draft.
+	sessionMemoryLLMRefineThreshold = 8000
 )
+
+// sessionMemoryRefineFunc optionally refines a heuristic session memory draft
+// using an LLM call. Receives the draft markdown and recent user messages for
+// reasoning context.
+type sessionMemoryRefineFunc func(ctx context.Context, draft string, recentUserMessages []string) (string, error)
+
+const sessionMemoryRefinePrompt = `You are refining a session memory document for an AI coding assistant.
+
+The document captures the state of an ongoing coding session so the assistant can resume seamlessly after context compaction. Below is a heuristic draft extracted from the conversation. Your job is to:
+
+1. Keep the exact same markdown structure (# Session Memory header, ## section headers)
+2. Improve accuracy — fix any misattributions or oversimplifications
+3. Add reasoning and intent that pure heuristics missed (WHY decisions were made, not just what happened)
+4. Remove noise, redundancy, and trivially obvious facts
+5. Keep it concise — aim for 800-1500 tokens total
+
+Return ONLY the refined markdown document, starting with "# Session Memory".`
 
 type sessionMemoryDocument struct {
 	SessionTitle          string
@@ -73,7 +93,7 @@ func loadSessionMemorySnapshot(ctx context.Context, artifactManager *artifactspk
 	}, nil
 }
 
-func maybeRefreshSessionMemory(ctx context.Context, bridge *ipc.Bridge, artifactManager *artifactspkg.Manager, sessionID string, turnID int, messages []api.Message, fromIndex int) error {
+func maybeRefreshSessionMemory(ctx context.Context, bridge *ipc.Bridge, artifactManager *artifactspkg.Manager, sessionID string, turnID int, messages []api.Message, fromIndex int, refiner sessionMemoryRefineFunc) error {
 	if !config.Load().EnableSessionMemory {
 		return nil
 	}
@@ -92,6 +112,21 @@ func maybeRefreshSessionMemory(ctx context.Context, bridge *ipc.Bridge, artifact
 	content := buildSessionMemoryMarkdown(previous, messages, fromIndex)
 	if strings.TrimSpace(content) == "" {
 		return nil
+	}
+
+	// LLM refinement: only when there's a meaningful delta since the last
+	// update and a refiner is available.
+	if refiner != nil {
+		tokenDelta := compact.EstimateConversationTokens(messages) - previous.SourceConversationTokens
+		postCompaction := turnHasCompactionSummary(messages, fromIndex)
+		if postCompaction || tokenDelta >= sessionMemoryLLMRefineThreshold {
+			recentUser := recentUserSnippets(messages, 5)
+			refined, refineErr := refiner(ctx, content, recentUser)
+			if refineErr == nil && strings.TrimSpace(refined) != "" {
+				content = limitRenderedSessionMemory(strings.TrimSpace(refined) + "\n")
+			}
+			// On error, fall back to the heuristic draft silently.
+		}
 	}
 	parsed := parseSessionMemoryMarkdown(content)
 

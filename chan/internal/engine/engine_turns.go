@@ -188,7 +188,7 @@ func (t *userTurnContext) runPlannerTurn(ctx context.Context, availableSkills []
 	if err := t.finalizePlannerTurn(ctx, planner, messagesBeforeQuery); err != nil {
 		return false, err
 	}
-	if err := maybeRefreshSessionMemory(ctx, t.deps.bridge, t.deps.artifactManager, t.state.sessionID, t.turnID, t.state.messages, messagesBeforeQuery); err != nil {
+	if err := maybeRefreshSessionMemory(ctx, t.deps.bridge, t.deps.artifactManager, t.state.sessionID, t.turnID, t.state.messages, messagesBeforeQuery, newSessionMemoryRefiner(t.deps.bridge, t.deps.tracker, t.state.client)); err != nil {
 		return false, err
 	}
 	continueTurn, err := t.handlePlanReviewDecision(ctx, messagesBeforeQuery)

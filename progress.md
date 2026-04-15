@@ -14,6 +14,7 @@
 - Added a non-test trace-tuning path by introducing a `timing-summary` CLI command over `timings.ndjson`, so real sessions can be inspected for compaction strategy mix, session-memory freshness at compaction time, token savings, and follow-up threshold recommendations.
 - Tightened the quality of the new context-memory runtime by fixing over-eager session-memory refreshes on tool-heavy turns, narrowing retry-loop detection to repeated failures instead of any two errors, propagating real session titles instead of the generic artifact title, and filtering extracted notes against the recent live transcript as well as durable memory.
 - Added the enhancement planning and reference-comparison markdown documents to the repository so the implementation history, ratings, and rollout plan are tracked alongside the code changes.
+- Closed the two remaining gaps for Claude Code parity: (1) added LLM-mediated session memory refinement so extraction captures reasoning and intent beyond what pure heuristics can collect, gated by a token-delta threshold to control cost; (2) made compaction session-memory-aware by injecting already-preserved session memory content into the compaction prompt so the summarizer produces a complementary summary instead of repeating facts.
 
 ## 2026-04-15
 

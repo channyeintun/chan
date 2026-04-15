@@ -46,6 +46,22 @@ Keep the summary concise but complete. Aim for 750-1500 tokens.`
 
 const summaryMessagePrefix = "Conversation summary for continuation:"
 
+// BuildCompactionPrompt augments a base compaction prompt with session memory
+// context so the summarizer can avoid repeating facts already captured.
+func BuildCompactionPrompt(basePrompt string, sessionMemoryContent string) string {
+	sessionMemoryContent = strings.TrimSpace(sessionMemoryContent)
+	if sessionMemoryContent == "" {
+		return basePrompt
+	}
+	return basePrompt + `
+
+The following session memory is already preserved separately and does NOT need to be repeated in the summary. Skip facts, file lists, and decisions already covered here — focus the summary on information NOT captured below.
+
+<already_preserved_session_memory>
+` + sessionMemoryContent + `
+</already_preserved_session_memory>`
+}
+
 // NormalizeSummary strips optional analysis blocks and returns the summary payload.
 func NormalizeSummary(raw string) string {
 	trimmed := strings.TrimSpace(raw)

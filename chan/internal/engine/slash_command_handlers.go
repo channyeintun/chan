@@ -624,7 +624,7 @@ func handleCompactSlashCommand(cmd *slashCommandContext) error {
 	if err := cmd.persistState(); err != nil {
 		return err
 	}
-	if err := maybeRefreshSessionMemory(cmd.ctx, cmd.bridge, cmd.artifactManager, cmd.state.SessionID, 0, cmd.state.Messages, 0); err != nil {
+	if err := maybeRefreshSessionMemory(cmd.ctx, cmd.bridge, cmd.artifactManager, cmd.state.SessionID, 0, cmd.state.Messages, 0, newSessionMemoryRefiner(cmd.bridge, cmd.tracker, *cmd.client)); err != nil {
 		return err
 	}
 	if err := cmd.bridge.Emit(ipc.EventCompactEnd, ipc.CompactEndPayload{

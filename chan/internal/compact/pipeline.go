@@ -32,6 +32,10 @@ type Pipeline struct {
 	contextWindow       int
 	summarizer          Summarizer
 	microcompactEnabled bool
+	// SessionMemoryHint is the current session memory content. When set, the
+	// compaction prompt tells the summarizer to skip facts already preserved
+	// in session memory, producing a more complementary summary.
+	SessionMemoryHint string
 }
 
 // Summarizer abstracts the LLM call for compaction summarization.
@@ -95,7 +99,7 @@ func (p *Pipeline) Compact(ctx context.Context, messages []api.Message, reason s
 		return result, nil
 	}
 
-	summary, err := p.summarize(ctx, toSummarize, CompactionPromptTemplate)
+	summary, err := p.summarize(ctx, toSummarize, BuildCompactionPrompt(CompactionPromptTemplate, p.SessionMemoryHint))
 	if err != nil {
 		return CompactResult{}, err
 	}
@@ -121,7 +125,7 @@ func (p *Pipeline) compactRecentWindow(ctx context.Context, messages []api.Messa
 		truncatedTokens = EstimateConversationTokens(TruncateToolResults(messages))
 	}
 
-	summary, err := p.summarize(ctx, window.ToSummarize, PartialCompactionPromptTemplate)
+	summary, err := p.summarize(ctx, window.ToSummarize, BuildCompactionPrompt(PartialCompactionPromptTemplate, p.SessionMemoryHint))
 	if err != nil {
 		return CompactResult{}, false, err
 	}
