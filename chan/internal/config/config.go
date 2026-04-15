@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,9 +13,10 @@ import (
 // Config holds all CLI configuration.
 type Config struct {
 	// Model selection: provider/model-name format
-	Model           string `json:"model,omitempty"`
-	SubagentModel   string `json:"subagent_model,omitempty"`
-	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+	Model           string    `json:"model,omitempty"`
+	SubagentModel   string    `json:"subagent_model,omitempty"`
+	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
+	MCP             MCPConfig `json:"mcp,omitempty"`
 
 	// Provider-level overrides
 	BaseURL string `json:"base_url,omitempty"`
@@ -64,6 +66,28 @@ func ConfigPath() string {
 
 // Load reads configuration from file and environment.
 func Load() Config {
+	cfg := loadUserConfig()
+	applyEnvOverrides(&cfg)
+	return cfg
+}
+
+// LoadForWorkingDir reads user configuration, merges the repo-local MCP
+// override for the current workspace, and then applies environment overrides.
+func LoadForWorkingDir(cwd string) Config {
+	cfg := loadUserConfig()
+
+	override, path, err := loadProjectMCPOverride(cwd)
+	if err == nil {
+		cfg.MCP = MergeMCPConfig(cfg.MCP, override)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "warning: failed to parse %s: %v\n", path, err)
+	}
+
+	applyEnvOverrides(&cfg)
+	return cfg
+}
+
+func loadUserConfig() Config {
 	cfg := DefaultConfig()
 
 	// File config
@@ -72,6 +96,14 @@ func Load() Config {
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to parse %s: %v\n", ConfigPath(), err)
 		}
+	}
+
+	return cfg
+}
+
+func applyEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
 	}
 
 	// Environment overrides
@@ -108,8 +140,6 @@ func Load() Config {
 			fmt.Fprintf(os.Stderr, "warning: invalid CHAN_COST_WARNING_THRESHOLD_USD %q: %v\n", v, err)
 		}
 	}
-
-	return cfg
 }
 
 // ParseModel splits "provider/model" into (provider, model).

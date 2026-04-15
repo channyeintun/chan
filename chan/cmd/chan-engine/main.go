@@ -62,7 +62,11 @@ func main() {
 }
 
 func runEngine(modelFlag, modeFlag string, stdioMode bool) error {
-	cfg := config.Load()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	cfg := config.LoadForWorkingDir(cwd)
 
 	// CLI flag overrides
 	if modelFlag != "" {
