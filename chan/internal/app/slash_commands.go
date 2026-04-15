@@ -9,7 +9,6 @@ import (
 	"github.com/channyeintun/chan/internal/agent"
 	"github.com/channyeintun/chan/internal/api"
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
-	commandspkg "github.com/channyeintun/chan/internal/commands"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
 	"github.com/channyeintun/chan/internal/ipc"
@@ -90,17 +89,7 @@ func appendSlashResponse(bridge *ipc.Bridge, text string) {
 }
 
 func gitHubCopilotPolicyModels(cfg config.Config) []string {
-	models := []string{
-		api.GitHubCopilotDefaultMainModel,
-		api.GitHubCopilotDefaultSubagentModel,
-	}
-	if provider, model := config.ParseModel(strings.TrimSpace(cfg.Model)); normalizeProvider(provider) == "github-copilot" && strings.TrimSpace(model) != "" {
-		models = append(models, model)
-	}
-	if provider, model := config.ParseModel(strings.TrimSpace(cfg.SubagentModel)); normalizeProvider(provider) == "github-copilot" && strings.TrimSpace(model) != "" {
-		models = append(models, model)
-	}
-	return commandspkg.MergeGitHubCopilotModelIDs(nil, models)
+	return providerBehaviorFor("github-copilot").PolicyModels(cfg)
 }
 
 func emitSessionArtifacts(ctx context.Context, bridge *ipc.Bridge, artifactManager *artifactspkg.Manager, sessionID string) error {
@@ -139,33 +128,6 @@ func emitSessionArtifacts(ctx context.Context, bridge *ipc.Bridge, artifactManag
 }
 
 func defaultSessionSubagentModel(cfg config.Config, activeModelID string) string {
-	selection := strings.TrimSpace(cfg.SubagentModel)
-	if selection != "" {
-		provider, model := config.ParseModel(selection)
-		if strings.TrimSpace(model) == "" && strings.TrimSpace(provider) != "" {
-			model = provider
-			provider = ""
-		}
-		if strings.TrimSpace(model) == "" {
-			return api.GitHubCopilotDefaultSubagentModel
-		}
-
-		activeProvider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
-		if strings.TrimSpace(provider) == "" && normalizeProvider(activeProvider) == "github-copilot" {
-			return modelRef("github-copilot", model)
-		}
-		if strings.TrimSpace(provider) != "" {
-			return modelRef(provider, model)
-		}
-		return model
-	}
-
 	activeProvider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
-	if normalizeProvider(activeProvider) == "github-copilot" {
-		return modelRef("github-copilot", api.GitHubCopilotDefaultSubagentModel)
-	}
-	if strings.TrimSpace(activeModelID) != "" {
-		return strings.TrimSpace(activeModelID)
-	}
-	return api.GitHubCopilotDefaultSubagentModel
+	return providerBehaviorFor(activeProvider).DefaultSubagentModel(cfg, activeModelID)
 }

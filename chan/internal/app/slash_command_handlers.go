@@ -58,24 +58,6 @@ func (fn slashCommandHandlerFunc) Handle(cmd *slashCommandContext) error {
 	return fn(cmd)
 }
 
-var slashCommandRegistry = map[string]slashCommandHandler{
-	"clear":     slashCommandHandlerFunc(handleClearSlashCommand),
-	"compact":   slashCommandHandlerFunc(handleCompactSlashCommand),
-	"connect":   slashCommandHandlerFunc(handleConnectSlashCommand),
-	"debug":     slashCommandHandlerFunc(handleDebugSlashCommand),
-	"diff":      slashCommandHandlerFunc(handleDiffSlashCommand),
-	"fast":      slashCommandHandlerFunc(handleFastSlashCommand),
-	"help":      slashCommandHandlerFunc(handleHelpSlashCommand),
-	"model":     slashCommandHandlerFunc(handleModelSlashCommand),
-	"plan":      slashCommandHandlerFunc(handlePlanSlashCommand),
-	"plan-mode": slashCommandHandlerFunc(handlePlanSlashCommand),
-	"reasoning": slashCommandHandlerFunc(handleReasoningSlashCommand),
-	"resume":    slashCommandHandlerFunc(handleResumeSlashCommand),
-	"sessions":  slashCommandHandlerFunc(handleSessionsSlashCommand),
-	"status":    slashCommandHandlerFunc(handleStatusSlashCommand),
-	"subagent":  slashCommandHandlerFunc(handleSubagentSlashCommand),
-}
-
 type modelSelectionPreset struct {
 	Label       string
 	Model       string
@@ -177,8 +159,12 @@ func newSlashCommandContext(
 }
 
 func lookupSlashCommandHandler(command string) (slashCommandHandler, bool) {
-	handler, ok := slashCommandRegistry[command]
-	return handler, ok
+	for _, spec := range slashCommandSpecs() {
+		if spec.Descriptor.Name == command {
+			return spec.Handler, true
+		}
+	}
+	return nil, false
 }
 
 func (cmd *slashCommandContext) persistState() error {
@@ -401,7 +387,7 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 	currentProvider = normalizeProvider(currentProvider)
 	providerHint := strings.TrimSpace(selected.Provider)
 	provider, model := resolveModelSelection(selectedModel, currentProvider)
-	if providerHint != "" && (currentProvider != "github-copilot" || requestedDefault) {
+	if providerHint != "" && (!retainSelectionProvider(currentProvider) || requestedDefault) {
 		provider = normalizeProvider(providerHint)
 		model = selectedModel
 	}
@@ -466,7 +452,7 @@ func handleSubagentSlashCommand(cmd *slashCommandContext) error {
 	currentProvider = normalizeProvider(currentProvider)
 	providerHint := strings.TrimSpace(selected.Provider)
 	provider, model := resolveModelSelection(selectedModel, currentProvider)
-	if currentProvider != "github-copilot" && providerHint != "" {
+	if providerHint != "" && !retainSelectionProvider(currentProvider) {
 		provider = normalizeProvider(providerHint)
 		model = selectedModel
 	}
@@ -841,7 +827,7 @@ func handleClearSlashCommand(cmd *slashCommandContext) error {
 }
 
 func handleHelpSlashCommand(cmd *slashCommandContext) error {
-	return emitTextResponse(cmd.bridge, commandspkg.FormatHelpText())
+	return emitTextResponse(cmd.bridge, commandspkg.FormatHelpText(slashCommandCatalog()))
 }
 
 func handleStatusSlashCommand(cmd *slashCommandContext) error {

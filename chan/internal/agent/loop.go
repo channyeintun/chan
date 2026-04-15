@@ -10,7 +10,6 @@ import (
 	"github.com/channyeintun/chan/internal/api"
 	"github.com/channyeintun/chan/internal/compact"
 	"github.com/channyeintun/chan/internal/ipc"
-	skillspkg "github.com/channyeintun/chan/internal/skills"
 )
 
 type modelTurn struct {
@@ -37,72 +36,8 @@ func runIteration(
 ) error {
 	state.TurnCount++
 	state.TurnContext = LoadTurnContext()
-	currentUserPrompt := latestUserPrompt(state.Messages)
-
-	if deps.ApplyResultBudget != nil {
-		state.Messages = deps.ApplyResultBudget(state.Messages)
-	}
-
-	if err := runProactiveCompaction(ctx, state, deps, yield); err != nil {
-		return err
-	}
-
-	pressure := EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation)
-	memoryRecalls := recallMemoryIndexes(ctx, deps.RecallMemory, state.SystemContext.MemoryFiles, currentUserPrompt, pressure)
-	if err := emitMemoryRecallTelemetry(deps.EmitTelemetry, state.SystemContext.MemoryFiles, memoryRecalls); err != nil {
-		return err
-	}
-
-	// Run the live retrieval stage.
-	liveRetrievalSection, retrievalMeta := runLiveRetrieval(state, currentUserPrompt, pressure)
-	if err := emitRetrievalTelemetry(deps.EmitTelemetry, retrievalMeta); err != nil {
-		return err
-	}
-
-	// Load session-scoped attempt log entries.
-	var attemptLogSection string
-	var attemptEntries []AttemptEntry
-	if deps.AttemptLog != nil {
-		attemptEntries, _ = deps.AttemptLog.Load()
-		attemptLogSection = FormatAttemptLogSection(attemptEntries)
-	}
-	if err := emitAttemptLogTelemetry(deps.EmitTelemetry, attemptEntries, attemptLogSection); err != nil {
-		return err
-	}
-
-	selectedSkills := skillspkg.SelectRelevant(state.Skills, currentUserPrompt)
-	skillPrompt := skillspkg.FormatPromptSection(selectedSkills)
-	basePrompt := state.BasePrompt
-	if capabilityPrompt := capabilitySystemPrompt(state.Capabilities); capabilityPrompt != "" {
-		basePrompt = strings.TrimSpace(basePrompt + "\n\n" + capabilityPrompt)
-	}
-	if state.PromptCache != nil {
-		state.SystemPrompt = state.PromptCache.Compose(
-			basePrompt,
-			state.SystemContext,
-			state.TurnContext,
-			currentUserPrompt,
-			memoryRecalls,
-			state.Capabilities,
-			skillPrompt,
-			liveRetrievalSection,
-			attemptLogSection,
-		)
-	} else {
-		state.SystemPrompt = composeSystemPrompt(
-			basePrompt,
-			state.SystemContext,
-			state.TurnContext,
-			currentUserPrompt,
-			memoryRecalls,
-			state.Capabilities,
-			skillPrompt,
-			liveRetrievalSection,
-			attemptLogSection,
-		)
-	}
-
-	if err := warnUnsupportedThinking(currentUserPrompt, state.Capabilities, yield); err != nil {
+	runtime := &iterationRuntime{}
+	if err := runIterationStages(ctx, state, deps, runtime, yield); err != nil {
 		return err
 	}
 
@@ -111,6 +46,25 @@ func runIteration(
 		return err
 	}
 
+	assistantMessage := appendAssistantTurnMessage(state, turn)
+	recordTurnOutput(state, turn)
+
+	if shouldRetryWithoutToolUse(state, runtime.currentUserPrompt, turn) {
+		return retryWithoutToolUse(state, yield)
+	}
+
+	if len(turn.toolCalls) > 0 {
+		return handleToolCallsTurn(ctx, state, deps, yield, turn)
+	}
+
+	if err := finalizeAssistantTurn(ctx, state, deps, yield, assistantMessage, turn.stopReason); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func appendAssistantTurnMessage(state *QueryState, turn modelTurn) api.Message {
 	assistantMessage := api.Message{
 		Role:             api.RoleAssistant,
 		Content:          strings.TrimSpace(turn.assistantText),
@@ -120,97 +74,111 @@ func runIteration(
 	if assistantMessage.Content != "" || len(assistantMessage.ToolCalls) > 0 {
 		state.Messages = append(state.Messages, assistantMessage)
 	}
+	return assistantMessage
+}
 
+func recordTurnOutput(state *QueryState, turn modelTurn) {
 	if turn.outputTokens > 0 {
-		isToolTurn := len(turn.toolCalls) > 0
-		state.Continuation.Record(turn.outputTokens, isToolTurn)
+		state.Continuation.Record(turn.outputTokens, len(turn.toolCalls) > 0)
 	}
 	if turn.stopReason == "max_tokens" {
 		postTurnPressure := EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation)
 		state.MaxTokens = nextOutputBudget(state.MaxTokens, state.MaxOutputCeiling, postTurnPressure)
 	}
+}
 
-	if shouldRetryWithoutToolUse(state, currentUserPrompt, turn) {
-		if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
-			Message:     "Model asked a routine clarification for a concrete implementation task; retrying with a stronger directive.",
-			Recoverable: true,
-		}), nil) {
+func retryWithoutToolUse(state *QueryState, yield func(ipc.StreamEvent, error) bool) error {
+	if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
+		Message:     "Model asked a routine clarification for a concrete implementation task; retrying with a stronger directive.",
+		Recoverable: true,
+	}), nil) {
+		return context.Canceled
+	}
+	state.NoToolRetryUsed = true
+	state.Messages = append(state.Messages, api.Message{
+		Role:    api.RoleUser,
+		Content: strings.TrimSpace(`Continue working on the user's implementation request. The request is concrete enough to act on now. Do not ask routine clarifying questions, and do not use web search for basic syntax, examples, or small scaffold tasks that you can complete from standard coding knowledge. Make the simplest safe assumption, inspect local files if needed, and perform the relevant file changes directly. Only ask a clarifying question if a missing detail makes a concrete file change impossible or unsafe.`),
+	})
+	return nil
+}
+
+func handleToolCallsTurn(
+	ctx context.Context,
+	state *QueryState,
+	deps QueryDeps,
+	yield func(ipc.StreamEvent, error) bool,
+	turn modelTurn,
+) error {
+	results, err := deps.ExecuteToolBatch(ctx, turn.toolCalls)
+	var pauseForPlanReview *PauseForPlanReviewError
+	if err != nil && !errors.As(err, &pauseForPlanReview) {
+		return err
+	}
+	for _, result := range results {
+		resultCopy := result
+		state.Messages = append(state.Messages, api.Message{
+			Role:       api.RoleTool,
+			Content:    result.Output,
+			ToolResult: &resultCopy,
+		})
+	}
+	collectTouchedFiles(state, turn.toolCalls, results)
+	invalidateGraphFiles(state, turn.toolCalls, results)
+	repeated := recordFailedAttempts(deps.AttemptLog, turn.toolCalls, results)
+	if repeated > 0 {
+		_ = emitAttemptRepeatedTelemetry(deps.EmitTelemetry, repeated)
+		if nudge := buildEditRetryNudge(turn.toolCalls, results); nudge != "" {
+			state.Messages = append(state.Messages, api.Message{
+				Role:    api.RoleUser,
+				Content: nudge,
+			})
+		}
+	}
+	if pauseForPlanReview != nil {
+		state.StopRequested = true
+		if !yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "plan_review_required"}), nil) {
 			return context.Canceled
 		}
-		state.NoToolRetryUsed = true
-		state.Messages = append(state.Messages, api.Message{
-			Role:    api.RoleUser,
-			Content: strings.TrimSpace(`Continue working on the user's implementation request. The request is concrete enough to act on now. Do not ask routine clarifying questions, and do not use web search for basic syntax, examples, or small scaffold tasks that you can complete from standard coding knowledge. Make the simplest safe assumption, inspect local files if needed, and perform the relevant file changes directly. Only ask a clarifying question if a missing detail makes a concrete file change impossible or unsafe.`),
-		})
+	}
+	return nil
+}
+
+func finalizeAssistantTurn(
+	ctx context.Context,
+	state *QueryState,
+	deps QueryDeps,
+	yield func(ipc.StreamEvent, error) bool,
+	assistantMessage api.Message,
+	stopReason string,
+) error {
+	if stopReason == "max_tokens" {
 		return nil
 	}
 
-	if len(turn.toolCalls) > 0 {
-		results, err := deps.ExecuteToolBatch(ctx, turn.toolCalls)
-		var pauseForPlanReview *PauseForPlanReviewError
-		if err != nil && !errors.As(err, &pauseForPlanReview) {
+	normalizedStopReason := normalizeStopReason(stopReason)
+	if deps.BeforeStop != nil {
+		decision, err := deps.BeforeStop(ctx, StopRequest{
+			Messages:         append([]api.Message(nil), state.Messages...),
+			AssistantMessage: assistantMessage,
+			StopReason:       normalizedStopReason,
+			TurnCount:        state.TurnCount,
+		})
+		if err != nil {
 			return err
 		}
-		for _, result := range results {
-			resultCopy := result
+		if decision.Continue {
 			state.Messages = append(state.Messages, api.Message{
-				Role:       api.RoleTool,
-				Content:    result.Output,
-				ToolResult: &resultCopy,
+				Role:    api.RoleUser,
+				Content: stopBlockedFollowUp(decision),
 			})
-		}
-		// Collect file paths touched by tools for future retrieval scoring.
-		collectTouchedFiles(state, turn.toolCalls, results)
-		// Invalidate graph nodes for touched files so they are re-parsed next turn.
-		invalidateGraphFiles(state, turn.toolCalls, results)
-		// Record failed commands into the attempt log.
-		repeated := recordFailedAttempts(deps.AttemptLog, turn.toolCalls, results)
-		if repeated > 0 {
-			_ = emitAttemptRepeatedTelemetry(deps.EmitTelemetry, repeated)
-			// Inject a corrective nudge so the model re-reads files
-			// instead of blindly retrying with stale content.
-			if nudge := buildEditRetryNudge(turn.toolCalls, results); nudge != "" {
-				state.Messages = append(state.Messages, api.Message{
-					Role:    api.RoleUser,
-					Content: nudge,
-				})
-			}
-		}
-		if pauseForPlanReview != nil {
-			state.StopRequested = true
-			if !yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "plan_review_required"}), nil) {
-				return context.Canceled
-			}
-		}
-		return nil
-	}
-
-	if turn.stopReason != "max_tokens" {
-		if deps.BeforeStop != nil {
-			decision, err := deps.BeforeStop(ctx, StopRequest{
-				Messages:         append([]api.Message(nil), state.Messages...),
-				AssistantMessage: assistantMessage,
-				StopReason:       normalizeStopReason(turn.stopReason),
-				TurnCount:        state.TurnCount,
-			})
-			if err != nil {
-				return err
-			}
-			if decision.Continue {
-				followUp := stopBlockedFollowUp(decision)
-				state.Messages = append(state.Messages, api.Message{
-					Role:    api.RoleUser,
-					Content: followUp,
-				})
-				return nil
-			}
-		}
-		state.StopRequested = true
-		if !yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: normalizeStopReason(turn.stopReason)}), nil) {
-			return context.Canceled
+			return nil
 		}
 	}
 
+	state.StopRequested = true
+	if !yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: normalizedStopReason}), nil) {
+		return context.Canceled
+	}
 	return nil
 }
 

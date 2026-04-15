@@ -15,7 +15,7 @@ import (
 	"github.com/channyeintun/chan/internal/session"
 )
 
-type descriptor struct {
+type Descriptor struct {
 	Name           string
 	Description    string
 	Usage          string
@@ -23,93 +23,7 @@ type descriptor struct {
 	Hidden         bool
 }
 
-var catalog = []descriptor{
-	{
-		Name:           "connect",
-		Description:    "Connect GitHub Copilot with device login",
-		Usage:          "/connect [github-copilot [enterprise-domain]]",
-		TakesArguments: true,
-	},
-	{
-		Name:        "plan",
-		Description: "Switch to plan mode (read-only until approved)",
-		Usage:       "/plan",
-	},
-	{
-		Name:        "fast",
-		Description: "Switch to fast mode (direct execution)",
-		Usage:       "/fast",
-	},
-	{
-		Name:           "model",
-		Description:    "Show the active model or open the model picker",
-		Usage:          "/model [model]",
-		TakesArguments: true,
-	},
-	{
-		Name:           "subagent",
-		Description:    "Show or switch the session subagent model",
-		Usage:          "/subagent [model|default|help]",
-		TakesArguments: true,
-	},
-	{
-		Name:           "reasoning",
-		Description:    "Show or set GPT-5 reasoning effort",
-		Usage:          "/reasoning [low|medium|high|xhigh|default]",
-		TakesArguments: true,
-	},
-	{
-		Name:        "compact",
-		Description: "Compact the conversation to save context",
-		Usage:       "/compact",
-	},
-	{
-		Name:           "resume",
-		Description:    "Resume a previous session",
-		Usage:          "/resume [id]",
-		TakesArguments: true,
-	},
-	{
-		Name:        "clear",
-		Description: "Clear the conversation and start a new session",
-		Usage:       "/clear",
-	},
-	{
-		Name:        "status",
-		Description: "Show the current session status",
-		Usage:       "/status",
-	},
-	{
-		Name:        "sessions",
-		Description: "List recent sessions",
-		Usage:       "/sessions",
-	},
-	{
-		Name:           "diff",
-		Description:    "Show git diff (for example /diff --staged)",
-		Usage:          "/diff [args]",
-		TakesArguments: true,
-	},
-	{
-		Name:           "debug",
-		Description:    "Enable live debug logging and open the monitor popup",
-		Usage:          "/debug [status|path|off]",
-		TakesArguments: true,
-	},
-	{
-		Name:        "help",
-		Description: "Show the slash-command help text",
-		Usage:       "/help",
-	},
-	{
-		Name:        "plan-mode",
-		Description: "Alias for /plan",
-		Usage:       "/plan-mode",
-		Hidden:      true,
-	},
-}
-
-func Descriptors() []ipc.SlashCommandDescriptorPayload {
+func Descriptors(catalog []Descriptor) []ipc.SlashCommandDescriptorPayload {
 	descriptors := make([]ipc.SlashCommandDescriptorPayload, 0, len(catalog))
 	for _, descriptor := range catalog {
 		if descriptor.Hidden {
@@ -211,10 +125,10 @@ func OpenBrowserURL(target string) error {
 	return cmd.Start()
 }
 
-func FormatHelpText() string {
+func FormatHelpText(catalog []Descriptor) string {
 	var b strings.Builder
 	b.WriteString("Available slash commands:\n\n")
-	for _, descriptor := range visibleDescriptors() {
+	for _, descriptor := range visibleDescriptors(catalog) {
 		usage := descriptor.Usage
 		if strings.TrimSpace(usage) == "" {
 			usage = "/" + descriptor.Name
@@ -312,8 +226,8 @@ func GitDiff(args string) string {
 	return result
 }
 
-func visibleDescriptors() []descriptor {
-	visible := make([]descriptor, 0, len(catalog))
+func visibleDescriptors(catalog []Descriptor) []Descriptor {
+	visible := make([]Descriptor, 0, len(catalog))
 	for _, descriptor := range catalog {
 		if descriptor.Hidden {
 			continue

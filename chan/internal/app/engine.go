@@ -9,14 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/channyeintun/chan/internal/agent"
 	"github.com/channyeintun/chan/internal/api"
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
 	"github.com/channyeintun/chan/internal/clientdebug"
-	commandspkg "github.com/channyeintun/chan/internal/commands"
 	"github.com/channyeintun/chan/internal/compact"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
@@ -124,7 +122,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	startupMetrics.Mark("session_persisted")
 
 	// Emit ready event
-	if err := bridge.EmitReady(commandspkg.Descriptors()); err != nil {
+	if err := bridge.EmitReady(slashCommandDescriptors()); err != nil {
 		return fmt.Errorf("emit ready: %w", err)
 	}
 	startupMetrics.Mark("ready_emitted")
@@ -601,159 +599,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 
 func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
 	provider = normalizeProvider(provider)
-	if provider == "github-copilot" {
-		resolved, err := resolveGitHubCopilotConfig(cfg)
-		if err != nil {
-			return nil, err
-		}
-		cfg = resolved
-	}
-
-	baseURL := cfg.BaseURL
-	apiKey := cfg.APIKey
-	var capabilitiesOverride *api.ModelCapabilities
-	if provider == "github-copilot" {
-		if capabilities, ok := resolveGitHubCopilotCapabilities(cfg, model); ok {
-			capabilitiesOverride = &capabilities
-		}
-	}
-
-	var client api.LLMClient
-	var err error
-	if provider == "github-copilot" {
-		switch {
-		case api.GitHubCopilotUsesAnthropicMessages(model):
-			client, err = api.NewAnthropicClientForProvider(provider, model, apiKey, baseURL)
-		case api.GitHubCopilotUsesOpenAIResponses(model):
-			client, err = api.NewOpenAIResponsesClient(provider, model, apiKey, baseURL)
-		}
-		if err != nil {
-			return nil, err
-		}
-		if client != nil {
-			refresher := newCopilotTokenRefresher(cfg.GitHubCopilot)
-			if capabilitiesOverride != nil {
-				client = api.WithCapabilities(client, *capabilitiesOverride)
-			}
-			api.SetAPIKeyFunc(client, refresher.resolve)
-			return client, nil
-		}
-	}
-
-	client, err = api.NewClientForProvider(provider, model, apiKey, baseURL)
-	if err != nil {
-		return nil, err
-	}
-	if capabilitiesOverride != nil {
-		client = api.WithCapabilities(client, *capabilitiesOverride)
-	}
-	return client, nil
-}
-
-func resolveGitHubCopilotConfig(cfg config.Config) (config.Config, error) {
-	loaded := config.Load()
-	if strings.TrimSpace(loaded.GitHubCopilot.GitHubToken) != "" {
-		cfg.GitHubCopilot = loaded.GitHubCopilot
-	}
-
-	if strings.TrimSpace(cfg.APIKey) == "" {
-		creds := cfg.GitHubCopilot
-		if strings.TrimSpace(creds.GitHubToken) == "" {
-			return cfg, &api.APIError{Type: api.ErrAuth, Message: "GitHub Copilot is not connected. Run /connect first."}
-		}
-
-		expiresAt := time.UnixMilli(creds.ExpiresAtUnixMS)
-		if strings.TrimSpace(creds.AccessToken) == "" || time.Now().After(expiresAt) {
-			refreshCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-
-			refreshed, err := api.RefreshGitHubCopilotToken(refreshCtx, creds.GitHubToken, creds.EnterpriseDomain)
-			if err != nil {
-				return cfg, err
-			}
-
-			creds.AccessToken = refreshed.AccessToken
-			creds.ExpiresAtUnixMS = refreshed.ExpiresAt.UnixMilli()
-			cfg.GitHubCopilot = creds
-
-			loaded.GitHubCopilot = creds
-			if err := config.Save(loaded); err != nil {
-				return cfg, fmt.Errorf("save refreshed GitHub Copilot credentials: %w", err)
-			}
-		}
-
-		cfg.APIKey = creds.AccessToken
-	}
-
-	if strings.TrimSpace(cfg.BaseURL) == "" {
-		cfg.BaseURL = api.GetGitHubCopilotBaseURL(cfg.GitHubCopilot.AccessToken, cfg.GitHubCopilot.EnterpriseDomain)
-	}
-
-	return cfg, nil
-}
-
-func resolveGitHubCopilotCapabilities(cfg config.Config, model string) (api.ModelCapabilities, bool) {
-	accessToken := strings.TrimSpace(cfg.GitHubCopilot.AccessToken)
-	if accessToken == "" {
-		return api.ModelCapabilities{}, false
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	capabilities, ok, err := api.ResolveGitHubCopilotModelCapabilities(ctx, accessToken, cfg.GitHubCopilot.EnterpriseDomain, model)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to fetch GitHub Copilot model metadata for %q: %v\n", model, err)
-		return api.ModelCapabilities{}, false
-	}
-	return capabilities, ok
-}
-
-// copilotTokenRefresher caches a GitHub Copilot access token and refreshes it
-// only when expired. The fast path is a single timestamp comparison.
-type copilotTokenRefresher struct {
-	mu               sync.Mutex
-	githubToken      string
-	enterpriseDomain string
-	accessToken      string
-	expiresAt        time.Time
-}
-
-func newCopilotTokenRefresher(creds config.GitHubCopilotAuth) *copilotTokenRefresher {
-	return &copilotTokenRefresher{
-		githubToken:      creds.GitHubToken,
-		enterpriseDomain: creds.EnterpriseDomain,
-		accessToken:      creds.AccessToken,
-		expiresAt:        time.UnixMilli(creds.ExpiresAtUnixMS),
-	}
-}
-
-func (r *copilotTokenRefresher) resolve() (string, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.accessToken != "" && time.Now().Before(r.expiresAt) {
-		return r.accessToken, nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	refreshed, err := api.RefreshGitHubCopilotToken(ctx, r.githubToken, r.enterpriseDomain)
-	if err != nil {
-		return "", fmt.Errorf("refresh GitHub Copilot token: %w", err)
-	}
-
-	r.accessToken = refreshed.AccessToken
-	r.expiresAt = refreshed.ExpiresAt
-
-	// Persist to config so other processes and restarts pick up the fresh token.
-	loaded := config.Load()
-	loaded.GitHubCopilot.AccessToken = refreshed.AccessToken
-	loaded.GitHubCopilot.ExpiresAtUnixMS = refreshed.ExpiresAt.UnixMilli()
-	_ = config.Save(loaded)
-
-	return r.accessToken, nil
+	return providerBehaviorFor(provider).NewClient(provider, model, cfg)
 }
 
 const clientWarmupTimeout = 3 * time.Second
@@ -831,43 +677,7 @@ func modelRef(provider, model string) string {
 }
 
 func resolveModelSelection(input string, fallbackProvider string) (string, string) {
-	provider, model := config.ParseModel(strings.TrimSpace(input))
-	if model == "" && provider != "" {
-		model = provider
-		provider = ""
-	}
-	if provider != "" {
-		return normalizeProvider(provider), model
-	}
-	if normalizeProvider(fallbackProvider) == "github-copilot" {
-		return "github-copilot", model
-	}
-
-	lower := strings.ToLower(model)
-	switch {
-	case strings.Contains(lower, "gemini"):
-		provider = "gemini"
-	case strings.Contains(lower, "gpt"), strings.HasPrefix(lower, "o1"), strings.HasPrefix(lower, "o3"), strings.HasPrefix(lower, "o4"):
-		provider = "openai"
-	case strings.Contains(lower, "deepseek"):
-		provider = "deepseek"
-	case strings.Contains(lower, "qwen"):
-		provider = "qwen"
-	case strings.Contains(lower, "glm"):
-		provider = "glm"
-	case strings.Contains(lower, "mistral"):
-		provider = "mistral"
-	case strings.Contains(lower, "llama"), strings.Contains(lower, "maverick"):
-		provider = "groq"
-	case strings.Contains(lower, "gemma"), strings.Contains(lower, "ollama"):
-		provider = "ollama"
-	case strings.Contains(lower, "claude"), strings.Contains(lower, "sonnet"), strings.Contains(lower, "opus"), strings.Contains(lower, "haiku"):
-		provider = "anthropic"
-	default:
-		provider = normalizeProvider(fallbackProvider)
-	}
-
-	return provider, model
+	return providerBehaviorFor(fallbackProvider).ResolveSelection(input, fallbackProvider)
 }
 
 func parseExecutionMode(mode string) agent.ExecutionMode {
