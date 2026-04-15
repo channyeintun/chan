@@ -57,6 +57,8 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	}
 	client = wrapClientWithDebug(client)
 	modelState := newActiveModelState(client, activeModelID)
+	subagentModelID := defaultSessionSubagentModel(cfg, activeModelID)
+	subagentModelState := newActiveSubagentModelState(subagentModelID)
 	messages := make([]api.Message, 0, 32)
 	mode := parseExecutionMode(cfg.DefaultMode)
 	permissionCtx := newPermissionContext(cfg.PermissionMode)
@@ -97,20 +99,21 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, hookRunner, modelState, cwd)))
+	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, hookRunner, modelState, subagentModelState, cwd)))
 	registry.Register(toolpkg.NewAgentStatusTool(lookupBackgroundAgentStatus))
 	registry.Register(toolpkg.NewAgentStopTool(func(ctx context.Context, req toolpkg.AgentStopRequest) (toolpkg.AgentRunResult, error) {
 		return stopBackgroundAgent(ctx, bridge, req)
 	}))
 	if err := persistSessionState(sessionStore, sessionStateParams{
-		SessionID: sessionID,
-		CreatedAt: startedAt,
-		Mode:      mode,
-		Model:     activeModelID,
-		CWD:       cwd,
-		Branch:    agent.LoadTurnContext().GitBranch,
-		Tracker:   tracker,
-		Messages:  messages,
+		SessionID:     sessionID,
+		CreatedAt:     startedAt,
+		Mode:          mode,
+		Model:         activeModelID,
+		SubagentModel: subagentModelID,
+		CWD:           cwd,
+		Branch:        agent.LoadTurnContext().GitBranch,
+		Tracker:       tracker,
+		Messages:      messages,
 	}); err != nil {
 		return err
 	}
@@ -257,14 +260,15 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			plannerUserRequest := payload.Text
 			persistCurrentMessages := func() {
 				_ = persistSessionState(sessionStore, sessionStateParams{
-					SessionID: sessionID,
-					CreatedAt: startedAt,
-					Mode:      mode,
-					Model:     activeModelID,
-					CWD:       cwd,
-					Branch:    agent.LoadTurnContext().GitBranch,
-					Tracker:   tracker,
-					Messages:  messages,
+					SessionID:     sessionID,
+					CreatedAt:     startedAt,
+					Mode:          mode,
+					Model:         activeModelID,
+					SubagentModel: subagentModelState.Get(),
+					CWD:           cwd,
+					Branch:        agent.LoadTurnContext().GitBranch,
+					Tracker:       tracker,
+					Messages:      messages,
 				})
 			}
 
@@ -499,15 +503,16 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						title := session.GenerateTitle(modelRouter, titleClient, titleMessages)
 						if title != "" {
 							_ = sessionStore.SaveMetadata(session.Metadata{
-								SessionID:    titleSessionID,
-								CreatedAt:    titleStartedAt,
-								UpdatedAt:    time.Now(),
-								Mode:         string(titleMode),
-								Model:        titleModelID,
-								CWD:          titleCWD,
-								Branch:       titleBranch,
-								TotalCostUSD: tracker.Snapshot().TotalCostUSD,
-								Title:        title,
+								SessionID:     titleSessionID,
+								CreatedAt:     titleStartedAt,
+								UpdatedAt:     time.Now(),
+								Mode:          string(titleMode),
+								Model:         titleModelID,
+								SubagentModel: subagentModelState.Get(),
+								CWD:           titleCWD,
+								Branch:        titleBranch,
+								TotalCostUSD:  tracker.Snapshot().TotalCostUSD,
+								Title:         title,
 							})
 							_ = emitSessionUpdated(bridge, titleSessionID, title)
 						}
@@ -542,6 +547,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				startedAt,
 				mode,
 				activeModelID,
+				subagentModelID,
 				cwd,
 				messages,
 				&client,
@@ -553,9 +559,11 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			startedAt = slashState.StartedAt
 			mode = slashState.Mode
 			activeModelID = slashState.ActiveModelID
+			subagentModelID = slashState.SubagentModelID
 			cwd = slashState.CWD
 			messages = slashState.Messages
 			modelState.Set(client, activeModelID)
+			subagentModelState.Set(subagentModelID)
 			toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
 			continue
 		case ipc.MsgModeToggle:
@@ -565,14 +573,15 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				mode = agent.ModePlan
 			}
 			if err := persistSessionState(sessionStore, sessionStateParams{
-				SessionID: sessionID,
-				CreatedAt: startedAt,
-				Mode:      mode,
-				Model:     activeModelID,
-				CWD:       cwd,
-				Branch:    agent.LoadTurnContext().GitBranch,
-				Tracker:   tracker,
-				Messages:  messages,
+				SessionID:     sessionID,
+				CreatedAt:     startedAt,
+				Mode:          mode,
+				Model:         activeModelID,
+				SubagentModel: subagentModelID,
+				CWD:           cwd,
+				Branch:        agent.LoadTurnContext().GitBranch,
+				Tracker:       tracker,
+				Messages:      messages,
 			}); err != nil {
 				return err
 			}

@@ -22,12 +22,13 @@ import (
 )
 
 type slashCommandState struct {
-	SessionID     string
-	StartedAt     time.Time
-	Mode          agent.ExecutionMode
-	ActiveModelID string
-	CWD           string
-	Messages      []api.Message
+	SessionID       string
+	StartedAt       time.Time
+	Mode            agent.ExecutionMode
+	ActiveModelID   string
+	SubagentModelID string
+	CWD             string
+	Messages        []api.Message
 }
 
 type slashCommandContext struct {
@@ -70,6 +71,7 @@ var slashCommandRegistry = map[string]slashCommandHandler{
 	"resume":    slashCommandHandlerFunc(handleResumeSlashCommand),
 	"sessions":  slashCommandHandlerFunc(handleSessionsSlashCommand),
 	"status":    slashCommandHandlerFunc(handleStatusSlashCommand),
+	"subagent":  slashCommandHandlerFunc(handleSubagentSlashCommand),
 }
 
 type modelSelectionPreset struct {
@@ -127,11 +129,6 @@ var curatedModelSelectionPresets = []modelSelectionPreset{
 		Provider:    "gemini",
 		Description: "Gemini pro preset",
 	},
-	{
-		Label:       "Composer 2.0",
-		Model:       "composer-2.0",
-		Description: "Composer preset",
-	},
 }
 
 func newSlashCommandContext(
@@ -148,6 +145,7 @@ func newSlashCommandContext(
 	startedAt time.Time,
 	mode agent.ExecutionMode,
 	activeModelID string,
+	subagentModelID string,
 	cwd string,
 	messages []api.Message,
 	client *api.LLMClient,
@@ -164,12 +162,13 @@ func newSlashCommandContext(
 		command:         strings.ToLower(strings.TrimSpace(payload.Command)),
 		args:            strings.TrimSpace(payload.Args),
 		state: slashCommandState{
-			SessionID:     sessionID,
-			StartedAt:     startedAt,
-			Mode:          mode,
-			ActiveModelID: activeModelID,
-			CWD:           cwd,
-			Messages:      messages,
+			SessionID:       sessionID,
+			StartedAt:       startedAt,
+			Mode:            mode,
+			ActiveModelID:   activeModelID,
+			SubagentModelID: subagentModelID,
+			CWD:             cwd,
+			Messages:        messages,
 		},
 		client: client,
 	}
@@ -182,14 +181,15 @@ func lookupSlashCommandHandler(command string) (slashCommandHandler, bool) {
 
 func (cmd *slashCommandContext) persistState() error {
 	return persistSessionState(cmd.store, sessionStateParams{
-		SessionID: cmd.state.SessionID,
-		CreatedAt: cmd.state.StartedAt,
-		Mode:      cmd.state.Mode,
-		Model:     cmd.state.ActiveModelID,
-		CWD:       cmd.state.CWD,
-		Branch:    agent.LoadTurnContext().GitBranch,
-		Tracker:   cmd.tracker,
-		Messages:  cmd.state.Messages,
+		SessionID:     cmd.state.SessionID,
+		CreatedAt:     cmd.state.StartedAt,
+		Mode:          cmd.state.Mode,
+		Model:         cmd.state.ActiveModelID,
+		SubagentModel: cmd.state.SubagentModelID,
+		CWD:           cmd.state.CWD,
+		Branch:        agent.LoadTurnContext().GitBranch,
+		Tracker:       cmd.tracker,
+		Messages:      cmd.state.Messages,
 	})
 }
 
@@ -232,6 +232,7 @@ func handleConnectSlashCommand(cmd *slashCommandContext) error {
 	nextClient = wrapClientWithDebug(nextClient)
 	*cmd.client = nextClient
 	cmd.state.ActiveModelID = modelRef(result.Provider, nextClient.ModelID())
+	cmd.state.SubagentModelID = defaultSessionSubagentModel(result.Config, cmd.state.ActiveModelID)
 	if err := emitToolUseCapabilityNotice(cmd.bridge, cmd.state.ActiveModelID, *cmd.client, nil); err != nil {
 		return err
 	}
@@ -371,7 +372,7 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 	selected := modelSelectionChoice{Model: strings.TrimSpace(cmd.args)}
 	if selected.Model == "" {
 		var err error
-		selected, err = promptModelSelection(cmd)
+		selected, err = promptModelSelection(cmd, cmd.state.ActiveModelID)
 		if err != nil {
 			return err
 		}
@@ -425,6 +426,54 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set model to %s", cmd.state.ActiveModelID))
 }
 
+func handleSubagentSlashCommand(cmd *slashCommandContext) error {
+	currentSelection := strings.TrimSpace(cmd.state.SubagentModelID)
+	if currentSelection == "" {
+		currentSelection = defaultSessionSubagentModel(config.Load(), cmd.state.ActiveModelID)
+	}
+
+	selected := modelSelectionChoice{Model: strings.TrimSpace(cmd.args)}
+	if selected.Model == "" {
+		var err error
+		selected, err = promptModelSelection(cmd, currentSelection)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(selected.Model) == "" {
+			return emitTextResponse(cmd.bridge, "Subagent model selection cancelled.")
+		}
+	}
+
+	switch {
+	case strings.EqualFold(selected.Model, "help"), strings.EqualFold(selected.Model, "status"), strings.EqualFold(selected.Model, "current"):
+		return emitTextResponse(cmd.bridge, formatSubagentHelpText(currentSelection))
+	case strings.EqualFold(selected.Model, "default"):
+		cmd.state.SubagentModelID = defaultSessionSubagentModel(config.Load(), cmd.state.ActiveModelID)
+		if err := cmd.persistState(); err != nil {
+			return err
+		}
+		return emitTextResponse(cmd.bridge, fmt.Sprintf("Reset subagent model to %s", formatModelSelectionLabel(cmd.state.SubagentModelID)))
+	}
+
+	selectedModel, err := normalizeModelSlashInput(selected.Model)
+	if err != nil {
+		return emitTextResponse(cmd.bridge, err.Error())
+	}
+
+	currentProvider, _ := config.ParseModel(cmd.state.ActiveModelID)
+	providerHint := strings.TrimSpace(selected.Provider)
+	provider, model := resolveModelSelection(selectedModel, currentProvider)
+	if normalizeProvider(currentProvider) != "github-copilot" && providerHint != "" {
+		provider = normalizeProvider(providerHint)
+		model = selectedModel
+	}
+	cmd.state.SubagentModelID = modelRef(provider, model)
+	if err := cmd.persistState(); err != nil {
+		return err
+	}
+	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set subagent model to %s", formatModelSelectionLabel(cmd.state.SubagentModelID)))
+}
+
 func normalizeModelSlashInput(input string) (string, error) {
 	compact := strings.TrimSpace(input)
 	if compact == "" {
@@ -436,8 +485,8 @@ func normalizeModelSlashInput(input string) (string, error) {
 	return compact, nil
 }
 
-func promptModelSelection(cmd *slashCommandContext) (modelSelectionChoice, error) {
-	activeModelID := strings.TrimSpace(cmd.state.ActiveModelID)
+func promptModelSelection(cmd *slashCommandContext, currentSelection string) (modelSelectionChoice, error) {
+	activeModelID := strings.TrimSpace(currentSelection)
 	_, activeModel := config.ParseModel(activeModelID)
 	if strings.TrimSpace(activeModel) == "" {
 		activeModel = activeModelID
@@ -462,7 +511,7 @@ func promptModelSelection(cmd *slashCommandContext) (modelSelectionChoice, error
 	requestID := fmt.Sprintf("model-%d", time.Now().UnixNano())
 	if err := cmd.bridge.Emit(ipc.EventModelSelectionRequested, ipc.ModelSelectionRequestedPayload{
 		RequestID:    requestID,
-		CurrentModel: cmd.state.ActiveModelID,
+		CurrentModel: currentSelection,
 		Options:      options,
 	}); err != nil {
 		return modelSelectionChoice{}, err
@@ -616,6 +665,10 @@ func handleResumeSlashCommand(cmd *slashCommandContext) error {
 			return err
 		}
 	}
+	cmd.state.SubagentModelID = strings.TrimSpace(restored.Metadata.SubagentModel)
+	if cmd.state.SubagentModelID == "" {
+		cmd.state.SubagentModelID = defaultSessionSubagentModel(config.Load(), cmd.state.ActiveModelID)
+	}
 
 	if restored.Metadata.CWD != "" {
 		if err := os.Chdir(restored.Metadata.CWD); err == nil {
@@ -729,14 +782,15 @@ func handleClearSlashCommand(cmd *slashCommandContext) error {
 	// Archive the current session before clearing
 	if len(cmd.state.Messages) > 0 {
 		if err := persistSessionState(cmd.store, sessionStateParams{
-			SessionID: cmd.state.SessionID,
-			CreatedAt: cmd.state.StartedAt,
-			Mode:      cmd.state.Mode,
-			Model:     cmd.state.ActiveModelID,
-			CWD:       cmd.state.CWD,
-			Branch:    agent.LoadTurnContext().GitBranch,
-			Tracker:   cmd.tracker,
-			Messages:  cmd.state.Messages,
+			SessionID:     cmd.state.SessionID,
+			CreatedAt:     cmd.state.StartedAt,
+			Mode:          cmd.state.Mode,
+			Model:         cmd.state.ActiveModelID,
+			SubagentModel: cmd.state.SubagentModelID,
+			CWD:           cmd.state.CWD,
+			Branch:        agent.LoadTurnContext().GitBranch,
+			Tracker:       cmd.tracker,
+			Messages:      cmd.state.Messages,
 		}); err != nil {
 			return err
 		}
@@ -751,6 +805,7 @@ func handleClearSlashCommand(cmd *slashCommandContext) error {
 	}
 	cmd.state.SessionID = newID
 	cmd.state.StartedAt = time.Now()
+	cmd.state.SubagentModelID = defaultSessionSubagentModel(config.Load(), cmd.state.ActiveModelID)
 	if err := rebindDebugSession(cmd); err != nil && debuglog.IsEnabled() {
 		appendSlashResponse(cmd.bridge, fmt.Sprintf("Debug logging rebind failed: %v\n\n", err))
 	}
@@ -774,7 +829,7 @@ func handleHelpSlashCommand(cmd *slashCommandContext) error {
 }
 
 func handleStatusSlashCommand(cmd *slashCommandContext) error {
-	statusText := formatStatusText(cmd.state.SessionID, cmd.state.StartedAt, cmd.state.Mode, cmd.state.ActiveModelID, cmd.state.CWD, len(cmd.state.Messages), cmd.tracker)
+	statusText := formatStatusText(cmd.state.SessionID, cmd.state.StartedAt, cmd.state.Mode, cmd.state.ActiveModelID, cmd.state.SubagentModelID, cmd.state.CWD, len(cmd.state.Messages), cmd.tracker)
 	return emitTextResponse(cmd.bridge, statusText)
 }
 

@@ -161,14 +161,15 @@ func truncateOutputPreview(output string, previewLen int, artifactPath string, t
 }
 
 type sessionStateParams struct {
-	SessionID string
-	CreatedAt time.Time
-	Mode      agent.ExecutionMode
-	Model     string
-	CWD       string
-	Branch    string
-	Tracker   *costpkg.Tracker
-	Messages  []api.Message
+	SessionID     string
+	CreatedAt     time.Time
+	Mode          agent.ExecutionMode
+	Model         string
+	SubagentModel string
+	CWD           string
+	Branch        string
+	Tracker       *costpkg.Tracker
+	Messages      []api.Message
 }
 
 type compactionSummarizer struct {
@@ -337,20 +338,25 @@ func persistSessionState(store *session.Store, params sessionStateParams) error 
 	}
 
 	title := ""
+	subagentModel := strings.TrimSpace(params.SubagentModel)
 	if existing, err := store.LoadMetadata(params.SessionID); err == nil {
 		title = existing.Title
+		if subagentModel == "" {
+			subagentModel = strings.TrimSpace(existing.SubagentModel)
+		}
 	}
 
 	return store.SaveMetadata(session.Metadata{
-		SessionID:    params.SessionID,
-		CreatedAt:    params.CreatedAt,
-		UpdatedAt:    time.Now(),
-		Mode:         string(params.Mode),
-		Model:        params.Model,
-		CWD:          params.CWD,
-		Branch:       params.Branch,
-		TotalCostUSD: totalCost,
-		Title:        title,
+		SessionID:     params.SessionID,
+		CreatedAt:     params.CreatedAt,
+		UpdatedAt:     time.Now(),
+		Mode:          string(params.Mode),
+		Model:         params.Model,
+		SubagentModel: subagentModel,
+		CWD:           params.CWD,
+		Branch:        params.Branch,
+		TotalCostUSD:  totalCost,
+		Title:         title,
 	})
 }
 

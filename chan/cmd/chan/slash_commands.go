@@ -50,6 +50,12 @@ var slashCommandCatalog = []slashCommandDescriptor{
 		TakesArguments: true,
 	},
 	{
+		Name:           "subagent",
+		Description:    "Show or switch the session subagent model",
+		Usage:          "/subagent [model|default|help]",
+		TakesArguments: true,
+	},
+	{
 		Name:           "reasoning",
 		Description:    "Show or set GPT-5 reasoning effort",
 		Usage:          "/reasoning [low|medium|high|xhigh|default]",
@@ -147,6 +153,7 @@ func handleSlashCommand(
 	startedAt time.Time,
 	mode agent.ExecutionMode,
 	activeModelID string,
+	subagentModelID string,
 	cwd string,
 	messages []api.Message,
 	client *api.LLMClient,
@@ -165,6 +172,7 @@ func handleSlashCommand(
 		startedAt,
 		mode,
 		activeModelID,
+		subagentModelID,
 		cwd,
 		messages,
 		client,
@@ -350,17 +358,18 @@ func formatHelpText() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func formatStatusText(sessionID string, startedAt time.Time, mode agent.ExecutionMode, model string, cwd string, msgCount int, tracker *costpkg.Tracker) string {
+func formatStatusText(sessionID string, startedAt time.Time, mode agent.ExecutionMode, model string, subagentModel string, cwd string, msgCount int, tracker *costpkg.Tracker) string {
 	elapsed := time.Since(startedAt).Round(time.Second)
 	snap := tracker.Snapshot()
 	reasoning := describeReasoningEffort(strings.TrimSpace(config.Load().ReasoningEffort), model)
 	return fmt.Sprintf(
-		"Session: %s\nStarted: %s (%s ago)\nMode: %s\nModel: %s\nReasoning: %s\nCWD: %s\nMessages: %d\nCost: $%.4f\nTokens: %d in / %d out",
+		"Session: %s\nStarted: %s (%s ago)\nMode: %s\nModel: %s\nSubagent: %s\nReasoning: %s\nCWD: %s\nMessages: %d\nCost: $%.4f\nTokens: %d in / %d out",
 		sessionID,
 		startedAt.Format(time.RFC3339),
 		elapsed,
 		string(mode),
-		model,
+		formatModelSelectionLabel(model),
+		formatModelSelectionLabel(subagentModel),
 		reasoning,
 		cwd,
 		msgCount,
@@ -368,6 +377,53 @@ func formatStatusText(sessionID string, startedAt time.Time, mode agent.Executio
 		snap.TotalInputTokens,
 		snap.TotalOutputTokens,
 	)
+}
+
+func formatModelSelectionLabel(selection string) string {
+	provider, model := config.ParseModel(strings.TrimSpace(selection))
+	if strings.TrimSpace(model) == "" {
+		model = provider
+	}
+	if strings.TrimSpace(model) == "" {
+		return "unknown model"
+	}
+	return model
+}
+
+func formatSubagentHelpText(currentSelection string) string {
+	return fmt.Sprintf(
+		"Current subagent model: %s\nUsage: /subagent [model|default|help]\nRun /subagent with no arguments to open the model picker.",
+		formatModelSelectionLabel(currentSelection),
+	)
+}
+
+func defaultSessionSubagentModel(cfg config.Config, activeModelID string) string {
+	selection := strings.TrimSpace(cfg.SubagentModel)
+	if selection != "" {
+		provider, model := config.ParseModel(selection)
+		if strings.TrimSpace(model) == "" && strings.TrimSpace(provider) != "" {
+			model = provider
+			provider = ""
+		}
+		if strings.TrimSpace(model) == "" {
+			return api.GitHubCopilotDefaultSubagentModel
+		}
+
+		activeProvider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
+		if strings.TrimSpace(provider) == "" && normalizeProvider(activeProvider) == "github-copilot" {
+			return modelRef("github-copilot", model)
+		}
+		if strings.TrimSpace(provider) != "" {
+			return modelRef(provider, model)
+		}
+		return model
+	}
+
+	activeProvider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
+	if normalizeProvider(activeProvider) == "github-copilot" {
+		return modelRef("github-copilot", api.GitHubCopilotDefaultSubagentModel)
+	}
+	return api.GitHubCopilotDefaultSubagentModel
 }
 
 func formatSessionList(sessions []session.Metadata, currentID string) string {

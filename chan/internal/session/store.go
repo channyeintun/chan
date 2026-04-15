@@ -15,15 +15,16 @@ import (
 
 // Metadata holds session state for persistence and resume.
 type Metadata struct {
-	SessionID    string    `json:"session_id"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Mode         string    `json:"mode"`
-	Model        string    `json:"model"`
-	CWD          string    `json:"cwd"`
-	Branch       string    `json:"branch"`
-	TotalCostUSD float64   `json:"total_cost_usd"`
-	Title        string    `json:"title,omitempty"`
+	SessionID     string    `json:"session_id"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Mode          string    `json:"mode"`
+	Model         string    `json:"model"`
+	SubagentModel string    `json:"subagent_model,omitempty"`
+	CWD           string    `json:"cwd"`
+	Branch        string    `json:"branch"`
+	TotalCostUSD  float64   `json:"total_cost_usd"`
+	Title         string    `json:"title,omitempty"`
 }
 
 // Store handles session transcript persistence.

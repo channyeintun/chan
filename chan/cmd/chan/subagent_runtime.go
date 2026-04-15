@@ -110,6 +110,7 @@ func makeSubagentRunner(
 	artifactManager *artifactspkg.Manager,
 	hookRunner *hooks.Runner,
 	modelState *activeModelState,
+	subagentModelState *activeSubagentModelState,
 	cwd string,
 ) toolpkg.AgentRunner {
 	return func(ctx context.Context, req toolpkg.AgentRunRequest) (toolpkg.AgentRunResult, error) {
@@ -118,7 +119,7 @@ func makeSubagentRunner(
 			return toolpkg.AgentRunResult{}, fmt.Errorf("agent tool is unavailable: model client is not initialized")
 		}
 
-		childClient, childActiveModelID, err := resolveSubagentClient(client, activeModelID)
+		childClient, childActiveModelID, err := resolveSubagentClient(client, activeModelID, subagentModelState)
 		if err != nil {
 			return toolpkg.AgentRunResult{}, err
 		}
@@ -155,7 +156,7 @@ func makeSubagentRunner(
 	}
 }
 
-func resolveSubagentClient(parent api.LLMClient, activeModelID string) (api.LLMClient, string, error) {
+func resolveSubagentClient(parent api.LLMClient, activeModelID string, subagentModelState *activeSubagentModelState) (api.LLMClient, string, error) {
 	provider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
 	provider = normalizeProvider(provider)
 	if provider != "github-copilot" {
@@ -164,8 +165,13 @@ func resolveSubagentClient(parent api.LLMClient, activeModelID string) (api.LLMC
 
 	cfg := config.Load()
 	selection := strings.TrimSpace(cfg.SubagentModel)
+	if subagentModelState != nil {
+		if current := strings.TrimSpace(subagentModelState.Get()); current != "" {
+			selection = current
+		}
+	}
 	if selection == "" {
-		selection = modelRef(provider, api.GitHubCopilotDefaultSubagentModel)
+		selection = defaultSessionSubagentModel(cfg, activeModelID)
 	}
 
 	childProvider, childModel := resolveModelSelection(selection, provider)
@@ -212,27 +218,29 @@ func executeSubagent(
 	lifecycle := &childLifecycleTracker{}
 
 	if err := persistSessionState(sessionStore, sessionStateParams{
-		SessionID: childSessionID,
-		CreatedAt: childStartedAt,
-		Mode:      childMode,
-		Model:     activeModelID,
-		CWD:       cwd,
-		Branch:    agent.LoadTurnContext().GitBranch,
-		Tracker:   childTracker,
-		Messages:  childMessages,
+		SessionID:     childSessionID,
+		CreatedAt:     childStartedAt,
+		Mode:          childMode,
+		Model:         activeModelID,
+		SubagentModel: "",
+		CWD:           cwd,
+		Branch:        agent.LoadTurnContext().GitBranch,
+		Tracker:       childTracker,
+		Messages:      childMessages,
 	}); err != nil {
 		return toolpkg.AgentRunResult{}, err
 	}
 	_ = sessionStore.SaveMetadata(session.Metadata{
-		SessionID:    childSessionID,
-		CreatedAt:    childStartedAt,
-		UpdatedAt:    childStartedAt,
-		Mode:         string(childMode),
-		Model:        activeModelID,
-		CWD:          cwd,
-		Branch:       agent.LoadTurnContext().GitBranch,
-		TotalCostUSD: 0,
-		Title:        req.Description,
+		SessionID:     childSessionID,
+		CreatedAt:     childStartedAt,
+		UpdatedAt:     childStartedAt,
+		Mode:          string(childMode),
+		Model:         activeModelID,
+		SubagentModel: "",
+		CWD:           cwd,
+		Branch:        agent.LoadTurnContext().GitBranch,
+		TotalCostUSD:  0,
+		Title:         req.Description,
 	})
 
 	childDeps := agent.QueryDeps{
@@ -264,14 +272,15 @@ func executeSubagent(
 		PersistMessages: func(updated []api.Message) {
 			childMessages = updated
 			_ = persistSessionState(sessionStore, sessionStateParams{
-				SessionID: childSessionID,
-				CreatedAt: childStartedAt,
-				Mode:      childMode,
-				Model:     activeModelID,
-				CWD:       cwd,
-				Branch:    agent.LoadTurnContext().GitBranch,
-				Tracker:   childTracker,
-				Messages:  childMessages,
+				SessionID:     childSessionID,
+				CreatedAt:     childStartedAt,
+				Mode:          childMode,
+				Model:         activeModelID,
+				SubagentModel: "",
+				CWD:           cwd,
+				Branch:        agent.LoadTurnContext().GitBranch,
+				Tracker:       childTracker,
+				Messages:      childMessages,
 			})
 		},
 		Clock: time.Now,
@@ -306,14 +315,15 @@ func executeSubagent(
 	}
 
 	if err := persistSessionState(sessionStore, sessionStateParams{
-		SessionID: childSessionID,
-		CreatedAt: childStartedAt,
-		Mode:      childMode,
-		Model:     activeModelID,
-		CWD:       cwd,
-		Branch:    agent.LoadTurnContext().GitBranch,
-		Tracker:   childTracker,
-		Messages:  childMessages,
+		SessionID:     childSessionID,
+		CreatedAt:     childStartedAt,
+		Mode:          childMode,
+		Model:         activeModelID,
+		SubagentModel: "",
+		CWD:           cwd,
+		Branch:        agent.LoadTurnContext().GitBranch,
+		Tracker:       childTracker,
+		Messages:      childMessages,
 	}); err != nil {
 		return toolpkg.AgentRunResult{}, err
 	}

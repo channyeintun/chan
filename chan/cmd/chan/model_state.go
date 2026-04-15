@@ -12,6 +12,11 @@ type activeModelState struct {
 	modelID string
 }
 
+type activeSubagentModelState struct {
+	mu      sync.RWMutex
+	modelID string
+}
+
 func newActiveModelState(client api.LLMClient, modelID string) *activeModelState {
 	return &activeModelState{client: client, modelID: modelID}
 }
@@ -32,5 +37,27 @@ func (s *activeModelState) Set(client api.LLMClient, modelID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.client = client
+	s.modelID = modelID
+}
+
+func newActiveSubagentModelState(modelID string) *activeSubagentModelState {
+	return &activeSubagentModelState{modelID: modelID}
+}
+
+func (s *activeSubagentModelState) Get() string {
+	if s == nil {
+		return ""
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.modelID
+}
+
+func (s *activeSubagentModelState) Set(modelID string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.modelID = modelID
 }
