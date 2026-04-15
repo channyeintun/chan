@@ -113,7 +113,12 @@ func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string
 
 	scores := make(map[string]int)
 	reasons := make(map[string]string)
+	seedFallbackCandidates(anchors, cwd, gitStatusText, sessionTouched, scores, reasons)
+	edgesExpanded := expandFallbackCandidates(cwd, anchors, scores, reasons)
+	return rankFallbackCandidates(scores, reasons), edgesExpanded
+}
 
+func seedFallbackCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string, sessionTouched []string, scores map[string]int, reasons map[string]string) {
 	for _, anchor := range anchors {
 		if anchor.FilePath == "" {
 			continue
@@ -134,7 +139,9 @@ func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string
 	}
 
 	scoreErrorAnchors(anchors, scores, reasons)
+}
 
+func expandFallbackCandidates(cwd string, anchors []RetrievalAnchor, scores map[string]int, reasons map[string]string) int {
 	// Expand one hop through structural edges from the initial seed set.
 	seedPaths := make([]string, 0, len(scores))
 	for path := range scores {
@@ -142,8 +149,10 @@ func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string
 	}
 	beforeExpand := len(scores)
 	expandStructuralEdges(seedPaths, cwd, scores, reasons)
-	edgesExpanded := len(scores) - beforeExpand
+	return len(scores) - beforeExpand
+}
 
+func rankFallbackCandidates(scores map[string]int, reasons map[string]string) []RetrievalCandidate {
 	candidates := make([]RetrievalCandidate, 0, len(scores))
 	for path, score := range scores {
 		candidates = append(candidates, RetrievalCandidate{
@@ -161,7 +170,7 @@ func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string
 	if len(candidates) > retrievalMaxCandidates {
 		candidates = candidates[:retrievalMaxCandidates]
 	}
-	return candidates, edgesExpanded
+	return candidates
 }
 
 // ReadLiveSnippets reads the top-scoring candidates from disk within the token budget.

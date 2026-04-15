@@ -118,3 +118,8 @@ func (b *Bridge) EmitError(message string, recoverable bool) error {
 		Recoverable: recoverable,
 	})
 }
+
+// EmitNotice sends a non-error status notice.
+func (b *Bridge) EmitNotice(message string) error {
+	return b.Emit(EventNotice, NoticePayload{Message: message})
+}

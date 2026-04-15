@@ -1,6 +1,8 @@
 package skills
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -33,29 +35,40 @@ var ignoredPromptTokens = map[string]struct{}{
 // LoadAll discovers and loads skills from both user-global and project-local directories.
 func LoadAll(projectRoot string) ([]Skill, error) {
 	var skills []Skill
+	var loadErrs []error
 
 	// User-global: ~/.config/chan/agents/*.md
 	home, _ := os.UserHomeDir()
 	globalDir := filepath.Join(home, ".config", "chan", "agents")
-	globalSkills, _ := loadFromDir(globalDir)
+	globalSkills, err := loadFromDir(globalDir)
+	if err != nil {
+		loadErrs = append(loadErrs, fmt.Errorf("load global skills: %w", err))
+	}
 	skills = append(skills, globalSkills...)
 
 	// Project-local: .agents/*.md
 	if projectRoot != "" {
 		localDir := filepath.Join(projectRoot, ".agents")
-		localSkills, _ := loadFromDir(localDir)
+		localSkills, err := loadFromDir(localDir)
+		if err != nil {
+			loadErrs = append(loadErrs, fmt.Errorf("load project skills: %w", err))
+		}
 		skills = append(skills, localSkills...)
 	}
 
-	return skills, nil
+	return skills, errors.Join(loadErrs...)
 }
 
 func loadFromDir(dir string) ([]Skill, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	var skills []Skill
+	var loadErrs []error
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
@@ -63,11 +76,12 @@ func loadFromDir(dir string) ([]Skill, error) {
 		path := filepath.Join(dir, entry.Name())
 		skill, err := loadSkillFile(path)
 		if err != nil {
+			loadErrs = append(loadErrs, fmt.Errorf("load %s: %w", path, err))
 			continue
 		}
 		skills = append(skills, skill)
 	}
-	return skills, nil
+	return skills, errors.Join(loadErrs...)
 }
 
 func loadSkillFile(path string) (Skill, error) {

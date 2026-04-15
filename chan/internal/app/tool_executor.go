@@ -38,246 +38,379 @@ func executeToolCalls(
 	turnStats *turnExecutionStats,
 	calls []api.ToolCall,
 ) ([]api.ToolResult, error) {
-	results := make([]api.ToolResult, len(calls))
-	approved := make([]toolpkg.PendingCall, 0, len(calls))
-	approvalFeedback := make(map[int]string, len(calls))
+	execState := newToolExecutionState(calls, maxOutputTokens, turnStats)
+	if err := prepareToolCalls(ctx, bridge, router, registry, permissionCtx, planner, hookRunner, sessionID, calls, execState); err != nil {
+		return nil, err
+	}
+	if err := executeApprovedToolBatches(ctx, bridge, tracker, artifactManager, hookRunner, sessionID, turnMetrics, turnStats, calls, execState); err != nil {
+		return nil, err
+	}
+	if execState.pauseForPlanReview {
+		return compactToolResults(execState.results), &agent.PauseForPlanReviewError{}
+	}
+	return execState.results, nil
+}
+
+type toolExecutionState struct {
+	results            []api.ToolResult
+	approved           []toolpkg.PendingCall
+	approvalFeedback   map[int]string
+	budget             toolpkg.ResultBudget
+	aggregateBudget    *toolpkg.AggregateResultBudget
+	pauseForPlanReview bool
+	planSavedThisTurn  bool
+}
+
+func newToolExecutionState(calls []api.ToolCall, maxOutputTokens int, turnStats *turnExecutionStats) *toolExecutionState {
 	budget := toolpkg.DefaultResultBudgetForModel(filepath.Join(os.TempDir(), "chan-session"), maxOutputTokens)
 	aggregateBudget := toolpkg.NewAggregateResultBudget(budget)
-	pauseForPlanReview := false
-	planSavedThisTurn := false
 	if turnStats != nil {
 		turnStats.AggregateBudgetChars = aggregateBudget.MaxChars()
 	}
+	return &toolExecutionState{
+		results:          make([]api.ToolResult, len(calls)),
+		approved:         make([]toolpkg.PendingCall, 0, len(calls)),
+		approvalFeedback: make(map[int]string, len(calls)),
+		budget:           budget,
+		aggregateBudget:  aggregateBudget,
+	}
+}
 
+func prepareToolCalls(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	router *ipc.MessageRouter,
+	registry *toolpkg.Registry,
+	permissionCtx *permissions.Context,
+	planner *agent.Planner,
+	hookRunner *hooks.Runner,
+	sessionID string,
+	calls []api.ToolCall,
+	state *toolExecutionState,
+) error {
 	for index, call := range calls {
-		call, err := normalizeToolCall(call)
-		if err != nil {
-			results[index] = api.ToolResult{ToolCallID: calls[index].ID, Output: err.Error(), IsError: true}
-			if emitErr := emitToolError(bridge, calls[index], err.Error(), toolpkg.ToolOutput{}, err); emitErr != nil {
-				return nil, emitErr
-			}
-			continue
-		}
-
-		tool, err := registry.Get(call.Name)
-		if err != nil {
-			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
-			if emitErr := emitToolError(bridge, call, err.Error(), toolpkg.ToolOutput{}, err); emitErr != nil {
-				return nil, emitErr
-			}
-			continue
-		}
-
-		input, err := decodeToolInput(call)
-		if err != nil {
-			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
-			if emitErr := emitToolError(bridge, call, err.Error(), toolpkg.ToolOutput{}, err); emitErr != nil {
-				return nil, emitErr
-			}
-			continue
-		}
-
-		if err := toolpkg.ValidateToolCall(tool, input); err != nil {
-			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
-			if emitErr := emitToolError(bridge, call, err.Error(), toolpkg.ToolOutput{}, err); emitErr != nil {
-				return nil, emitErr
-			}
-			continue
-		}
-
-		pendingCall := toolpkg.PendingCall{Index: index, Tool: tool, Input: input}
-		if planSavedThisTurn && pendingCall.Tool.Permission() == toolpkg.PermissionWrite {
-			pauseForPlanReview = true
-			break
-		}
-		if err := planner.ValidateTool(ctx, pendingCall.Tool.Name(), pendingCall.Tool.Permission()); err != nil {
-			var reviewRequired *agent.PlanReviewRequiredError
-			if errors.As(err, &reviewRequired) {
-				pauseForPlanReview = true
-				break
-			}
-
-			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
-			if emitErr := emitToolError(bridge, call, err.Error(), toolpkg.ToolOutput{}, err); emitErr != nil {
-				return nil, emitErr
-			}
-			continue
-		}
-		authorization, err := authorizeToolCall(ctx, bridge, router, permissionCtx, call.ID, pendingCall)
-		if err != nil {
-			return nil, err
-		}
-		if !authorization.Allowed {
-			results[index] = api.ToolResult{ToolCallID: call.ID, Output: authorization.DenyReason, IsError: true}
-			if emitErr := emitToolError(bridge, call, authorization.DenyReason, toolpkg.ToolOutput{}, nil); emitErr != nil {
-				return nil, emitErr
-			}
-			continue
-		}
-		if authorization.Feedback != "" {
-			approvalFeedback[index] = authorization.Feedback
-		}
-
-		// Fire pre_tool_use hook
-		hookDenied := false
-		if hookRunner != nil {
-			responses, _ := hookRunner.Run(ctx, hooks.Payload{
-				Type:      hooks.HookPreToolUse,
-				SessionID: sessionID,
-				ToolName:  call.Name,
-				ToolInput: call.Input,
-			})
-			for _, resp := range responses {
-				if resp.Action == "deny" {
-					reason := resp.Message
-					if reason == "" {
-						reason = "blocked by pre_tool_use hook"
-					}
-					reason = appendPermissionFeedback(reason, approvalFeedback[index])
-					results[index] = api.ToolResult{ToolCallID: call.ID, Output: reason, IsError: true}
-					_ = emitToolError(bridge, call, reason, toolpkg.ToolOutput{}, nil)
-					hookDenied = true
-					break
-				}
-			}
-		}
-		if hookDenied {
-			continue
-		}
-
-		if err := bridge.Emit(ipc.EventToolStart, ipc.ToolStartPayload{
-			ToolID: call.ID,
-			Name:   call.Name,
-			Input:  call.Input,
-		}); err != nil {
-			return nil, err
-		}
-
-		approved = append(approved, pendingCall)
-		if pendingCall.Tool.Name() == "save_implementation_plan" {
-			planSavedThisTurn = true
+		shouldContinue, err := prepareToolCall(ctx, bridge, router, registry, permissionCtx, planner, hookRunner, sessionID, calls, index, call, state)
+		if err != nil || !shouldContinue {
+			return err
 		}
 	}
+	return nil
+}
 
-	for _, batch := range toolpkg.PartitionBatches(approved) {
+func prepareToolCall(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	router *ipc.MessageRouter,
+	registry *toolpkg.Registry,
+	permissionCtx *permissions.Context,
+	planner *agent.Planner,
+	hookRunner *hooks.Runner,
+	sessionID string,
+	calls []api.ToolCall,
+	index int,
+	call api.ToolCall,
+	state *toolExecutionState,
+) (bool, error) {
+	call, tool, input, pendingCall, err := resolvePendingToolCall(registry, index, call)
+	if err != nil {
+		return true, recordToolPreparationError(bridge, state.results, index, calls[index], err)
+	}
+	if state.planSavedThisTurn && pendingCall.Tool.Permission() == toolpkg.PermissionWrite {
+		state.pauseForPlanReview = true
+		return false, nil
+	}
+	allowed, err := validatePlannedTool(ctx, planner, call, pendingCall, state.results, bridge)
+	if err != nil {
+		var reviewRequired *agent.PlanReviewRequiredError
+		if errors.As(err, &reviewRequired) {
+			state.pauseForPlanReview = true
+			return false, nil
+		}
+		return true, nil
+	}
+	if !allowed {
+		return true, nil
+	}
+	authorization, err := authorizeToolCall(ctx, bridge, router, permissionCtx, call.ID, pendingCall)
+	if err != nil {
+		return false, err
+	}
+	if !authorization.Allowed {
+		state.results[index] = api.ToolResult{ToolCallID: call.ID, Output: authorization.DenyReason, IsError: true}
+		return true, emitToolError(bridge, call, authorization.DenyReason, toolpkg.ToolOutput{}, nil)
+	}
+	if authorization.Feedback != "" {
+		state.approvalFeedback[index] = authorization.Feedback
+	}
+	hookDenied, err := runPreToolUseHooks(ctx, hookRunner, sessionID, call, index, state.results, state.approvalFeedback[index], bridge)
+	if err != nil {
+		return false, err
+	}
+	if hookDenied {
+		return true, nil
+	}
+	if err := emitToolStart(bridge, call); err != nil {
+		return false, err
+	}
+	state.approved = append(state.approved, toolpkg.PendingCall{Index: index, Tool: tool, Input: input})
+	if pendingCall.Tool.Name() == "save_implementation_plan" {
+		state.planSavedThisTurn = true
+	}
+	return true, nil
+}
+
+func resolvePendingToolCall(registry *toolpkg.Registry, index int, call api.ToolCall) (api.ToolCall, toolpkg.Tool, toolpkg.ToolInput, toolpkg.PendingCall, error) {
+	normalizedCall, err := normalizeToolCall(call)
+	if err != nil {
+		return api.ToolCall{}, nil, toolpkg.ToolInput{}, toolpkg.PendingCall{}, err
+	}
+	tool, err := registry.Get(normalizedCall.Name)
+	if err != nil {
+		return normalizedCall, nil, toolpkg.ToolInput{}, toolpkg.PendingCall{}, err
+	}
+	input, err := decodeToolInput(normalizedCall)
+	if err != nil {
+		return normalizedCall, nil, toolpkg.ToolInput{}, toolpkg.PendingCall{}, err
+	}
+	if err := toolpkg.ValidateToolCall(tool, input); err != nil {
+		return normalizedCall, nil, toolpkg.ToolInput{}, toolpkg.PendingCall{}, err
+	}
+	pendingCall := toolpkg.PendingCall{Index: index, Tool: tool, Input: input}
+	return normalizedCall, tool, input, pendingCall, nil
+}
+
+func validatePlannedTool(
+	ctx context.Context,
+	planner *agent.Planner,
+	call api.ToolCall,
+	pendingCall toolpkg.PendingCall,
+	results []api.ToolResult,
+	bridge *ipc.Bridge,
+) (bool, error) {
+	if err := planner.ValidateTool(ctx, pendingCall.Tool.Name(), pendingCall.Tool.Permission()); err != nil {
+		var reviewRequired *agent.PlanReviewRequiredError
+		if errors.As(err, &reviewRequired) {
+			return false, err
+		}
+		results[pendingCall.Index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
+		if emitErr := emitToolError(bridge, call, err.Error(), toolpkg.ToolOutput{}, err); emitErr != nil {
+			return false, emitErr
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func runPreToolUseHooks(
+	ctx context.Context,
+	hookRunner *hooks.Runner,
+	sessionID string,
+	call api.ToolCall,
+	index int,
+	results []api.ToolResult,
+	feedback string,
+	bridge *ipc.Bridge,
+) (bool, error) {
+	if hookRunner == nil {
+		return false, nil
+	}
+	responses, _ := hookRunner.Run(ctx, hooks.Payload{
+		Type:      hooks.HookPreToolUse,
+		SessionID: sessionID,
+		ToolName:  call.Name,
+		ToolInput: call.Input,
+	})
+	for _, resp := range responses {
+		if resp.Action != "deny" {
+			continue
+		}
+		reason := resp.Message
+		if reason == "" {
+			reason = "blocked by pre_tool_use hook"
+		}
+		reason = appendPermissionFeedback(reason, feedback)
+		results[index] = api.ToolResult{ToolCallID: call.ID, Output: reason, IsError: true}
+		return true, emitToolError(bridge, call, reason, toolpkg.ToolOutput{}, nil)
+	}
+	return false, nil
+}
+
+func emitToolStart(bridge *ipc.Bridge, call api.ToolCall) error {
+	return bridge.Emit(ipc.EventToolStart, ipc.ToolStartPayload{ToolID: call.ID, Name: call.Name, Input: call.Input})
+}
+
+func recordToolPreparationError(bridge *ipc.Bridge, results []api.ToolResult, index int, call api.ToolCall, err error) error {
+	results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
+	return emitToolError(bridge, call, err.Error(), toolpkg.ToolOutput{}, err)
+}
+
+func executeApprovedToolBatches(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	tracker *costpkg.Tracker,
+	artifactManager *artifactspkg.Manager,
+	hookRunner *hooks.Runner,
+	sessionID string,
+	turnMetrics *timing.CheckpointRecorder,
+	turnStats *turnExecutionStats,
+	calls []api.ToolCall,
+	state *toolExecutionState,
+) error {
+	for _, batch := range toolpkg.PartitionBatches(state.approved) {
 		batchStart := time.Now()
 		batchResults := toolpkg.ExecuteBatch(ctx, batch)
 		tracker.RecordToolDuration(time.Since(batchStart))
 		for _, result := range batchResults {
-			call := calls[result.Index]
-			toolResult := api.ToolResult{ToolCallID: call.ID, FilePath: result.Output.FilePath}
-			feedback := approvalFeedback[result.Index]
-
-			if result.Err != nil {
-				toolResult.Output = appendPermissionFeedback(result.Err.Error(), feedback)
-				toolResult.IsError = true
-				if err := emitToolError(bridge, call, toolResult.Output, result.Output, result.Err); err != nil {
-					return nil, err
-				}
-				results[result.Index] = toolResult
-				continue
-			}
-
-			output := result.Output.Output
-			spillPath := result.Output.SpillPath
-			truncated := result.Output.Truncated
-			if !result.Output.IsError {
-				budgetedOutput, artifact, budgetInfo, err := budgetToolOutput(ctx, artifactManager, sessionID, budget, aggregateBudget, call, output)
-				output = budgetedOutput
-				if err != nil {
-					if emitErr := bridge.EmitError(fmt.Sprintf("persist tool-log artifact: %v", err), true); emitErr != nil {
-						return nil, emitErr
-					}
-				}
-				if turnStats != nil {
-					turnStats.ToolResultCount++
-					turnStats.ToolInlineChars += budgetInfo.InlineChars
-					if budgetInfo.Spilled {
-						turnStats.ToolSpillCount++
-					}
-					if budgetInfo.AggregateLimited {
-						turnStats.AggregateBudgetSpills++
-					}
-				}
-				if artifact.ID != "" {
-					spillPath = artifact.ContentPath
-					truncated = true
-					if err := emitArtifactCreated(bridge, artifact); err != nil {
-						return nil, err
-					}
-				}
-			}
-			output = appendPermissionFeedback(output, feedback)
-
-			toolResult.Output = output
-			toolResult.IsError = result.Output.IsError
-			results[result.Index] = toolResult
-
-			if result.Output.IsError {
-				if err := emitToolError(bridge, call, output, result.Output, nil); err != nil {
-					return nil, err
-				}
-				continue
-			}
-
-			for _, artifactUpdate := range result.Output.Artifacts {
-				if artifactUpdate.Created {
-					if err := emitArtifactCreated(bridge, artifactUpdate.Artifact); err != nil {
-						return nil, err
-					}
-				}
-				if err := emitArtifactUpdated(bridge, artifactUpdate.Artifact, artifactUpdate.Content); err != nil {
-					return nil, err
-				}
-				if artifactUpdate.Focused {
-					if err := emitArtifactFocusedForTurn(bridge, artifactUpdate.Artifact, turnMetrics); err != nil {
-						return nil, err
-					}
-				}
-			}
-
-			if turnMetrics != nil {
-				if turnMetrics.Mark("first_tool_result") {
-					if err := emitTurnTimingCheckpoint(bridge, turnMetrics, "first_tool_result"); err != nil {
-						return nil, err
-					}
-				}
-			}
-			if err := bridge.Emit(ipc.EventToolResult, ipc.ToolResultPayload{
-				ToolID:      call.ID,
-				Output:      output,
-				Truncated:   truncated || spillPath != "",
-				Name:        call.Name,
-				Input:       call.Input,
-				FilePath:    result.Output.FilePath,
-				Preview:     result.Output.Preview,
-				Insertions:  result.Output.Insertions,
-				Deletions:   result.Output.Deletions,
-				Diagnostics: result.Output.Diagnostics,
-				ErrorKind:   result.Output.ErrorKind,
-				ErrorHint:   result.Output.ErrorHint,
-			}); err != nil {
-				return nil, err
-			}
-
-			// Fire post_tool_use hook
-			if hookRunner != nil {
-				_, _ = hookRunner.Run(ctx, hooks.Payload{
-					Type:      hooks.HookPostToolUse,
-					SessionID: sessionID,
-					ToolName:  call.Name,
-					ToolInput: call.Input,
-					Output:    output,
-				})
+			if err := handleToolBatchResult(ctx, bridge, artifactManager, hookRunner, sessionID, turnMetrics, turnStats, calls[result.Index], result, state); err != nil {
+				return err
 			}
 		}
 	}
+	return nil
+}
 
-	if pauseForPlanReview {
-		return compactToolResults(results), &agent.PauseForPlanReviewError{}
+func handleToolBatchResult(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	artifactManager *artifactspkg.Manager,
+	hookRunner *hooks.Runner,
+	sessionID string,
+	turnMetrics *timing.CheckpointRecorder,
+	turnStats *turnExecutionStats,
+	call api.ToolCall,
+	result toolpkg.IndexedResult,
+	state *toolExecutionState,
+) error {
+	toolResult := api.ToolResult{ToolCallID: call.ID, FilePath: result.Output.FilePath}
+	feedback := state.approvalFeedback[result.Index]
+	if result.Err != nil {
+		toolResult.Output = appendPermissionFeedback(result.Err.Error(), feedback)
+		toolResult.IsError = true
+		state.results[result.Index] = toolResult
+		return emitToolError(bridge, call, toolResult.Output, result.Output, result.Err)
 	}
+	output, truncated, err := finalizeToolOutput(ctx, bridge, artifactManager, sessionID, turnStats, call, result.Output, state, feedback)
+	if err != nil {
+		return err
+	}
+	toolResult.Output = output
+	toolResult.IsError = result.Output.IsError
+	state.results[result.Index] = toolResult
+	if result.Output.IsError {
+		return emitToolError(bridge, call, output, result.Output, nil)
+	}
+	if err := emitToolArtifacts(bridge, result.Output.Artifacts, turnMetrics); err != nil {
+		return err
+	}
+	if err := markFirstToolResult(bridge, turnMetrics); err != nil {
+		return err
+	}
+	if err := bridge.Emit(ipc.EventToolResult, ipc.ToolResultPayload{
+		ToolID:      call.ID,
+		Output:      output,
+		Truncated:   truncated,
+		Name:        call.Name,
+		Input:       call.Input,
+		FilePath:    result.Output.FilePath,
+		Preview:     result.Output.Preview,
+		Insertions:  result.Output.Insertions,
+		Deletions:   result.Output.Deletions,
+		Diagnostics: result.Output.Diagnostics,
+		ErrorKind:   result.Output.ErrorKind,
+		ErrorHint:   result.Output.ErrorHint,
+	}); err != nil {
+		return err
+	}
+	runPostToolUseHooks(ctx, hookRunner, sessionID, call, output)
+	return nil
+}
 
-	return results, nil
+func finalizeToolOutput(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	artifactManager *artifactspkg.Manager,
+	sessionID string,
+	turnStats *turnExecutionStats,
+	call api.ToolCall,
+	output toolpkg.ToolOutput,
+	state *toolExecutionState,
+	feedback string,
+) (string, bool, error) {
+	finalOutput := output.Output
+	spillPath := output.SpillPath
+	truncated := output.Truncated
+	if !output.IsError {
+		budgetedOutput, artifact, budgetInfo, err := budgetToolOutput(ctx, artifactManager, sessionID, state.budget, state.aggregateBudget, call, finalOutput)
+		finalOutput = budgetedOutput
+		if err != nil {
+			if emitErr := bridge.EmitError(fmt.Sprintf("persist tool-log artifact: %v", err), true); emitErr != nil {
+				return "", false, emitErr
+			}
+		}
+		updateTurnToolStats(turnStats, budgetInfo)
+		if artifact.ID != "" {
+			spillPath = artifact.ContentPath
+			truncated = true
+			if err := emitArtifactCreated(bridge, artifact); err != nil {
+				return "", false, err
+			}
+		}
+	}
+	finalOutput = appendPermissionFeedback(finalOutput, feedback)
+	return finalOutput, truncated || spillPath != "", nil
+}
+
+func updateTurnToolStats(turnStats *turnExecutionStats, budgetInfo toolBudgetInfo) {
+	if turnStats == nil {
+		return
+	}
+	turnStats.ToolResultCount++
+	turnStats.ToolInlineChars += budgetInfo.InlineChars
+	if budgetInfo.Spilled {
+		turnStats.ToolSpillCount++
+	}
+	if budgetInfo.AggregateLimited {
+		turnStats.AggregateBudgetSpills++
+	}
+}
+
+func emitToolArtifacts(bridge *ipc.Bridge, updates []toolpkg.ArtifactMutation, turnMetrics *timing.CheckpointRecorder) error {
+	for _, artifactUpdate := range updates {
+		if artifactUpdate.Created {
+			if err := emitArtifactCreated(bridge, artifactUpdate.Artifact); err != nil {
+				return err
+			}
+		}
+		if err := emitArtifactUpdated(bridge, artifactUpdate.Artifact, artifactUpdate.Content); err != nil {
+			return err
+		}
+		if artifactUpdate.Focused {
+			if err := emitArtifactFocusedForTurn(bridge, artifactUpdate.Artifact, turnMetrics); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func markFirstToolResult(bridge *ipc.Bridge, turnMetrics *timing.CheckpointRecorder) error {
+	if turnMetrics == nil || !turnMetrics.Mark("first_tool_result") {
+		return nil
+	}
+	return emitTurnTimingCheckpoint(bridge, turnMetrics, "first_tool_result")
+}
+
+func runPostToolUseHooks(ctx context.Context, hookRunner *hooks.Runner, sessionID string, call api.ToolCall, output string) {
+	if hookRunner == nil {
+		return
+	}
+	_, _ = hookRunner.Run(ctx, hooks.Payload{
+		Type:      hooks.HookPostToolUse,
+		SessionID: sessionID,
+		ToolName:  call.Name,
+		ToolInput: call.Input,
+		Output:    output,
+	})
 }
 
 func compactToolResults(results []api.ToolResult) []api.ToolResult {

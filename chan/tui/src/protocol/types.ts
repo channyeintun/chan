@@ -31,6 +31,7 @@ export type EventType =
   | "background_agent_updated"
   | "ready"
   | "error"
+  | "notice"
   | "session_updated"
   | "session_restored";
 
@@ -305,6 +306,10 @@ export interface ReadyPayload {
 export interface ErrorPayload {
   message: string;
   recoverable: boolean;
+}
+
+export interface NoticePayload {
+  message: string;
 }
 
 export interface ArtifactFocusedPayload {

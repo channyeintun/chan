@@ -241,9 +241,9 @@ func recallMemoryIndexes(
 	files []MemoryFile,
 	currentUserPrompt string,
 	pressure ContextPressureDecision,
-) []MemoryRecallResult {
+) ([]MemoryRecallResult, error) {
 	if recall == nil || strings.TrimSpace(currentUserPrompt) == "" || pressure.SkipMemoryRecall {
-		return nil
+		return nil, nil
 	}
 
 	hasMemoryIndexes := false
@@ -254,17 +254,24 @@ func recallMemoryIndexes(
 		}
 	}
 	if !hasMemoryIndexes {
-		return nil
+		return nil, nil
 	}
 
 	results, err := recall(ctx, files, currentUserPrompt)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("memory recall unavailable: %w", err)
 	}
 	if len(results) == 0 {
+		return nil, nil
+	}
+	return results, nil
+}
+
+func emitNoticeTelemetry(emit func(ipc.StreamEvent) error, message string) error {
+	if emit == nil || strings.TrimSpace(message) == "" {
 		return nil
 	}
-	return results
+	return emit(newEvent(ipc.EventNotice, ipc.NoticePayload{Message: message}))
 }
 
 func emitMemoryRecallTelemetry(

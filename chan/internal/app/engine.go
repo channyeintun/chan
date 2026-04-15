@@ -22,10 +22,7 @@ import (
 	enginepkg "github.com/channyeintun/chan/internal/engine"
 	"github.com/channyeintun/chan/internal/hooks"
 	"github.com/channyeintun/chan/internal/ipc"
-	"github.com/channyeintun/chan/internal/localmodel"
-	memorypkg "github.com/channyeintun/chan/internal/memory"
 	"github.com/channyeintun/chan/internal/session"
-	skillspkg "github.com/channyeintun/chan/internal/skills"
 	"github.com/channyeintun/chan/internal/timing"
 	toolpkg "github.com/channyeintun/chan/internal/tools"
 )
@@ -69,7 +66,6 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	sessionStore := session.NewStore(session.DefaultBaseDir())
 	artifactStore := artifactspkg.NewLocalStore(filepath.Join(filepath.Dir(session.DefaultBaseDir()), "artifacts"))
 	artifactManager := artifactspkg.NewManager(artifactStore)
-	sessionTitleGenerated := false
 	sessionID, err := newSessionID()
 	if err != nil {
 		return err
@@ -157,7 +153,33 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 		Type:      hooks.HookSessionStart,
 		SessionID: sessionID,
 	})
-	queryIndex := 0
+	loopState := &engineLoopState{
+		client:          client,
+		sessionID:       sessionID,
+		sessionDir:      sessionDir,
+		startedAt:       startedAt,
+		mode:            mode,
+		activeModelID:   activeModelID,
+		subagentModelID: subagentModelID,
+		cwd:             cwd,
+		messages:        messages,
+		toolUseNoticeID: toolUseNoticeModelID,
+		titleGenerated:  false,
+	}
+	loopDeps := engineLoopDeps{
+		bridge:             bridge,
+		router:             router,
+		registry:           registry,
+		permissionCtx:      permissionCtx,
+		tracker:            tracker,
+		hookRunner:         hookRunner,
+		sessionStore:       sessionStore,
+		artifactManager:    artifactManager,
+		timingLogger:       timingLogger,
+		modelState:         modelState,
+		subagentModelState: subagentModelState,
+		cfg:                cfg,
+	}
 
 	// Main event loop: read client messages and dispatch
 	for {
@@ -177,357 +199,8 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 				return fmt.Errorf("decode user input: %w", err)
 			}
-			if strings.TrimSpace(payload.Text) == "" && len(payload.Images) == 0 {
-				continue
-			}
-			messageCountBefore := len(messages)
-			queryIndex++
-			turnID := queryIndex
-			turnMetrics := timing.NewCheckpointRecorder(time.Now())
-			turnStats := &turnExecutionStats{}
-			turnStopReason := ""
-			flushTurnMetrics := func(outcome string) {
-				if turnMetrics == nil {
-					return
-				}
-				_ = timingLogger.AppendSnapshot("turn", "query_latency", sessionID, turnID, turnMetrics, map[string]any{
-					"aggregate_tool_budget_chars": turnStats.AggregateBudgetChars,
-					"aggregate_budget_spills":     turnStats.AggregateBudgetSpills,
-					"continuation_budget_tokens":  turnStats.ContinuationBudgetTokens,
-					"continuation_count":          turnStats.ContinuationCount,
-					"continuation_stop_reason":    turnStats.ContinuationStopReason,
-					"continuation_used_tokens":    turnStats.ContinuationUsedTokens,
-					"image_count":                 len(payload.Images),
-					"message_count_after":         len(messages),
-					"message_count_before":        messageCountBefore,
-					"mode":                        string(mode),
-					"model":                       activeModelID,
-					"outcome":                     outcome,
-					"stop_reason":                 turnStopReason,
-					"tool_inline_chars":           turnStats.ToolInlineChars,
-					"tool_result_count":           turnStats.ToolResultCount,
-					"tool_spill_count":            turnStats.ToolSpillCount,
-					"user_input_characters":       len(payload.Text),
-				})
-				turnMetrics = nil
-			}
-
-			resolvedClient, nextModelID, err := ensureClientForSelection(activeModelID, cfg, client)
-			if err != nil {
-				turnMetrics.Mark("client_initialization_failed")
-				flushTurnMetrics("client_initialization_failed")
-				if emitErr := bridge.EmitError(fmt.Sprintf("initialize model %q: %v", activeModelID, err), true); emitErr != nil {
-					return emitErr
-				}
-				continue
-			}
-			if resolvedClient != client {
-				client = clientdebug.WrapClient(resolvedClient)
-			}
-			activeModelID = nextModelID
-			modelState.Set(client, activeModelID)
-			if err := emitToolUseCapabilityNotice(bridge, activeModelID, client, &toolUseNoticeModelID); err != nil {
+			if err := handleUserInputMessage(ctx, payload, loopDeps, loopState); err != nil {
 				return err
-			}
-
-			if len(payload.Images) > 0 && !client.Capabilities().SupportsVision {
-				turnMetrics.Mark("vision_unsupported")
-				flushTurnMetrics("vision_unsupported")
-				if err := bridge.EmitError(fmt.Sprintf("model %q does not support image input", activeModelID), true); err != nil {
-					return err
-				}
-				continue
-			}
-
-			images := make([]api.ImageAttachment, 0, len(payload.Images))
-			for _, image := range payload.Images {
-				images = append(images, api.ImageAttachment{
-					ID:         image.ID,
-					Data:       image.Data,
-					MediaType:  image.MediaType,
-					Filename:   image.Filename,
-					SourcePath: image.SourcePath,
-				})
-			}
-
-			messages = append(messages, api.Message{
-				Role:    api.RoleUser,
-				Content: payload.Text,
-				Images:  images,
-			})
-			if err := emitContextWindowUsage(bridge, client, messages); err != nil {
-				return err
-			}
-			availableSkills, _ := skillspkg.LoadAll(cwd)
-			plannerUserRequest := payload.Text
-			persistCurrentMessages := func() {
-				_ = persistSessionState(sessionStore, sessionStateParams{
-					SessionID:     sessionID,
-					CreatedAt:     startedAt,
-					Mode:          mode,
-					Model:         activeModelID,
-					SubagentModel: subagentModelState.Get(),
-					CWD:           cwd,
-					Branch:        agent.LoadTurnContext().GitBranch,
-					Tracker:       tracker,
-					Messages:      messages,
-				})
-			}
-
-			for {
-				messagesBeforeQuery := len(messages)
-				planner := agent.NewPlanner(mode, sessionID, artifactManager)
-				if updates, beginErr := planner.BeginTurn(ctx, plannerUserRequest); beginErr != nil {
-					if emitErr := bridge.EmitError(fmt.Sprintf("create session artifact: %v", beginErr), true); emitErr != nil {
-						return emitErr
-					}
-				} else {
-					for _, update := range updates {
-						if update.Created {
-							if err := emitArtifactCreated(bridge, update.Artifact); err != nil {
-								return err
-							}
-						}
-						if err := emitArtifactUpdated(bridge, update.Artifact, update.Content); err != nil {
-							return err
-						}
-					}
-				}
-
-				deps := agent.QueryDeps{
-					CallModel: func(callCtx context.Context, req api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
-						return trackModelStream(callCtx, bridge, tracker, client, req)
-					},
-					ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-						return executeToolCalls(callCtx, bridge, router, registry, permissionCtx, tracker, planner, artifactManager, hookRunner, sessionID, client.Capabilities().MaxOutputTokens, turnMetrics, turnStats, calls)
-					},
-					CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
-						result, err := compactWithMetrics(callCtx, bridge, tracker, client, timingLogger, sessionID, turnID, string(reason), current)
-						if err != nil {
-							return nil, err
-						}
-						return result.Messages, nil
-					},
-					RecallMemory: func(callCtx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
-						selector := memorypkg.RecallSelector{}
-						return selector.Select(callCtx, files, userPrompt)
-					},
-					BeforeStop: func(callCtx context.Context, stopReq agent.StopRequest) (agent.StopDecision, error) {
-						return evaluateSessionStopHooks(callCtx, hookRunner, sessionID, stopReq)
-					},
-					ApplyResultBudget: func(current []api.Message) []api.Message {
-						return current
-					},
-					ObserveContinuation: func(tracker agent.ContinuationTracker, reason string) {
-						turnStats.ContinuationBudgetTokens = tracker.MaxBudgetTokens
-						turnStats.ContinuationCount = tracker.ContinuationCount
-						turnStats.ContinuationStopReason = reason
-						turnStats.ContinuationUsedTokens = tracker.BudgetUsedTokens
-					},
-					EmitTelemetry: bridge.EmitEvent,
-					PersistMessages: func(updated []api.Message) {
-						messages = updated
-						persistCurrentMessages()
-						_ = emitContextWindowUsage(bridge, client, messages)
-					},
-					Clock:      time.Now,
-					AttemptLog: agent.NewAttemptLog(sessionDir),
-				}
-
-				queryCtx, queryCancel := context.WithCancel(ctx)
-				stopControl := agent.NewStopController()
-				deps.StopController = stopControl
-				router.SetCancelFunc(func() {
-					stopControl.Request("cancelled")
-					queryCancel()
-				})
-
-				stream := agent.QueryStream(queryCtx, agent.QueryRequest{
-					Messages:        messages,
-					SystemPrompt:    systemPromptForMode(mode),
-					ModelID:         client.ModelID(),
-					ReasoningEffort: config.Load().ReasoningEffort,
-					Mode:            mode,
-					SessionID:       sessionID,
-					Skills:          availableSkills,
-					Tools:           registry.Definitions(),
-					Capabilities:    client.Capabilities(),
-					ContextWindow:   client.Capabilities().MaxContextWindow,
-					MaxTokens:       client.Capabilities().MaxOutputTokens,
-				}, deps)
-
-				queryFailed := false
-				queryCancelled := false
-				for event, streamErr := range stream {
-					if streamErr != nil {
-						runSessionStopFailureHooks(queryCtx, hookRunner, sessionID, turnStopReason, messages, streamErr)
-						if queryCtx.Err() != nil {
-							queryCancelled = true
-							break
-						}
-						queryFailed = true
-						if emitErr := bridge.EmitError(streamErr.Error(), false); emitErr != nil {
-							return emitErr
-						}
-						break
-					}
-					switch event.Type {
-					case ipc.EventTokenDelta:
-						if turnMetrics.Mark("first_token") {
-							if err := emitTurnTimingCheckpoint(bridge, turnMetrics, "first_token"); err != nil {
-								return err
-							}
-						}
-					case ipc.EventTurnComplete:
-						if turnMetrics.Mark("turn_complete") {
-							if err := emitTurnTimingCheckpoint(bridge, turnMetrics, "turn_complete"); err != nil {
-								return err
-							}
-						}
-						var payload ipc.TurnCompletePayload
-						if err := json.Unmarshal(event.Payload, &payload); err == nil {
-							turnStopReason = payload.StopReason
-						}
-					}
-					if err := bridge.EmitEvent(event); err != nil {
-						return err
-					}
-				}
-
-				queryCancel()
-				router.SetCancelFunc(nil)
-
-				if queryCancelled || turnStopReason == "cancelled" {
-					if turnMetrics.Mark("cancelled") {
-						if err := emitTurnTimingCheckpoint(bridge, turnMetrics, "cancelled"); err != nil {
-							return err
-						}
-					}
-					if turnStopReason == "" {
-						turnStopReason = "cancelled"
-						if err := bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "cancelled"}); err != nil {
-							return err
-						}
-					}
-					flushTurnMetrics("cancelled")
-					break
-				}
-
-				if queryFailed {
-					turnMetrics.Mark("failed")
-					flushTurnMetrics("failed")
-					break
-				}
-
-				if updates, finalizeErr := planner.FinalizeTurn(ctx, "", plannerUserRequest, messages, messagesBeforeQuery); finalizeErr != nil {
-					if emitErr := bridge.EmitError(fmt.Sprintf("update session artifact: %v", finalizeErr), true); emitErr != nil {
-						return emitErr
-					}
-				} else {
-					for _, update := range updates {
-						if update.Created {
-							if err := emitArtifactCreated(bridge, update.Artifact); err != nil {
-								return err
-							}
-						}
-						if err := emitArtifactUpdated(bridge, update.Artifact, update.Content); err != nil {
-							return err
-						}
-						if update.Artifact.Kind == artifactspkg.KindImplementationPlan && strings.TrimSpace(update.Content) != "" {
-							if err := emitArtifactFocusedForTurn(bridge, update.Artifact, turnMetrics); err != nil {
-								return err
-							}
-						}
-					}
-				}
-
-				// Plan review gate: after a successful plan-mode query that saved a final
-				// implementation plan, pause for explicit user review before execution.
-				if mode == agent.ModePlan {
-					reviewResult, reviewErr := handlePlanReviewGate(ctx, bridge, router, &mode, artifactManager, sessionID, messages, messagesBeforeQuery, turnStopReason)
-					if reviewErr != nil && reviewErr != context.Canceled {
-						if emitErr := bridge.EmitError(fmt.Sprintf("plan review gate: %v", reviewErr), true); emitErr != nil {
-							return emitErr
-						}
-					}
-					if reviewResult.Decision == "approved" {
-						// Mode already switched to fast inside handlePlanReviewGate; persist it.
-						// Inject a user message so the model knows to begin implementation, then
-						// continue the inner loop to run an immediate fast-mode execution turn.
-						turnMetrics.Mark("plan_approved")
-						turnStopReason = "plan_approved"
-						flushTurnMetrics("plan_approved")
-						messages = append(messages, api.Message{
-							Role:    api.RoleUser,
-							Content: "Plan approved. Implement it now.",
-						})
-						persistCurrentMessages()
-						if err := emitContextWindowUsage(bridge, client, messages); err != nil {
-							return err
-						}
-						continue
-					}
-					if reviewResult.Decision == "revised" {
-						turnMetrics.Mark("plan_review_revised")
-						turnStopReason = "plan_revised"
-						flushTurnMetrics("plan_review_revised")
-						messages = append(messages, api.Message{
-							Role:    api.RoleUser,
-							Content: planRevisionFeedbackMessage(reviewResult.Feedback),
-						})
-						persistCurrentMessages()
-						if err := emitContextWindowUsage(bridge, client, messages); err != nil {
-							return err
-						}
-						continue
-					}
-					if reviewResult.Decision == "cancelled" {
-						turnMetrics.Mark("plan_review_cancelled")
-						turnStopReason = "plan_cancelled"
-						flushTurnMetrics("plan_review_cancelled")
-						break
-					}
-				}
-
-				// Generate session title after the first successful query
-				if !sessionTitleGenerated && len(messages) > 0 {
-					sessionTitleGenerated = true
-					titleClient := client
-					titleSessionID := sessionID
-					titleStartedAt := startedAt
-					titleMode := mode
-					titleModelID := activeModelID
-					titleCWD := cwd
-					titleBranch := agent.LoadTurnContext().GitBranch
-					titleMessages := api.DeepCopyMessages(messages)
-					go func() {
-						modelRouter := localmodel.NewRouter(titleClient)
-						title := session.GenerateTitle(modelRouter, titleClient, titleMessages)
-						if title != "" {
-							_ = sessionStore.SaveMetadata(session.Metadata{
-								SessionID:     titleSessionID,
-								CreatedAt:     titleStartedAt,
-								UpdatedAt:     time.Now(),
-								Mode:          string(titleMode),
-								Model:         titleModelID,
-								SubagentModel: subagentModelState.Get(),
-								CWD:           titleCWD,
-								Branch:        titleBranch,
-								TotalCostUSD:  tracker.Snapshot().TotalCostUSD,
-								Title:         title,
-							})
-							_ = emitSessionUpdated(bridge, titleSessionID, title)
-						}
-					}()
-				}
-
-				turnMetrics.Mark("completed")
-				if turnStopReason == "" {
-					turnStopReason = "completed"
-				}
-				flushTurnMetrics("completed")
-
-				break
 			}
 		case ipc.MsgSlashCommand:
 			var payload ipc.SlashCommandPayload
@@ -545,49 +218,50 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 				artifactManager,
 				tracker,
 				payload,
-				sessionID,
-				startedAt,
-				mode,
-				activeModelID,
-				subagentModelID,
-				cwd,
-				messages,
-				&client,
+				loopState.sessionID,
+				loopState.startedAt,
+				loopState.mode,
+				loopState.activeModelID,
+				loopState.subagentModelID,
+				loopState.cwd,
+				loopState.messages,
+				&loopState.client,
 			)
 			if err != nil {
 				return err
 			}
-			sessionID = slashState.SessionID
-			startedAt = slashState.StartedAt
-			mode = slashState.Mode
-			activeModelID = slashState.ActiveModelID
-			subagentModelID = slashState.SubagentModelID
-			cwd = slashState.CWD
-			messages = slashState.Messages
-			modelState.Set(client, activeModelID)
-			subagentModelState.Set(subagentModelID)
-			toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
+			loopState.sessionID = slashState.SessionID
+			loopState.sessionDir = sessionStore.SessionDir(slashState.SessionID)
+			loopState.startedAt = slashState.StartedAt
+			loopState.mode = slashState.Mode
+			loopState.activeModelID = slashState.ActiveModelID
+			loopState.subagentModelID = slashState.SubagentModelID
+			loopState.cwd = slashState.CWD
+			loopState.messages = slashState.Messages
+			modelState.Set(loopState.client, loopState.activeModelID)
+			subagentModelState.Set(loopState.subagentModelID)
+			toolpkg.SetGlobalSessionArtifacts(loopState.sessionID, artifactManager)
 			continue
 		case ipc.MsgModeToggle:
-			if mode == agent.ModePlan {
-				mode = agent.ModeFast
+			if loopState.mode == agent.ModePlan {
+				loopState.mode = agent.ModeFast
 			} else {
-				mode = agent.ModePlan
+				loopState.mode = agent.ModePlan
 			}
 			if err := persistSessionState(sessionStore, sessionStateParams{
-				SessionID:     sessionID,
-				CreatedAt:     startedAt,
-				Mode:          mode,
-				Model:         activeModelID,
-				SubagentModel: subagentModelID,
-				CWD:           cwd,
+				SessionID:     loopState.sessionID,
+				CreatedAt:     loopState.startedAt,
+				Mode:          loopState.mode,
+				Model:         loopState.activeModelID,
+				SubagentModel: loopState.subagentModelID,
+				CWD:           loopState.cwd,
 				Branch:        agent.LoadTurnContext().GitBranch,
 				Tracker:       tracker,
-				Messages:      messages,
+				Messages:      loopState.messages,
 			}); err != nil {
 				return err
 			}
-			if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
+			if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(loopState.mode)}); err != nil {
 				return err
 			}
 			continue

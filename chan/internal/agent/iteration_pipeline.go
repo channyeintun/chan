@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/channyeintun/chan/internal/ipc"
@@ -89,7 +90,14 @@ func recallMemoryStage(
 	runtime *iterationRuntime,
 	_ func(ipc.StreamEvent, error) bool,
 ) error {
-	runtime.memoryRecalls = recallMemoryIndexes(ctx, deps.RecallMemory, state.SystemContext.MemoryFiles, runtime.currentUserPrompt, runtime.pressure)
+	results, err := recallMemoryIndexes(ctx, deps.RecallMemory, state.SystemContext.MemoryFiles, runtime.currentUserPrompt, runtime.pressure)
+	if err != nil {
+		if telemetryErr := emitNoticeTelemetry(deps.EmitTelemetry, err.Error()); telemetryErr != nil {
+			return telemetryErr
+		}
+		return nil
+	}
+	runtime.memoryRecalls = results
 	return emitMemoryRecallTelemetry(deps.EmitTelemetry, state.SystemContext.MemoryFiles, runtime.memoryRecalls)
 }
 
@@ -113,8 +121,15 @@ func loadAttemptLogStage(
 	_ func(ipc.StreamEvent, error) bool,
 ) error {
 	if deps.AttemptLog != nil {
-		runtime.attemptEntries, _ = deps.AttemptLog.Load()
-		runtime.attemptLogSection = FormatAttemptLogSection(runtime.attemptEntries)
+		entries, err := deps.AttemptLog.Load()
+		if err != nil {
+			if telemetryErr := emitNoticeTelemetry(deps.EmitTelemetry, fmt.Sprintf("session attempt log unavailable: %v", err)); telemetryErr != nil {
+				return telemetryErr
+			}
+		} else {
+			runtime.attemptEntries = entries
+			runtime.attemptLogSection = FormatAttemptLogSection(runtime.attemptEntries)
+		}
 	}
 	return emitAttemptLogTelemetry(deps.EmitTelemetry, runtime.attemptEntries, runtime.attemptLogSection)
 }

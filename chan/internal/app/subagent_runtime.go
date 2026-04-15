@@ -21,7 +21,6 @@ import (
 	memorypkg "github.com/channyeintun/chan/internal/memory"
 	"github.com/channyeintun/chan/internal/permissions"
 	"github.com/channyeintun/chan/internal/session"
-	skillspkg "github.com/channyeintun/chan/internal/skills"
 	"github.com/channyeintun/chan/internal/timing"
 	toolpkg "github.com/channyeintun/chan/internal/tools"
 )
@@ -214,7 +213,10 @@ func executeSubagent(
 	childPermissionCtx := permissions.CloneContext(permissionCtx)
 	childBridge := ipc.NewBridge(strings.NewReader(""), io.Discard)
 	childTimingLogger := timing.NewSessionLogger(sessionStore.SessionDir(childSessionID))
-	childSkills, _ := skillspkg.LoadAll(cwd)
+	childSkills, err := loadAvailableSkills(bridge, cwd)
+	if err != nil {
+		return toolpkg.AgentRunResult{}, err
+	}
 	childMode := agent.ModeFast
 	startHookMessages := runChildStartHooks(ctx, hookRunner, childSessionID, invocationID, req, subagentType)
 	childMessages := []api.Message{{Role: api.RoleUser, Content: injectChildHookContext(req.Prompt, startHookMessages)}}

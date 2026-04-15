@@ -14,6 +14,7 @@ import type {
   ContextWindowPayload,
   CostUpdatePayload,
   ErrorPayload,
+  NoticePayload,
   ModelSelectionOptionPayload,
   ModelSelectionRequestedPayload,
   MemoryRecalledPayload,
@@ -1289,6 +1290,14 @@ export function useEvents(initialModel: string, initialMode: string) {
             statusLine: p.message,
           };
         });
+        break;
+      }
+      case "notice": {
+        const p = event.payload as NoticePayload;
+        setUIState((s) => ({
+          ...s,
+          statusLine: p.message,
+        }));
         break;
       }
     }

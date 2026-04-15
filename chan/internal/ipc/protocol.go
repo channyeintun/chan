@@ -53,6 +53,7 @@ const (
 	// Engine status
 	EventReady           EventType = "ready"
 	EventError           EventType = "error"
+	EventNotice          EventType = "notice"
 	EventSessionUpdated  EventType = "session_updated"
 	EventSessionRestored EventType = "session_restored"
 )
@@ -293,6 +294,10 @@ type ReadyPayload struct {
 type ErrorPayload struct {
 	Message     string `json:"message"`
 	Recoverable bool   `json:"recoverable"`
+}
+
+type NoticePayload struct {
+	Message string `json:"message"`
 }
 
 type SessionRestoredPayload struct {
