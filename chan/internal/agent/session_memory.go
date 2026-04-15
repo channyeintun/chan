@@ -1,6 +1,11 @@
 package agent
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
+
+const SessionMemoryFreshnessWindow = 20 * time.Minute
 
 // SessionMemorySnapshot holds the current extracted session working state.
 type SessionMemorySnapshot struct {
@@ -8,6 +13,21 @@ type SessionMemorySnapshot struct {
 	Title      string
 	Content    string
 	Version    int
+	UpdatedAt  time.Time
+}
+
+func (s SessionMemorySnapshot) HasContent() bool {
+	return strings.TrimSpace(s.Content) != ""
+}
+
+func (s SessionMemorySnapshot) IsFresh(now time.Time) bool {
+	if !s.HasContent() || s.UpdatedAt.IsZero() {
+		return false
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	return now.Sub(s.UpdatedAt) <= SessionMemoryFreshnessWindow
 }
 
 // FormatSessionMemorySection renders extracted session continuity into the prompt.

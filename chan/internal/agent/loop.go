@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/channyeintun/chan/internal/api"
 	"github.com/channyeintun/chan/internal/compact"
@@ -581,8 +582,9 @@ func runProactiveCompaction(
 	}
 
 	pressure := EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation)
-	hasSessionMemory := strings.TrimSpace(state.SessionMemory.Content) != ""
-	if !pressure.ShouldCompact && !(hasSessionMemory && pressure.WarningThreshold > 0 && pressure.ConversationTokens >= pressure.WarningThreshold) {
+	hasSessionMemory := state.SessionMemory.HasContent()
+	hasFreshSessionMemory := state.SessionMemory.IsFresh(time.Now())
+	if !pressure.ShouldCompact && !(hasFreshSessionMemory && pressure.WarningThreshold > 0 && pressure.ConversationTokens >= pressure.WarningThreshold) {
 		return nil
 	}
 	tokensBefore := pressure.ConversationTokens

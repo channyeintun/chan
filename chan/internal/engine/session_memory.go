@@ -22,7 +22,17 @@ const (
 	sessionMemoryMaxSectionItems      = 5
 	sessionMemoryMaxSnippetLen        = 240
 	sessionMemoryMaxFileCount         = 8
+	sessionMemoryMaxChars             = 3200
 )
+
+type sessionMemoryDocument struct {
+	Objective string
+	State     string
+	Files     []string
+	Decisions []string
+	Errors    []string
+	NextSteps []string
+}
 
 func loadSessionMemorySnapshot(ctx context.Context, artifactManager *artifactspkg.Manager, sessionID string) (agent.SessionMemorySnapshot, error) {
 	if artifactManager == nil || strings.TrimSpace(sessionID) == "" {
@@ -44,6 +54,7 @@ func loadSessionMemorySnapshot(ctx context.Context, artifactManager *artifactspk
 		Title:      loaded.Title,
 		Content:    content,
 		Version:    loaded.Version,
+		UpdatedAt:  loaded.UpdatedAt,
 	}, nil
 }
 
@@ -55,7 +66,12 @@ func maybeRefreshSessionMemory(ctx context.Context, bridge *ipc.Bridge, artifact
 		return nil
 	}
 
-	content := buildSessionMemoryMarkdown(messages, fromIndex)
+	previous, err := loadSessionMemorySnapshot(ctx, artifactManager, sessionID)
+	if err != nil {
+		previous = agent.SessionMemorySnapshot{}
+	}
+
+	content := buildSessionMemoryMarkdown(previous, messages, fromIndex)
 	if strings.TrimSpace(content) == "" {
 		return nil
 	}
@@ -67,7 +83,9 @@ func maybeRefreshSessionMemory(ctx context.Context, bridge *ipc.Bridge, artifact
 		Source:  sessionMemoryArtifactSource,
 		Content: content,
 		Metadata: map[string]any{
-			"status": "active",
+			"status":                "active",
+			"updated_turn":          turnID,
+			"updated_message_count": len(messages),
 		},
 	}, sessionID, sessionMemoryArtifactSlot)
 	if err != nil {
@@ -127,29 +145,152 @@ func turnHasCompactionSummary(messages []api.Message, fromIndex int) bool {
 	return false
 }
 
-func buildSessionMemoryMarkdown(messages []api.Message, fromIndex int) string {
-	objective := firstNonEmptySnippet(recentUserSnippets(messages, 3)...)
-	state := firstNonEmptySnippet(recentAssistantSnippets(messages, fromIndex, 3)...)
-	files := recentImportantFiles(messages, fromIndex)
-	decisions := recentDecisionSnippets(messages, fromIndex)
-	errors := recentErrorSnippets(messages, fromIndex)
-	nextSteps := deriveNextSteps(objective, decisions, errors)
+func buildSessionMemoryMarkdown(previous agent.SessionMemorySnapshot, messages []api.Message, fromIndex int) string {
+	current := sessionMemoryDocument{
+		Objective: firstNonEmptySnippet(recentUserSnippets(messages, 3)...),
+		State:     firstNonEmptySnippet(recentAssistantSnippets(messages, fromIndex, 3)...),
+		Files:     recentImportantFiles(messages, fromIndex),
+		Decisions: recentDecisionSnippets(messages, fromIndex),
+		Errors:    recentErrorSnippets(messages, fromIndex),
+	}
+	current.NextSteps = deriveNextSteps(current.Objective, current.Decisions, current.Errors)
+	merged := mergeSessionMemoryDocuments(parseSessionMemoryMarkdown(previous.Content), current)
 
 	var b strings.Builder
 	b.WriteString("# Session Memory\n\n")
 	b.WriteString("## Current Objective\n\n")
-	b.WriteString(bulletOrFallback(objective, "Continue the current session objective."))
+	b.WriteString(bulletOrFallback(merged.Objective, "Continue the current session objective."))
 	b.WriteString("\n\n## Current State\n\n")
-	b.WriteString(bulletOrFallback(state, "Implementation work is active."))
+	b.WriteString(bulletOrFallback(merged.State, "Implementation work is active."))
 	b.WriteString("\n\n## Important Files\n\n")
-	b.WriteString(listOrFallback(files, "- No file focus captured yet."))
+	b.WriteString(listOrFallback(merged.Files, "- No file focus captured yet."))
 	b.WriteString("\n\n## Recent Decisions And Findings\n\n")
-	b.WriteString(listOrFallback(decisions, "- No durable decisions captured yet."))
+	b.WriteString(listOrFallback(merged.Decisions, "- No durable decisions captured yet."))
 	b.WriteString("\n\n## Recent Errors And Corrections\n\n")
-	b.WriteString(listOrFallback(errors, "- No recent errors captured."))
+	b.WriteString(listOrFallback(merged.Errors, "- No recent errors captured."))
 	b.WriteString("\n\n## Next Steps\n\n")
-	b.WriteString(listOrFallback(nextSteps, "- Continue from the latest user request and current file focus."))
-	return strings.TrimSpace(b.String()) + "\n"
+	b.WriteString(listOrFallback(merged.NextSteps, "- Continue from the latest user request and current file focus."))
+	rendered := strings.TrimSpace(b.String()) + "\n"
+	if len(rendered) > sessionMemoryMaxChars {
+		return strings.TrimSpace(rendered[:sessionMemoryMaxChars]) + "\n"
+	}
+	return rendered
+}
+
+func parseSessionMemoryMarkdown(content string) sessionMemoryDocument {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return sessionMemoryDocument{}
+	}
+	sections := splitMarkdownSections(content)
+	return sessionMemoryDocument{
+		Objective: strings.TrimPrefix(firstListEntry(sections["Current Objective"]), "- "),
+		State:     strings.TrimPrefix(firstListEntry(sections["Current State"]), "- "),
+		Files:     parseBulletList(sections["Important Files"]),
+		Decisions: parseBulletList(sections["Recent Decisions And Findings"]),
+		Errors:    parseBulletList(sections["Recent Errors And Corrections"]),
+		NextSteps: parseBulletList(sections["Next Steps"]),
+	}
+}
+
+func mergeSessionMemoryDocuments(previous, current sessionMemoryDocument) sessionMemoryDocument {
+	merged := sessionMemoryDocument{
+		Objective: firstNonEmptySnippet(current.Objective, previous.Objective),
+		State:     firstNonEmptySnippet(current.State, previous.State),
+		Files:     mergeBulletLists(current.Files, previous.Files, sessionMemoryMaxFileCount),
+		Decisions: mergeBulletLists(current.Decisions, previous.Decisions, sessionMemoryMaxSectionItems),
+		Errors:    mergeBulletLists(current.Errors, previous.Errors, sessionMemoryMaxSectionItems),
+	}
+	merged.NextSteps = mergeBulletLists(current.NextSteps, previous.NextSteps, sessionMemoryMaxSectionItems)
+	if len(merged.NextSteps) == 0 {
+		merged.NextSteps = deriveNextSteps(merged.Objective, merged.Decisions, merged.Errors)
+	}
+	return merged
+}
+
+func splitMarkdownSections(content string) map[string]string {
+	sections := map[string]string{}
+	var current string
+	var buffer strings.Builder
+	flush := func() {
+		if current == "" {
+			return
+		}
+		sections[current] = strings.TrimSpace(buffer.String())
+		buffer.Reset()
+	}
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## ") {
+			flush()
+			current = strings.TrimSpace(strings.TrimPrefix(trimmed, "## "))
+			continue
+		}
+		if current == "" {
+			continue
+		}
+		buffer.WriteString(line)
+		buffer.WriteString("\n")
+	}
+	flush()
+	return sections
+}
+
+func parseBulletList(section string) []string {
+	lines := strings.Split(strings.TrimSpace(section), "\n")
+	items := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "- ") {
+			items = append(items, trimmed)
+			continue
+		}
+		items = append(items, "- "+trimmed)
+	}
+	return items
+}
+
+func firstListEntry(section string) string {
+	items := parseBulletList(section)
+	if len(items) == 0 {
+		return ""
+	}
+	return items[0]
+}
+
+func mergeBulletLists(primary, fallback []string, limit int) []string {
+	merged := make([]string, 0, limit)
+	seen := make(map[string]struct{}, limit)
+	appendItem := func(item string) {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			return
+		}
+		if !strings.HasPrefix(item, "- ") {
+			item = "- " + item
+		}
+		if _, ok := seen[item]; ok {
+			return
+		}
+		seen[item] = struct{}{}
+		merged = append(merged, item)
+	}
+	for _, item := range primary {
+		if limit > 0 && len(merged) >= limit {
+			return merged
+		}
+		appendItem(item)
+	}
+	for _, item := range fallback {
+		if limit > 0 && len(merged) >= limit {
+			break
+		}
+		appendItem(item)
+	}
+	return merged
 }
 
 func recentUserSnippets(messages []api.Message, limit int) []string {
