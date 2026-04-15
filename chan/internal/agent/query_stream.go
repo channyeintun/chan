@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/channyeintun/chan/internal/api"
+	"github.com/channyeintun/chan/internal/compact"
 	"github.com/channyeintun/chan/internal/ipc"
 	skillspkg "github.com/channyeintun/chan/internal/skills"
 )
@@ -24,6 +25,7 @@ type QueryRequest struct {
 	Capabilities    api.ModelCapabilities
 	ContextWindow   int
 	MaxTokens       int
+	SessionMemory   SessionMemorySnapshot
 }
 
 // CompactReason indicates why compaction was triggered.
@@ -38,8 +40,9 @@ const (
 type QueryDeps struct {
 	CallModel           func(context.Context, api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error)
 	ExecuteToolBatch    func(context.Context, []api.ToolCall) ([]api.ToolResult, error)
-	CompactMessages     func(context.Context, []api.Message, CompactReason) ([]api.Message, error)
+	CompactMessages     func(context.Context, []api.Message, CompactReason) (compact.CompactResult, error)
 	RecallMemory        func(context.Context, []MemoryFile, string) ([]MemoryRecallResult, error)
+	LoadSessionMemory   func(context.Context) (SessionMemorySnapshot, error)
 	BeforeStop          func(context.Context, StopRequest) (StopDecision, error)
 	StopController      *StopController
 	ApplyResultBudget   func([]api.Message) []api.Message
@@ -94,6 +97,8 @@ type QueryState struct {
 	RetrievalTouched []string
 	// Graph is the session-scoped retrieval graph for structural cross-references.
 	Graph *RetrievalGraph
+	// SessionMemory carries extracted session continuity state when available.
+	SessionMemory SessionMemorySnapshot
 }
 
 // NewQueryState creates initial state from a request.
@@ -119,6 +124,7 @@ func NewQueryState(req QueryRequest) *QueryState {
 		MaxTurns:         50,
 		Continuation:     NewContinuationTracker(req.MaxTokens),
 		Graph:            NewRetrievalGraph(ctx.CurrentDir),
+		SessionMemory:    req.SessionMemory,
 	}
 	return state
 }
@@ -187,21 +193,22 @@ func QueryStream(ctx context.Context, req QueryRequest, deps QueryDeps) iter.Seq
 	}
 }
 
-func composeSystemPrompt(basePrompt string, sys SystemContext, turn TurnContext, currentUserPrompt string, recalls []MemoryRecallResult, capabilities api.ModelCapabilities, skillPrompt string, liveRetrievalSection string, attemptLogSection string) string {
+func composeSystemPrompt(basePrompt string, sys SystemContext, turn TurnContext, currentUserPrompt string, recalls []MemoryRecallResult, sessionMemory SessionMemorySnapshot, capabilities api.ModelCapabilities, skillPrompt string, liveRetrievalSection string, attemptLogSection string) string {
 	contextPrompt := strings.TrimSpace(FormatContextPrompt(sys, turn))
 	memoryPrompt := strings.TrimSpace(FormatMemoryPrompt(sys.MemoryFiles, currentUserPrompt, recalls))
+	sessionMemoryPrompt := strings.TrimSpace(FormatSessionMemorySection(sessionMemory))
 	skillPrompt = strings.TrimSpace(skillPrompt)
 	basePrompt = strings.TrimSpace(basePrompt)
 	liveRetrievalSection = strings.TrimSpace(liveRetrievalSection)
 	attemptLogSection = strings.TrimSpace(attemptLogSection)
-	return joinPromptSections(orderedPromptSections(capabilities.SupportsCaching, basePrompt, skillPrompt, memoryPrompt, contextPrompt, liveRetrievalSection, attemptLogSection))
+	return joinPromptSections(orderedPromptSections(capabilities.SupportsCaching, basePrompt, skillPrompt, memoryPrompt, sessionMemoryPrompt, contextPrompt, liveRetrievalSection, attemptLogSection))
 }
 
-func orderedPromptSections(supportsCaching bool, basePrompt, skillPrompt, memoryPrompt, contextPrompt, liveRetrievalSection, attemptLogSection string) []string {
+func orderedPromptSections(supportsCaching bool, basePrompt, skillPrompt, memoryPrompt, sessionMemoryPrompt, contextPrompt, liveRetrievalSection, attemptLogSection string) []string {
 	if supportsCaching {
-		return []string{basePrompt, skillPrompt, memoryPrompt, contextPrompt, liveRetrievalSection, attemptLogSection}
+		return []string{basePrompt, skillPrompt, memoryPrompt, sessionMemoryPrompt, contextPrompt, liveRetrievalSection, attemptLogSection}
 	}
-	return []string{basePrompt, memoryPrompt, skillPrompt, contextPrompt, liveRetrievalSection, attemptLogSection}
+	return []string{basePrompt, memoryPrompt, skillPrompt, sessionMemoryPrompt, contextPrompt, liveRetrievalSection, attemptLogSection}
 }
 
 func joinPromptSections(parts []string) string {

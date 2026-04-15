@@ -19,6 +19,7 @@ type PromptAssemblyCache struct {
 	base    promptCacheEntry
 	skill   promptCacheEntry
 	memory  promptCacheEntry
+	session promptCacheEntry
 	context promptCacheEntry
 	final   promptCacheEntry
 }
@@ -27,9 +28,9 @@ func NewPromptAssemblyCache() *PromptAssemblyCache {
 	return &PromptAssemblyCache{}
 }
 
-func (c *PromptAssemblyCache) Compose(basePrompt string, sys SystemContext, turn TurnContext, currentUserPrompt string, recalls []MemoryRecallResult, capabilities api.ModelCapabilities, skillPrompt string, liveRetrievalSection string, attemptLogSection string) string {
+func (c *PromptAssemblyCache) Compose(basePrompt string, sys SystemContext, turn TurnContext, currentUserPrompt string, recalls []MemoryRecallResult, sessionMemory SessionMemorySnapshot, capabilities api.ModelCapabilities, skillPrompt string, liveRetrievalSection string, attemptLogSection string) string {
 	if c == nil {
-		return composeSystemPrompt(basePrompt, sys, turn, currentUserPrompt, recalls, capabilities, skillPrompt, liveRetrievalSection, attemptLogSection)
+		return composeSystemPrompt(basePrompt, sys, turn, currentUserPrompt, recalls, sessionMemory, capabilities, skillPrompt, liveRetrievalSection, attemptLogSection)
 	}
 
 	basePrompt = c.memoize(&c.base, hashStrings("base", basePrompt), func() string {
@@ -41,6 +42,9 @@ func (c *PromptAssemblyCache) Compose(basePrompt string, sys SystemContext, turn
 	memoryPrompt := c.memoize(&c.memory, memoryPromptCacheKey(currentUserPrompt, recalls), func() string {
 		return strings.TrimSpace(FormatMemoryPrompt(sys.MemoryFiles, currentUserPrompt, recalls))
 	})
+	sessionMemoryPrompt := c.memoize(&c.session, sessionMemoryPromptCacheKey(sessionMemory), func() string {
+		return strings.TrimSpace(FormatSessionMemorySection(sessionMemory))
+	})
 	contextPrompt := c.memoize(&c.context, contextPromptCacheKey(turn), func() string {
 		return strings.TrimSpace(FormatContextPrompt(sys, turn))
 	})
@@ -49,9 +53,9 @@ func (c *PromptAssemblyCache) Compose(basePrompt string, sys SystemContext, turn
 	liveSection := strings.TrimSpace(liveRetrievalSection)
 	attemptSection := strings.TrimSpace(attemptLogSection)
 
-	finalKey := hashStrings("final", boolString(capabilities.SupportsCaching), basePrompt, skillPrompt, memoryPrompt, contextPrompt, liveSection, attemptSection)
+	finalKey := hashStrings("final", boolString(capabilities.SupportsCaching), basePrompt, skillPrompt, memoryPrompt, sessionMemoryPrompt, contextPrompt, liveSection, attemptSection)
 	return c.memoize(&c.final, finalKey, func() string {
-		return joinPromptSections(orderedPromptSections(capabilities.SupportsCaching, basePrompt, skillPrompt, memoryPrompt, contextPrompt, liveSection, attemptSection))
+		return joinPromptSections(orderedPromptSections(capabilities.SupportsCaching, basePrompt, skillPrompt, memoryPrompt, sessionMemoryPrompt, contextPrompt, liveSection, attemptSection))
 	})
 }
 
@@ -71,6 +75,10 @@ func memoryPromptCacheKey(currentUserPrompt string, recalls []MemoryRecallResult
 		parts = append(parts, recall.Lines...)
 	}
 	return hashStrings(parts...)
+}
+
+func sessionMemoryPromptCacheKey(snapshot SessionMemorySnapshot) string {
+	return hashStrings("session-memory", snapshot.ArtifactID, snapshot.Title, snapshot.Content, fmt.Sprintf("%d", snapshot.Version))
 }
 
 func contextPromptCacheKey(turn TurnContext) string {

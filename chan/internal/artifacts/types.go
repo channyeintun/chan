@@ -15,6 +15,7 @@ const (
 	KindDiagram            Kind = "diagram"
 	KindCodegenOutput      Kind = "codegen-output"
 	KindCompactSummary     Kind = "compact-summary"
+	KindSessionMemory      Kind = "session-memory"
 	KindKnowledgeItem      Kind = "knowledge-item"
 )
 

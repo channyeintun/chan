@@ -603,11 +603,13 @@ func handleCompactSlashCommand(cmd *slashCommandContext) error {
 	}
 	*cmd.client = resolvedClient
 	cmd.state.ActiveModelID = nextModelID
+	sessionMemory, _ := loadSessionMemorySnapshot(cmd.ctx, cmd.artifactManager, cmd.state.SessionID)
 
 	tokensBefore := compact.EstimateConversationTokens(cmd.state.Messages)
 	if err := cmd.bridge.Emit(ipc.EventCompactStart, ipc.CompactStartPayload{
-		Strategy:     string(agent.CompactManual),
-		TokensBefore: tokensBefore,
+		Strategy:         string(agent.CompactManual),
+		TokensBefore:     tokensBefore,
+		HasSessionMemory: strings.TrimSpace(sessionMemory.Content) != "",
 	}); err != nil {
 		return err
 	}
@@ -622,7 +624,15 @@ func handleCompactSlashCommand(cmd *slashCommandContext) error {
 	if err := cmd.persistState(); err != nil {
 		return err
 	}
-	if err := cmd.bridge.Emit(ipc.EventCompactEnd, ipc.CompactEndPayload{TokensAfter: tokensAfter}); err != nil {
+	if err := cmd.bridge.Emit(ipc.EventCompactEnd, ipc.CompactEndPayload{
+		Strategy:                string(result.Strategy),
+		TokensBefore:            result.TokensBefore,
+		TokensAfter:             tokensAfter,
+		TokensSaved:             result.TokensBefore - tokensAfter,
+		MicrocompactApplied:     result.MicrocompactApplied,
+		MicrocompactTokensSaved: result.MicrocompactTokensSaved,
+		HasSessionMemory:        strings.TrimSpace(sessionMemory.Content) != "",
+	}); err != nil {
 		return err
 	}
 	if err := emitContextWindowUsage(cmd.bridge, *cmd.client, cmd.state.Messages); err != nil {

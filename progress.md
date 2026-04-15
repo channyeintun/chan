@@ -1,5 +1,12 @@
 # Progress
 
+## 2026-04-16
+
+- Researched context and memory handling across the reference tools under `reference/` excluding Silvery, compared them against Chan's implementation, and documented ratings, strengths, weaknesses, and recommended follow-up work in `docs/reference-context-memory-comparison.md`.
+- Added an explicit Chan self-rating to the context and memory comparison report so the scorecard applies the same standard to Chan as to the reference tools.
+- Reconsidered Chan's memory-recall scoring to treat deterministic recall as a strength rather than a primary weakness, updated the report accordingly, and created `enhancement-plan.md` focused on session-memory extraction and advanced continuity-aware compaction.
+- Implemented the first enhancement slice: added a session-memory artifact with prompt injection, automatic session-memory refresh after significant turns, and richer compaction telemetry carrying token savings, microcompaction, and session-memory presence.
+
 ## 2026-04-15
 
 - Fixed the repeated TUI out-of-memory crash caused by oversized child-agent summaries being duplicated into live tool results, background-agent updates, and replayed UI state.

@@ -12,6 +12,7 @@ import (
 	"github.com/channyeintun/chan/internal/api"
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
 	"github.com/channyeintun/chan/internal/clientdebug"
+	"github.com/channyeintun/chan/internal/compact"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
 	"github.com/channyeintun/chan/internal/hooks"
@@ -185,6 +186,9 @@ func (t *userTurnContext) runPlannerTurn(ctx context.Context, availableSkills []
 		return false, nil
 	}
 	if err := t.finalizePlannerTurn(ctx, planner, messagesBeforeQuery); err != nil {
+		return false, err
+	}
+	if err := maybeRefreshSessionMemory(ctx, t.deps.bridge, t.deps.artifactManager, t.state.sessionID, t.turnID, t.state.messages, messagesBeforeQuery); err != nil {
 		return false, err
 	}
 	continueTurn, err := t.handlePlanReviewDecision(ctx, messagesBeforeQuery)
@@ -379,6 +383,7 @@ func (t *userTurnContext) maybeGenerateSessionTitle() {
 }
 
 func (t *userTurnContext) newQueryRequest(availableSkills []skillspkg.Skill) agent.QueryRequest {
+	sessionMemory, _ := loadSessionMemorySnapshot(context.Background(), t.deps.artifactManager, t.state.sessionID)
 	return agent.QueryRequest{
 		Messages:        t.state.messages,
 		SystemPrompt:    systemPromptForMode(t.state.mode),
@@ -391,6 +396,7 @@ func (t *userTurnContext) newQueryRequest(availableSkills []skillspkg.Skill) age
 		Capabilities:    t.state.client.Capabilities(),
 		ContextWindow:   t.state.client.Capabilities().MaxContextWindow,
 		MaxTokens:       t.state.client.Capabilities().MaxOutputTokens,
+		SessionMemory:   sessionMemory,
 	}
 }
 
@@ -402,16 +408,15 @@ func (t *userTurnContext) newQueryDeps(planner *agent.Planner) agent.QueryDeps {
 		ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
 			return executeToolCalls(callCtx, t.deps.bridge, t.deps.router, t.deps.registry, t.deps.permissionCtx, t.deps.tracker, planner, t.deps.artifactManager, t.deps.hookRunner, t.state.sessionID, t.state.client.Capabilities().MaxOutputTokens, t.turnMetrics, t.turnStats, calls)
 		},
-		CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
-			result, err := compactWithMetrics(callCtx, t.deps.bridge, t.deps.tracker, t.state.client, t.deps.timingLogger, t.state.sessionID, t.turnID, string(reason), current)
-			if err != nil {
-				return nil, err
-			}
-			return result.Messages, nil
+		CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) (compact.CompactResult, error) {
+			return compactWithMetrics(callCtx, t.deps.bridge, t.deps.tracker, t.state.client, t.deps.timingLogger, t.state.sessionID, t.turnID, string(reason), current)
 		},
 		RecallMemory: func(callCtx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
 			selector := memorypkg.RecallSelector{}
 			return selector.Select(callCtx, files, userPrompt)
+		},
+		LoadSessionMemory: func(callCtx context.Context) (agent.SessionMemorySnapshot, error) {
+			return loadSessionMemorySnapshot(callCtx, t.deps.artifactManager, t.state.sessionID)
 		},
 		BeforeStop: func(callCtx context.Context, stopReq agent.StopRequest) (agent.StopDecision, error) {
 			return evaluateSessionStopHooks(callCtx, t.deps.hookRunner, t.state.sessionID, stopReq)

@@ -13,6 +13,7 @@ import (
 	"github.com/channyeintun/chan/internal/agent"
 	"github.com/channyeintun/chan/internal/api"
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
+	"github.com/channyeintun/chan/internal/compact"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
 	"github.com/channyeintun/chan/internal/hooks"
@@ -257,16 +258,15 @@ func executeSubagent(
 		ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
 			return executeToolCallsForSubagent(callCtx, subagentType, childRegistry, childPermissionCtx, artifactManager, childSessionID, sessionStore.SessionDir(childSessionID), childTracker, client.Capabilities().MaxOutputTokens, calls)
 		},
-		CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
-			result, err := compactWithMetrics(callCtx, childBridge, childTracker, client, childTimingLogger, childSessionID, 0, string(reason), current)
-			if err != nil {
-				return nil, err
-			}
-			return result.Messages, nil
+		CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) (compact.CompactResult, error) {
+			return compactWithMetrics(callCtx, childBridge, childTracker, client, childTimingLogger, childSessionID, 0, string(reason), current)
 		},
 		RecallMemory: func(callCtx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
 			selector := memorypkg.RecallSelector{}
 			return selector.Select(callCtx, files, userPrompt)
+		},
+		LoadSessionMemory: func(callCtx context.Context) (agent.SessionMemorySnapshot, error) {
+			return loadSessionMemorySnapshot(callCtx, artifactManager, childSessionID)
 		},
 		BeforeStop: func(callCtx context.Context, stopReq agent.StopRequest) (agent.StopDecision, error) {
 			return evaluateChildStopHooks(callCtx, hookRunner, childSessionID, invocationID, req, subagentType, stopReq, lifecycle, transcriptPath, resultFile, reportStatus)
@@ -305,6 +305,7 @@ func executeSubagent(
 		Capabilities:    client.Capabilities(),
 		ContextWindow:   client.Capabilities().MaxContextWindow,
 		MaxTokens:       client.Capabilities().MaxOutputTokens,
+		SessionMemory:   agent.SessionMemorySnapshot{},
 	}, childDeps)
 
 	turnStopReason := ""

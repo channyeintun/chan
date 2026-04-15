@@ -18,10 +18,12 @@ const (
 
 // CompactResult holds the outcome of a compaction run.
 type CompactResult struct {
-	Messages     []api.Message
-	Strategy     Strategy
-	TokensBefore int
-	TokensAfter  int
+	Messages                []api.Message
+	Strategy                Strategy
+	TokensBefore            int
+	TokensAfter             int
+	MicrocompactApplied     bool
+	MicrocompactTokensSaved int
 }
 
 // Pipeline orchestrates multi-strategy compaction.
@@ -60,9 +62,15 @@ func (p *Pipeline) Compact(ctx context.Context, messages []api.Message, reason s
 	result.TokensBefore = EstimateConversationTokens(messages)
 
 	// Strategy A: Tool result truncation
-	result.Messages = TruncateToolResults(result.Messages)
+	truncated := TruncateToolResults(result.Messages)
+	truncatedTokens := EstimateConversationTokens(truncated)
+	result.Messages = truncated
 	result.Strategy = StrategyToolTruncate
-	result.TokensAfter = EstimateConversationTokens(result.Messages)
+	result.TokensAfter = truncatedTokens
+	if truncatedTokens < result.TokensBefore {
+		result.MicrocompactApplied = true
+		result.MicrocompactTokensSaved = result.TokensBefore - truncatedTokens
+	}
 
 	if p.summarizer == nil || !shouldRunSummary(reason, result.TokensBefore, result.TokensAfter, p.contextWindow) {
 		return result, nil
@@ -99,6 +107,8 @@ func (p *Pipeline) compactRecentWindow(ctx context.Context, messages []api.Messa
 	if !ok {
 		return CompactResult{}, false, nil
 	}
+	tokensBefore := EstimateConversationTokens(messages)
+	truncatedTokens := EstimateConversationTokens(TruncateToolResults(messages))
 
 	summary, err := p.summarize(ctx, window.ToSummarize, PartialCompactionPromptTemplate)
 	if err != nil {
@@ -110,10 +120,12 @@ func (p *Pipeline) compactRecentWindow(ctx context.Context, messages []api.Messa
 
 	compacted := BuildSummaryMessagesWithPrefix(window.Prefix, summary, window.RetainedTail)
 	return CompactResult{
-		Messages:     compacted,
-		Strategy:     StrategyPartial,
-		TokensBefore: EstimateConversationTokens(messages),
-		TokensAfter:  EstimateConversationTokens(compacted),
+		Messages:                compacted,
+		Strategy:                StrategyPartial,
+		TokensBefore:            tokensBefore,
+		TokensAfter:             EstimateConversationTokens(compacted),
+		MicrocompactApplied:     truncatedTokens < tokensBefore,
+		MicrocompactTokensSaved: max(tokensBefore-truncatedTokens, 0),
 	}, true, nil
 }
 

@@ -361,8 +361,9 @@ func invokeModelWithRecovery(
 
 		before := compact.EstimateConversationTokens(state.Messages)
 		if !yield(newEvent(ipc.EventCompactStart, ipc.CompactStartPayload{
-			Strategy:     string(CompactAuto),
-			TokensBefore: before,
+			Strategy:         string(CompactAuto),
+			TokensBefore:     before,
+			HasSessionMemory: strings.TrimSpace(state.SessionMemory.Content) != "",
 		}), nil) {
 			return modelTurn{}, context.Canceled
 		}
@@ -371,11 +372,18 @@ func invokeModelWithRecovery(
 		if compactErr != nil {
 			return modelTurn{}, fmt.Errorf("compact prompt: %w", compactErr)
 		}
-		state.Messages = compacted
+		state.Messages = compacted.Messages
 		state.AutoCompactFailures = 0
 
-		after := compact.EstimateConversationTokens(state.Messages)
-		if !yield(newEvent(ipc.EventCompactEnd, ipc.CompactEndPayload{TokensAfter: after}), nil) {
+		if !yield(newEvent(ipc.EventCompactEnd, ipc.CompactEndPayload{
+			Strategy:                string(compacted.Strategy),
+			TokensBefore:            compacted.TokensBefore,
+			TokensAfter:             compacted.TokensAfter,
+			TokensSaved:             compacted.TokensBefore - compacted.TokensAfter,
+			MicrocompactApplied:     compacted.MicrocompactApplied,
+			MicrocompactTokensSaved: compacted.MicrocompactTokensSaved,
+			HasSessionMemory:        strings.TrimSpace(state.SessionMemory.Content) != "",
+		}), nil) {
 			return modelTurn{}, context.Canceled
 		}
 	}
@@ -573,7 +581,8 @@ func runProactiveCompaction(
 	}
 
 	pressure := EvaluateContextPressure(state.Messages, state.ContextWindow, state.MaxTokens, state.Continuation)
-	if !pressure.ShouldCompact {
+	hasSessionMemory := strings.TrimSpace(state.SessionMemory.Content) != ""
+	if !pressure.ShouldCompact && !(hasSessionMemory && pressure.WarningThreshold > 0 && pressure.ConversationTokens >= pressure.WarningThreshold) {
 		return nil
 	}
 	tokensBefore := pressure.ConversationTokens
@@ -582,8 +591,9 @@ func runProactiveCompaction(
 	}
 
 	if !yield(newEvent(ipc.EventCompactStart, ipc.CompactStartPayload{
-		Strategy:     string(CompactAuto),
-		TokensBefore: tokensBefore,
+		Strategy:         string(CompactAuto),
+		TokensBefore:     tokensBefore,
+		HasSessionMemory: hasSessionMemory,
 	}), nil) {
 		return context.Canceled
 	}
@@ -601,10 +611,17 @@ func runProactiveCompaction(
 	}
 
 	state.AutoCompactFailures = 0
-	state.Messages = compacted
+	state.Messages = compacted.Messages
 
-	tokensAfter := compact.EstimateConversationTokens(state.Messages)
-	if !yield(newEvent(ipc.EventCompactEnd, ipc.CompactEndPayload{TokensAfter: tokensAfter}), nil) {
+	if !yield(newEvent(ipc.EventCompactEnd, ipc.CompactEndPayload{
+		Strategy:                string(compacted.Strategy),
+		TokensBefore:            compacted.TokensBefore,
+		TokensAfter:             compacted.TokensAfter,
+		TokensSaved:             compacted.TokensBefore - compacted.TokensAfter,
+		MicrocompactApplied:     compacted.MicrocompactApplied,
+		MicrocompactTokensSaved: compacted.MicrocompactTokensSaved,
+		HasSessionMemory:        hasSessionMemory,
+	}), nil) {
 		return context.Canceled
 	}
 

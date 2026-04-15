@@ -13,6 +13,7 @@ type iterationRuntime struct {
 	currentUserPrompt    string
 	pressure             ContextPressureDecision
 	memoryRecalls        []MemoryRecallResult
+	sessionMemory        SessionMemorySnapshot
 	liveRetrievalSection string
 	attemptEntries       []AttemptEntry
 	attemptLogSection    string
@@ -23,6 +24,7 @@ type iterationStage func(context.Context, *QueryState, QueryDeps, *iterationRunt
 
 var defaultIterationStages = []iterationStage{
 	applyResultBudgetStage,
+	loadSessionMemoryStage,
 	runProactiveCompactionStage,
 	evaluateContextPressureStage,
 	recallMemoryStage,
@@ -31,6 +33,29 @@ var defaultIterationStages = []iterationStage{
 	selectSkillsStage,
 	composeSystemPromptStage,
 	warnUnsupportedThinkingStage,
+}
+
+func loadSessionMemoryStage(
+	ctx context.Context,
+	state *QueryState,
+	deps QueryDeps,
+	runtime *iterationRuntime,
+	_ func(ipc.StreamEvent, error) bool,
+) error {
+	runtime.sessionMemory = state.SessionMemory
+	if deps.LoadSessionMemory == nil {
+		return nil
+	}
+	snapshot, err := deps.LoadSessionMemory(ctx)
+	if err != nil {
+		if telemetryErr := emitNoticeTelemetry(deps.EmitTelemetry, fmt.Sprintf("session memory unavailable: %v", err)); telemetryErr != nil {
+			return telemetryErr
+		}
+		return nil
+	}
+	state.SessionMemory = snapshot
+	runtime.sessionMemory = snapshot
+	return nil
 }
 
 func runIterationStages(
@@ -164,6 +189,7 @@ func composeSystemPromptStage(
 			state.TurnContext,
 			runtime.currentUserPrompt,
 			runtime.memoryRecalls,
+			runtime.sessionMemory,
 			state.Capabilities,
 			runtime.skillPrompt,
 			runtime.liveRetrievalSection,
@@ -177,6 +203,7 @@ func composeSystemPromptStage(
 		state.TurnContext,
 		runtime.currentUserPrompt,
 		runtime.memoryRecalls,
+		runtime.sessionMemory,
 		state.Capabilities,
 		runtime.skillPrompt,
 		runtime.liveRetrievalSection,

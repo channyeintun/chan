@@ -231,12 +231,19 @@ type RateLimitUpdatePayload struct {
 }
 
 type CompactStartPayload struct {
-	Strategy     string `json:"strategy"`
-	TokensBefore int    `json:"tokens_before"`
+	Strategy         string `json:"strategy"`
+	TokensBefore     int    `json:"tokens_before"`
+	HasSessionMemory bool   `json:"has_session_memory,omitempty"`
 }
 
 type CompactEndPayload struct {
-	TokensAfter int `json:"tokens_after"`
+	Strategy                string `json:"strategy,omitempty"`
+	TokensBefore            int    `json:"tokens_before,omitempty"`
+	TokensAfter             int    `json:"tokens_after"`
+	TokensSaved             int    `json:"tokens_saved,omitempty"`
+	MicrocompactApplied     bool   `json:"microcompact_applied,omitempty"`
+	MicrocompactTokensSaved int    `json:"microcompact_tokens_saved,omitempty"`
+	HasSessionMemory        bool   `json:"has_session_memory,omitempty"`
 }
 
 // RetrievalUsedPayload is emitted after the live retrieval step runs each turn.
