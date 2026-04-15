@@ -12,6 +12,7 @@ import (
 	"github.com/channyeintun/chan/internal/api"
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
 	"github.com/channyeintun/chan/internal/compact"
+	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
 	"github.com/channyeintun/chan/internal/ipc"
 	"github.com/channyeintun/chan/internal/localmodel"
@@ -185,7 +186,7 @@ func newCompactionPipeline(bridge *ipc.Bridge, tracker *costpkg.Tracker, client 
 		tracker: tracker,
 		client:  client,
 		router:  localmodel.NewRouter(client),
-	})
+	}, config.Load().EnableMicrocompact)
 }
 
 func compactWithMetrics(

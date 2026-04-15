@@ -7,6 +7,7 @@
 - Reconsidered Chan's memory-recall scoring to treat deterministic recall as a strength rather than a primary weakness, updated the report accordingly, and created `enhancement-plan.md` focused on session-memory extraction and advanced continuity-aware compaction.
 - Implemented the first enhancement slice: added a session-memory artifact with prompt injection, automatic session-memory refresh after significant turns, and richer compaction telemetry carrying token savings, microcompaction, and session-memory presence.
 - Made session memory incremental and freshness-aware by merging prior extracted state into each refresh, adding update metadata, deduplicating and capping working-memory sections, and requiring fresh session memory before earlier proactive compaction kicks in.
+- Added rollout controls for the new context features by introducing config and env flags for session-memory extraction and microcompaction, gating both code paths, and surfacing their runtime state in `/status`.
 
 ## 2026-04-15
 

@@ -25,6 +25,8 @@ type Config struct {
 	// Session
 	DefaultMode             string  `json:"default_mode,omitempty"` // "plan" or "fast"
 	CostWarningThresholdUSD float64 `json:"cost_warning_threshold_usd,omitempty"`
+	EnableSessionMemory     bool    `json:"enable_session_memory,omitempty"`
+	EnableMicrocompact      bool    `json:"enable_microcompact,omitempty"`
 
 	// Permissions
 	PermissionMode string `json:"permission_mode,omitempty"` // "default", "bypassPermissions", "autoApprove"
@@ -50,6 +52,8 @@ func DefaultConfig() Config {
 		Model:                   "anthropic/claude-sonnet-4-20250514",
 		DefaultMode:             "plan",
 		CostWarningThresholdUSD: 5,
+		EnableSessionMemory:     true,
+		EnableMicrocompact:      true,
 	}
 }
 
@@ -138,6 +142,20 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.CostWarningThresholdUSD = parsed
 		} else {
 			fmt.Fprintf(os.Stderr, "warning: invalid CHAN_COST_WARNING_THRESHOLD_USD %q: %v\n", v, err)
+		}
+	}
+	if v := os.Getenv("CHAN_ENABLE_SESSION_MEMORY"); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.EnableSessionMemory = parsed
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: invalid CHAN_ENABLE_SESSION_MEMORY %q: %v\n", v, err)
+		}
+	}
+	if v := os.Getenv("CHAN_ENABLE_MICROCOMPACT"); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			cfg.EnableMicrocompact = parsed
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: invalid CHAN_ENABLE_MICROCOMPACT %q: %v\n", v, err)
 		}
 	}
 }

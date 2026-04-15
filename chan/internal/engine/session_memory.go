@@ -10,6 +10,7 @@ import (
 	"github.com/channyeintun/chan/internal/api"
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
 	"github.com/channyeintun/chan/internal/compact"
+	"github.com/channyeintun/chan/internal/config"
 	"github.com/channyeintun/chan/internal/ipc"
 )
 
@@ -35,6 +36,9 @@ type sessionMemoryDocument struct {
 }
 
 func loadSessionMemorySnapshot(ctx context.Context, artifactManager *artifactspkg.Manager, sessionID string) (agent.SessionMemorySnapshot, error) {
+	if !config.Load().EnableSessionMemory {
+		return agent.SessionMemorySnapshot{}, nil
+	}
 	if artifactManager == nil || strings.TrimSpace(sessionID) == "" {
 		return agent.SessionMemorySnapshot{}, nil
 	}
@@ -59,6 +63,9 @@ func loadSessionMemorySnapshot(ctx context.Context, artifactManager *artifactspk
 }
 
 func maybeRefreshSessionMemory(ctx context.Context, bridge *ipc.Bridge, artifactManager *artifactspkg.Manager, sessionID string, turnID int, messages []api.Message, fromIndex int) error {
+	if !config.Load().EnableSessionMemory {
+		return nil
+	}
 	if artifactManager == nil || strings.TrimSpace(sessionID) == "" {
 		return nil
 	}

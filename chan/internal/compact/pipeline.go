@@ -11,6 +11,7 @@ import (
 type Strategy string
 
 const (
+	StrategyNone         Strategy = "none"
 	StrategyToolTruncate Strategy = "tool_truncate" // Strategy A: zero API calls
 	StrategySummarize    Strategy = "summarize"     // Strategy B: LLM call
 	StrategyPartial      Strategy = "partial"       // Strategy C: scope to recent
@@ -28,8 +29,9 @@ type CompactResult struct {
 
 // Pipeline orchestrates multi-strategy compaction.
 type Pipeline struct {
-	contextWindow int
-	summarizer    Summarizer
+	contextWindow       int
+	summarizer          Summarizer
+	microcompactEnabled bool
 }
 
 // Summarizer abstracts the LLM call for compaction summarization.
@@ -44,10 +46,11 @@ type PromptSummarizer interface {
 }
 
 // NewPipeline creates a compaction pipeline.
-func NewPipeline(contextWindow int, summarizer Summarizer) *Pipeline {
+func NewPipeline(contextWindow int, summarizer Summarizer, microcompactEnabled bool) *Pipeline {
 	return &Pipeline{
-		contextWindow: contextWindow,
-		summarizer:    summarizer,
+		contextWindow:       contextWindow,
+		summarizer:          summarizer,
+		microcompactEnabled: microcompactEnabled,
 	}
 }
 
@@ -61,15 +64,20 @@ func (p *Pipeline) Compact(ctx context.Context, messages []api.Message, reason s
 	}
 	result.TokensBefore = EstimateConversationTokens(messages)
 
+	result.Strategy = StrategyNone
+	result.TokensAfter = result.TokensBefore
+
 	// Strategy A: Tool result truncation
-	truncated := TruncateToolResults(result.Messages)
-	truncatedTokens := EstimateConversationTokens(truncated)
-	result.Messages = truncated
-	result.Strategy = StrategyToolTruncate
-	result.TokensAfter = truncatedTokens
-	if truncatedTokens < result.TokensBefore {
-		result.MicrocompactApplied = true
-		result.MicrocompactTokensSaved = result.TokensBefore - truncatedTokens
+	if p.microcompactEnabled {
+		truncated := TruncateToolResults(result.Messages)
+		truncatedTokens := EstimateConversationTokens(truncated)
+		result.Messages = truncated
+		result.Strategy = StrategyToolTruncate
+		result.TokensAfter = truncatedTokens
+		if truncatedTokens < result.TokensBefore {
+			result.MicrocompactApplied = true
+			result.MicrocompactTokensSaved = result.TokensBefore - truncatedTokens
+		}
 	}
 
 	if p.summarizer == nil || !shouldRunSummary(reason, result.TokensBefore, result.TokensAfter, p.contextWindow) {
@@ -108,7 +116,10 @@ func (p *Pipeline) compactRecentWindow(ctx context.Context, messages []api.Messa
 		return CompactResult{}, false, nil
 	}
 	tokensBefore := EstimateConversationTokens(messages)
-	truncatedTokens := EstimateConversationTokens(TruncateToolResults(messages))
+	truncatedTokens := tokensBefore
+	if p.microcompactEnabled {
+		truncatedTokens = EstimateConversationTokens(TruncateToolResults(messages))
+	}
 
 	summary, err := p.summarize(ctx, window.ToSummarize, PartialCompactionPromptTemplate)
 	if err != nil {
