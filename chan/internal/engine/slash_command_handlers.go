@@ -223,8 +223,12 @@ func handleConnectSlashCommand(cmd *slashCommandContext) error {
 	}
 	nextClient = clientdebug.WrapClient(nextClient)
 	*cmd.client = nextClient
+	previousModelID := cmd.state.ActiveModelID
 	cmd.state.ActiveModelID = modelRef(result.Provider, nextClient.ModelID())
 	cmd.state.SubagentModelID = defaultSessionSubagentModel(result.Config, cmd.state.ActiveModelID)
+	if err := emitCacheBustNoticeOnModelSwitch(cmd.bridge, cmd.tracker, previousModelID, cmd.state.ActiveModelID); err != nil {
+		return err
+	}
 	if err := emitToolUseCapabilityNotice(cmd.bridge, cmd.state.ActiveModelID, *cmd.client, nil); err != nil {
 		return err
 	}
@@ -402,7 +406,11 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 
 	nextClient = clientdebug.WrapClient(nextClient)
 	*cmd.client = nextClient
+	previousModelID := cmd.state.ActiveModelID
 	cmd.state.ActiveModelID = modelRef(provider, nextClient.ModelID())
+	if err := emitCacheBustNoticeOnModelSwitch(cmd.bridge, cmd.tracker, previousModelID, cmd.state.ActiveModelID); err != nil {
+		return err
+	}
 	if err := emitToolUseCapabilityNotice(cmd.bridge, cmd.state.ActiveModelID, *cmd.client, nil); err != nil {
 		return err
 	}
@@ -416,6 +424,39 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 		return err
 	}
 	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set model to %s", cmd.state.ActiveModelID))
+}
+
+func emitCacheBustNoticeOnModelSwitch(bridge *ipc.Bridge, tracker *costpkg.Tracker, previousModelID string, nextModelID string) error {
+	if bridge == nil || tracker == nil {
+		return nil
+	}
+	if strings.EqualFold(strings.TrimSpace(previousModelID), strings.TrimSpace(nextModelID)) {
+		return nil
+	}
+	snapshot := tracker.Snapshot()
+	cacheRead := snapshot.TotalCacheReadTokens
+	cacheWrite := snapshot.TotalCacheCreationTokens
+	if cacheRead == 0 && cacheWrite == 0 {
+		return nil
+	}
+	return bridge.EmitNotice(fmt.Sprintf(
+		"Switching model from %s to %s invalidates the current prompt cache. Cache usage so far: %s read / %s write.",
+		commandspkg.FormatModelSelectionLabel(previousModelID),
+		commandspkg.FormatModelSelectionLabel(nextModelID),
+		formatCacheTokenCount(cacheRead),
+		formatCacheTokenCount(cacheWrite),
+	))
+}
+
+func formatCacheTokenCount(value int) string {
+	switch {
+	case value >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(value)/1_000_000)
+	case value >= 1_000:
+		return fmt.Sprintf("%.1fk", float64(value)/1_000)
+	default:
+		return fmt.Sprintf("%d", value)
+	}
 }
 
 func handleSubagentSlashCommand(cmd *slashCommandContext) error {
