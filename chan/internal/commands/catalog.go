@@ -142,21 +142,61 @@ func FormatStatusText(sessionID string, startedAt time.Time, mode agent.Executio
 	elapsed := time.Since(startedAt).Round(time.Second)
 	snap := tracker.Snapshot()
 	reasoning := DescribeReasoningEffort(strings.TrimSpace(config.Load().ReasoningEffort), model)
+	lines := []string{
+		fmt.Sprintf("Session: %s", sessionID),
+		fmt.Sprintf("Started: %s (%s ago)", startedAt.Format(time.RFC3339), elapsed),
+		fmt.Sprintf("Mode: %s", string(mode)),
+		fmt.Sprintf("Model: %s", FormatModelSelectionLabel(model)),
+		fmt.Sprintf("Subagent: %s", FormatModelSelectionLabel(subagentModel)),
+		fmt.Sprintf("Reasoning: %s", reasoning),
+		fmt.Sprintf("CWD: %s", cwd),
+		fmt.Sprintf("Messages: %d", msgCount),
+		fmt.Sprintf("Cost: $%.4f", snap.TotalCostUSD),
+		fmt.Sprintf("Tokens: %d in / %d out", snap.TotalInputTokens, snap.TotalOutputTokens),
+		formatCacheStatusLine(snap),
+	}
+	if childLine := formatChildCacheStatusLine(snap); childLine != "" {
+		lines = append(lines, childLine)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatCacheStatusLine(snapshot costpkg.TrackerSnapshot) string {
+	cacheRead := snapshot.TotalCacheReadTokens
+	cacheWrite := snapshot.TotalCacheCreationTokens
+	if cacheRead == 0 && cacheWrite == 0 {
+		return "Prompt cache: inactive"
+	}
 	return fmt.Sprintf(
-		"Session: %s\nStarted: %s (%s ago)\nMode: %s\nModel: %s\nSubagent: %s\nReasoning: %s\nCWD: %s\nMessages: %d\nCost: $%.4f\nTokens: %d in / %d out",
-		sessionID,
-		startedAt.Format(time.RFC3339),
-		elapsed,
-		string(mode),
-		FormatModelSelectionLabel(model),
-		FormatModelSelectionLabel(subagentModel),
-		reasoning,
-		cwd,
-		msgCount,
-		snap.TotalCostUSD,
-		snap.TotalInputTokens,
-		snap.TotalOutputTokens,
+		"Prompt cache: %.1f%% hit · %s read / %s write · main %s / %s",
+		snapshot.CacheHitRate()*100,
+		formatTokenTotal(cacheRead),
+		formatTokenTotal(cacheWrite),
+		formatTokenTotal(snapshot.MainAgentCacheReadTokens()),
+		formatTokenTotal(snapshot.MainAgentCacheCreationTokens()),
 	)
+}
+
+func formatChildCacheStatusLine(snapshot costpkg.TrackerSnapshot) string {
+	if snapshot.ChildAgentCacheReadTokens == 0 && snapshot.ChildAgentCacheCreationTokens == 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"Child cache: %s read / %s write",
+		formatTokenTotal(snapshot.ChildAgentCacheReadTokens),
+		formatTokenTotal(snapshot.ChildAgentCacheCreationTokens),
+	)
+}
+
+func formatTokenTotal(value int) string {
+	switch {
+	case value >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(value)/1_000_000)
+	case value >= 1_000:
+		return fmt.Sprintf("%.1fk", float64(value)/1_000)
+	default:
+		return fmt.Sprintf("%d", value)
+	}
 }
 
 func FormatModelSelectionLabel(selection string) string {

@@ -18,23 +18,25 @@ type ModelUsageEntry struct {
 
 // Tracker accumulates session-wide cost and usage data.
 type Tracker struct {
-	mu                       sync.Mutex
-	TotalCostUSD             float64
-	TotalInputTokens         int
-	TotalOutputTokens        int
-	TotalCacheReadTokens     int
-	TotalCacheCreationTokens int
-	MemoryRecallCostUSD      float64
-	MemoryRecallInputTokens  int
-	MemoryRecallOutputTokens int
-	ChildAgentCostUSD        float64
-	ChildAgentInputTokens    int
-	ChildAgentOutputTokens   int
-	TotalAPIDuration         time.Duration
-	TotalToolDuration        time.Duration
-	TotalLinesAdded          int
-	TotalLinesRemoved        int
-	ModelUsage               map[string]*ModelUsageEntry
+	mu                            sync.Mutex
+	TotalCostUSD                  float64
+	TotalInputTokens              int
+	TotalOutputTokens             int
+	TotalCacheReadTokens          int
+	TotalCacheCreationTokens      int
+	MemoryRecallCostUSD           float64
+	MemoryRecallInputTokens       int
+	MemoryRecallOutputTokens      int
+	ChildAgentCostUSD             float64
+	ChildAgentInputTokens         int
+	ChildAgentOutputTokens        int
+	ChildAgentCacheReadTokens     int
+	ChildAgentCacheCreationTokens int
+	TotalAPIDuration              time.Duration
+	TotalToolDuration             time.Duration
+	TotalLinesAdded               int
+	TotalLinesRemoved             int
+	ModelUsage                    map[string]*ModelUsageEntry
 }
 
 // NewTracker creates an empty cost tracker.
@@ -109,6 +111,8 @@ func (t *Tracker) Reset() {
 	t.ChildAgentCostUSD = 0
 	t.ChildAgentInputTokens = 0
 	t.ChildAgentOutputTokens = 0
+	t.ChildAgentCacheReadTokens = 0
+	t.ChildAgentCacheCreationTokens = 0
 	t.TotalAPIDuration = 0
 	t.TotalToolDuration = 0
 	t.TotalLinesAdded = 0
@@ -118,22 +122,24 @@ func (t *Tracker) Reset() {
 
 // Snapshot returns a snapshot of the current cost state.
 type TrackerSnapshot struct {
-	TotalCostUSD             float64
-	TotalInputTokens         int
-	TotalOutputTokens        int
-	TotalCacheReadTokens     int
-	TotalCacheCreationTokens int
-	MemoryRecallCostUSD      float64
-	MemoryRecallInputTokens  int
-	MemoryRecallOutputTokens int
-	ChildAgentCostUSD        float64
-	ChildAgentInputTokens    int
-	ChildAgentOutputTokens   int
-	TotalAPIDuration         time.Duration
-	TotalToolDuration        time.Duration
-	TotalLinesAdded          int
-	TotalLinesRemoved        int
-	ModelUsage               map[string]*ModelUsageEntry
+	TotalCostUSD                  float64
+	TotalInputTokens              int
+	TotalOutputTokens             int
+	TotalCacheReadTokens          int
+	TotalCacheCreationTokens      int
+	MemoryRecallCostUSD           float64
+	MemoryRecallInputTokens       int
+	MemoryRecallOutputTokens      int
+	ChildAgentCostUSD             float64
+	ChildAgentInputTokens         int
+	ChildAgentOutputTokens        int
+	ChildAgentCacheReadTokens     int
+	ChildAgentCacheCreationTokens int
+	TotalAPIDuration              time.Duration
+	TotalToolDuration             time.Duration
+	TotalLinesAdded               int
+	TotalLinesRemoved             int
+	ModelUsage                    map[string]*ModelUsageEntry
 }
 
 // Snapshot returns a copy of the current cost state (safe for concurrent reads).
@@ -141,22 +147,24 @@ func (t *Tracker) Snapshot() TrackerSnapshot {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	snap := TrackerSnapshot{
-		TotalCostUSD:             t.TotalCostUSD,
-		TotalInputTokens:         t.TotalInputTokens,
-		TotalOutputTokens:        t.TotalOutputTokens,
-		TotalCacheReadTokens:     t.TotalCacheReadTokens,
-		TotalCacheCreationTokens: t.TotalCacheCreationTokens,
-		MemoryRecallCostUSD:      t.MemoryRecallCostUSD,
-		MemoryRecallInputTokens:  t.MemoryRecallInputTokens,
-		MemoryRecallOutputTokens: t.MemoryRecallOutputTokens,
-		ChildAgentCostUSD:        t.ChildAgentCostUSD,
-		ChildAgentInputTokens:    t.ChildAgentInputTokens,
-		ChildAgentOutputTokens:   t.ChildAgentOutputTokens,
-		TotalAPIDuration:         t.TotalAPIDuration,
-		TotalToolDuration:        t.TotalToolDuration,
-		TotalLinesAdded:          t.TotalLinesAdded,
-		TotalLinesRemoved:        t.TotalLinesRemoved,
-		ModelUsage:               make(map[string]*ModelUsageEntry, len(t.ModelUsage)),
+		TotalCostUSD:                  t.TotalCostUSD,
+		TotalInputTokens:              t.TotalInputTokens,
+		TotalOutputTokens:             t.TotalOutputTokens,
+		TotalCacheReadTokens:          t.TotalCacheReadTokens,
+		TotalCacheCreationTokens:      t.TotalCacheCreationTokens,
+		MemoryRecallCostUSD:           t.MemoryRecallCostUSD,
+		MemoryRecallInputTokens:       t.MemoryRecallInputTokens,
+		MemoryRecallOutputTokens:      t.MemoryRecallOutputTokens,
+		ChildAgentCostUSD:             t.ChildAgentCostUSD,
+		ChildAgentInputTokens:         t.ChildAgentInputTokens,
+		ChildAgentOutputTokens:        t.ChildAgentOutputTokens,
+		ChildAgentCacheReadTokens:     t.ChildAgentCacheReadTokens,
+		ChildAgentCacheCreationTokens: t.ChildAgentCacheCreationTokens,
+		TotalAPIDuration:              t.TotalAPIDuration,
+		TotalToolDuration:             t.TotalToolDuration,
+		TotalLinesAdded:               t.TotalLinesAdded,
+		TotalLinesRemoved:             t.TotalLinesRemoved,
+		ModelUsage:                    make(map[string]*ModelUsageEntry, len(t.ModelUsage)),
 	}
 	for k, v := range t.ModelUsage {
 		entry := *v
@@ -186,6 +194,14 @@ func (t *Tracker) RecordChildAgentSnapshot(snapshot TrackerSnapshot) {
 	t.ChildAgentInputTokens += ownInput
 	ownOutput := snapshot.TotalOutputTokens - snapshot.ChildAgentOutputTokens
 	t.ChildAgentOutputTokens += ownOutput
+	ownCacheRead := snapshot.TotalCacheReadTokens - snapshot.ChildAgentCacheReadTokens
+	if ownCacheRead > 0 {
+		t.ChildAgentCacheReadTokens += ownCacheRead
+	}
+	ownCacheCreation := snapshot.TotalCacheCreationTokens - snapshot.ChildAgentCacheCreationTokens
+	if ownCacheCreation > 0 {
+		t.ChildAgentCacheCreationTokens += ownCacheCreation
+	}
 }
 
 func (t *Tracker) mergeSnapshotLocked(snapshot TrackerSnapshot) {
@@ -201,6 +217,8 @@ func (t *Tracker) mergeSnapshotLocked(snapshot TrackerSnapshot) {
 	t.ChildAgentCostUSD += snapshot.ChildAgentCostUSD
 	t.ChildAgentInputTokens += snapshot.ChildAgentInputTokens
 	t.ChildAgentOutputTokens += snapshot.ChildAgentOutputTokens
+	t.ChildAgentCacheReadTokens += snapshot.ChildAgentCacheReadTokens
+	t.ChildAgentCacheCreationTokens += snapshot.ChildAgentCacheCreationTokens
 	t.TotalAPIDuration += snapshot.TotalAPIDuration
 	t.TotalToolDuration += snapshot.TotalToolDuration
 	t.TotalLinesAdded += snapshot.TotalLinesAdded
@@ -222,4 +240,28 @@ func (t *Tracker) mergeSnapshotLocked(snapshot TrackerSnapshot) {
 			current.ContextWindow = entry.ContextWindow
 		}
 	}
+}
+
+func (s TrackerSnapshot) CacheHitRate() float64 {
+	totalPromptTokens := s.TotalInputTokens + s.TotalCacheReadTokens + s.TotalCacheCreationTokens
+	if totalPromptTokens <= 0 || s.TotalCacheReadTokens <= 0 {
+		return 0
+	}
+	return float64(s.TotalCacheReadTokens) / float64(totalPromptTokens)
+}
+
+func (s TrackerSnapshot) MainAgentCacheReadTokens() int {
+	value := s.TotalCacheReadTokens - s.ChildAgentCacheReadTokens
+	if value < 0 {
+		return 0
+	}
+	return value
+}
+
+func (s TrackerSnapshot) MainAgentCacheCreationTokens() int {
+	value := s.TotalCacheCreationTokens - s.ChildAgentCacheCreationTokens
+	if value < 0 {
+		return 0
+	}
+	return value
 }
