@@ -11,6 +11,11 @@ import type {
   AttemptLogSurfacedPayload,
   CompactEndPayload,
   CompactStartPayload,
+  ConversationHydratedMessageBlockPayload,
+  ConversationHydratedMessagePayload,
+  ConversationHydratedPayload,
+  ConversationHydratedToolCallPayload,
+  ConversationHydratedTranscriptEntryPayload,
   ContextWindowPayload,
   CostUpdatePayload,
   ErrorPayload,
@@ -957,6 +962,20 @@ export function useEvents(initialModel: string, initialMode: string) {
         }));
         break;
       }
+      case "conversation_hydrated": {
+        const p = event.payload as ConversationHydratedPayload;
+        setUIState((s) => ({
+          ...s,
+          messages: normalizeHydratedMessages(p.messages),
+          toolCalls: normalizeHydratedToolCalls(p.tool_calls),
+          transcript: normalizeHydratedTranscriptEntries(p.transcript),
+          liveAssistantBlocks: [],
+          activeTurnStatus: "idle",
+          isStreaming: false,
+          error: null,
+        }));
+        break;
+      }
       case "memory_recalled": {
         const p = event.payload as MemoryRecalledPayload;
         setUIState((s) => ({
@@ -1620,6 +1639,197 @@ function normalizeRewindSelectionTurns(
           ? turn.preview.trim()
           : "(no prompt text)",
     }));
+}
+
+function normalizeHydratedMessages(
+  payload: ConversationHydratedMessagePayload[] | undefined,
+): UIMessage[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  const timestamp = new Date().toISOString();
+
+  return payload.flatMap((message): UIMessage[] => {
+    if (typeof message?.id !== "string" || message.id.trim().length === 0) {
+      return [];
+    }
+
+    switch (message.role) {
+      case "user": {
+        const text = stringOrEmpty(message.text);
+        if (text.length === 0) {
+          return [];
+        }
+        return [
+          {
+            id: message.id.trim(),
+            role: "user",
+            text,
+            timestamp,
+          },
+        ];
+      }
+      case "assistant": {
+        const blocks = normalizeHydratedAssistantBlocks(message.blocks);
+        if (blocks.length === 0) {
+          return [];
+        }
+        return [
+          {
+            id: message.id.trim(),
+            role: "assistant",
+            blocks,
+            timestamp,
+            model: stringOrUndefined(message.model),
+          },
+        ];
+      }
+      case "system": {
+        const text = stringOrEmpty(message.text);
+        if (text.length === 0) {
+          return [];
+        }
+        return [
+          {
+            id: message.id.trim(),
+            role: "system",
+            text,
+            tone: normalizeHydratedSystemTone(message.tone),
+            timestamp,
+          },
+        ];
+      }
+      default:
+        return [];
+    }
+  });
+}
+
+function normalizeHydratedAssistantBlocks(
+  payload: ConversationHydratedMessageBlockPayload[] | undefined,
+): UIAssistantBlock[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload.flatMap((block) => {
+    if (block?.kind !== "text" && block?.kind !== "thinking") {
+      return [];
+    }
+
+    const text = stringOrEmpty(block.text);
+    if (text.length === 0) {
+      return [];
+    }
+
+    return [{ kind: block.kind, text }];
+  });
+}
+
+function normalizeHydratedSystemTone(
+  tone: string | undefined,
+): UISystemMessage["tone"] {
+  switch (tone) {
+    case "success":
+    case "warning":
+    case "error":
+      return tone;
+    default:
+      return "info";
+  }
+}
+
+function normalizeHydratedToolCalls(
+  payload: ConversationHydratedToolCallPayload[] | undefined,
+): UIToolCall[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload.flatMap((toolCall) => {
+    if (typeof toolCall?.id !== "string" || toolCall.id.trim().length === 0) {
+      return [];
+    }
+
+    const name = stringOrEmpty(toolCall.name) || "tool";
+    const input = sanitizeToolCallInput(name, stringOrEmpty(toolCall.input));
+    const output = sanitizeHydratedToolOutput(name, toolCall.output);
+    const error = stringOrUndefined(toolCall.error);
+
+    return [
+      {
+        id: toolCall.id.trim(),
+        name,
+        input,
+        status: normalizeHydratedToolStatus(toolCall.status, error),
+        output,
+        truncated: toolCall.truncated === true,
+        error,
+        filePath: stringOrUndefined(toolCall.file_path),
+        preview: stringOrUndefined(toolCall.preview),
+        insertions: numberOrUndefined(toolCall.insertions),
+        deletions: numberOrUndefined(toolCall.deletions),
+        diagnostics: stringOrUndefined(toolCall.diagnostics),
+        errorKind: stringOrUndefined(toolCall.error_kind),
+        errorHint: stringOrUndefined(toolCall.error_hint),
+      },
+    ];
+  });
+}
+
+function normalizeHydratedToolStatus(
+  status: string | undefined,
+  error: string | undefined,
+): UIToolStatus {
+  switch (status) {
+    case "running":
+    case "waiting_permission":
+    case "completed":
+    case "error":
+      return status;
+    default:
+      return error ? "error" : "completed";
+  }
+}
+
+function sanitizeHydratedToolOutput(
+  name: string,
+  output: string | undefined,
+): string | undefined {
+  if (typeof output !== "string") {
+    return undefined;
+  }
+
+  if (isAgentToolName(name)) {
+    return sanitizeAgentToolOutput(output);
+  }
+
+  return output;
+}
+
+function normalizeHydratedTranscriptEntries(
+  payload: ConversationHydratedTranscriptEntryPayload[] | undefined,
+): UITranscriptEntry[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload.flatMap((entry) => {
+    if (typeof entry?.id !== "string" || entry.id.trim().length === 0) {
+      return [];
+    }
+    if (entry.kind !== "message" && entry.kind !== "tool_call") {
+      return [];
+    }
+
+    return [
+      {
+        id: entry.id.trim(),
+        kind: entry.kind,
+      },
+    ];
+  });
 }
 
 function normalizeModelSelectionOptions(

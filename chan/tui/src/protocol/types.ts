@@ -8,6 +8,7 @@ export type EventType =
   | "tool_result"
   | "tool_error"
   | "permission_request"
+  | "conversation_hydrated"
   | "model_selection_requested"
   | "rewind_selection_requested"
   | "resume_selection_requested"
@@ -230,6 +231,48 @@ export interface CostUpdatePayload {
   child_agent_usd?: number;
   child_agent_input_tokens?: number;
   child_agent_output_tokens?: number;
+}
+
+export interface ConversationHydratedMessageBlockPayload {
+  kind: string;
+  text: string;
+}
+
+export interface ConversationHydratedMessagePayload {
+  id: string;
+  role: string;
+  text?: string;
+  tone?: string;
+  blocks?: ConversationHydratedMessageBlockPayload[];
+  model?: string;
+}
+
+export interface ConversationHydratedToolCallPayload {
+  id: string;
+  name: string;
+  input: string;
+  status: string;
+  output?: string;
+  truncated?: boolean;
+  error?: string;
+  file_path?: string;
+  preview?: string;
+  insertions?: number;
+  deletions?: number;
+  diagnostics?: string;
+  error_kind?: string;
+  error_hint?: string;
+}
+
+export interface ConversationHydratedTranscriptEntryPayload {
+  id: string;
+  kind: string;
+}
+
+export interface ConversationHydratedPayload {
+  messages?: ConversationHydratedMessagePayload[];
+  tool_calls?: ConversationHydratedToolCallPayload[];
+  transcript?: ConversationHydratedTranscriptEntryPayload[];
 }
 
 export interface MemoryRecallEntryPayload {

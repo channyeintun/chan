@@ -30,6 +30,7 @@ const (
 	EventModelChanged             EventType = "model_changed"
 	EventContextWindow            EventType = "context_window"
 	EventCostUpdate               EventType = "cost_update"
+	EventConversationHydrated     EventType = "conversation_hydrated"
 	EventModelSelectionRequested  EventType = "model_selection_requested"
 	EventRewindSelectionRequested EventType = "rewind_selection_requested"
 	EventResumeSelectionRequested EventType = "resume_selection_requested"
@@ -178,6 +179,48 @@ type CostUpdatePayload struct {
 	ChildAgentUSD            float64 `json:"child_agent_usd,omitempty"`
 	ChildAgentInputTokens    int     `json:"child_agent_input_tokens,omitempty"`
 	ChildAgentOutputTokens   int     `json:"child_agent_output_tokens,omitempty"`
+}
+
+type ConversationHydratedMessageBlockPayload struct {
+	Kind string `json:"kind"`
+	Text string `json:"text"`
+}
+
+type ConversationHydratedMessagePayload struct {
+	ID     string                                    `json:"id"`
+	Role   string                                    `json:"role"`
+	Text   string                                    `json:"text,omitempty"`
+	Tone   string                                    `json:"tone,omitempty"`
+	Blocks []ConversationHydratedMessageBlockPayload `json:"blocks,omitempty"`
+	Model  string                                    `json:"model,omitempty"`
+}
+
+type ConversationHydratedToolCallPayload struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Input       string `json:"input"`
+	Status      string `json:"status"`
+	Output      string `json:"output,omitempty"`
+	Truncated   bool   `json:"truncated,omitempty"`
+	Error       string `json:"error,omitempty"`
+	FilePath    string `json:"file_path,omitempty"`
+	Preview     string `json:"preview,omitempty"`
+	Insertions  int    `json:"insertions,omitempty"`
+	Deletions   int    `json:"deletions,omitempty"`
+	Diagnostics string `json:"diagnostics,omitempty"`
+	ErrorKind   string `json:"error_kind,omitempty"`
+	ErrorHint   string `json:"error_hint,omitempty"`
+}
+
+type ConversationHydratedTranscriptEntryPayload struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+}
+
+type ConversationHydratedPayload struct {
+	Messages   []ConversationHydratedMessagePayload         `json:"messages,omitempty"`
+	ToolCalls  []ConversationHydratedToolCallPayload        `json:"tool_calls,omitempty"`
+	Transcript []ConversationHydratedTranscriptEntryPayload `json:"transcript,omitempty"`
 }
 
 type ResumeSelectionSessionPayload struct {
