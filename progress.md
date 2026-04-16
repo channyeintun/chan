@@ -11,6 +11,7 @@
 - Implemented the first child-flow cache-reuse slice for subagents: when a subagent stays on the same model as the parent, Chan now preserves the parent mode system prompt as a stable prefix and sends the full parent tool schema array for cache compatibility, while subagent execution remains bounded by explicit tool-name and permission gates so unlisted tools are still rejected at runtime.
 - Added prompt-cache observability to session status reporting: the cost tracker now preserves child-agent cache read/write totals separately, and `/status` now shows overall prompt-cache hit rate plus main-vs-child cache read/write token breakdown so prompt-shaping changes can be evaluated from normal sessions.
 - Added an explicit model-switch cache-bust warning on the slash-command path: when a session changes the active model after accumulating prompt-cache activity, Chan now emits a notice that the hot cache is being invalidated and includes the cache read/write totals being discarded instead of letting the miss happen silently.
+- Added a smaller cache-friendly child handoff path for oversized delegated prompts: subagents now archive the full raw delegated prompt into the child session directory and receive a shorter structured brief with key instructions, extracted anchors, and the saved prompt path so they can pull the full task only when the brief is insufficient.
 
 ## 2026-04-16
 

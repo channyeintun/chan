@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/channyeintun/chan/internal/agent"
 	"github.com/channyeintun/chan/internal/api"
@@ -28,6 +31,16 @@ import (
 const exploreSubagentType = "Explore"
 const generalPurposeSubagentType = "general-purpose"
 const verificationSubagentType = "verification"
+
+const (
+	delegationPromptArchiveName  = "delegation-prompt.txt"
+	delegationPromptArchiveLimit = 1800
+	delegationPromptBriefLimit   = 1400
+	delegationPromptLineLimit    = 6
+	delegationPromptAnchorLimit  = 8
+)
+
+var delegatedPromptAnchorPattern = regexp.MustCompile(`(?:/[A-Za-z0-9._-]+)+(?:\.[A-Za-z0-9._-]+)?|(?:[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+(?:\.[A-Za-z0-9._-]+)?|` + "`[^`]+`")
 
 var exploreSubagentTools = []string{
 	"think",
@@ -215,7 +228,12 @@ func executeSubagent(
 	}
 	childMode := agent.ModeFast
 	startHookMessages := runChildStartHooks(ctx, hookRunner, childSessionID, invocationID, req, subagentType)
-	childMessages := []api.Message{{Role: api.RoleUser, Content: injectChildHookContext(req.Prompt, startHookMessages)}}
+	promptArchivePath, archiveErr := archiveDelegatedPrompt(sessionStore.SessionDir(childSessionID), req.Description, req.Prompt)
+	if archiveErr != nil && bridge != nil {
+		_ = bridge.EmitNotice(fmt.Sprintf("archive child prompt: %v", archiveErr))
+	}
+	childHandoff := buildDelegatedPromptBrief(req.Description, req.Prompt, subagentType, promptArchivePath)
+	childMessages := []api.Message{{Role: api.RoleUser, Content: injectChildHookContext(childHandoff, startHookMessages)}}
 	childPrompt, queryTools, executionRegistry := configureSubagentCachePrefix(parentState, parentModelID, childModelID, subagentType, registry, childRegistry)
 	transcriptPath := filepath.Join(sessionStore.SessionDir(childSessionID), "transcript.ndjson")
 	resultFile := filepath.Join(sessionStore.SessionDir(childSessionID), "agent-result.json")
@@ -906,4 +924,138 @@ func normalizeSubagentFinalAnswer(content string) string {
 		return trimmed
 	}
 	return inner
+}
+
+func archiveDelegatedPrompt(sessionDir string, description string, prompt string) (string, error) {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" || utf8.RuneCountInString(prompt) <= delegationPromptArchiveLimit {
+		return "", nil
+	}
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(sessionDir, delegationPromptArchiveName)
+	var builder strings.Builder
+	if strings.TrimSpace(description) != "" {
+		builder.WriteString("Description: ")
+		builder.WriteString(strings.TrimSpace(description))
+		builder.WriteString("\n\n")
+	}
+	builder.WriteString(prompt)
+	builder.WriteString("\n")
+	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func buildDelegatedPromptBrief(description string, prompt string, subagentType string, archivePath string) string {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return ""
+	}
+	if utf8.RuneCountInString(prompt) <= delegationPromptArchiveLimit {
+		return prompt
+	}
+
+	briefLines := collectDelegatedPromptLines(prompt, delegationPromptLineLimit, delegationPromptBriefLimit)
+	anchors := extractDelegatedPromptAnchors(prompt, delegationPromptAnchorLimit)
+
+	var builder strings.Builder
+	builder.WriteString("Delegated task brief:\n")
+	if strings.TrimSpace(description) != "" {
+		builder.WriteString("- Summary: ")
+		builder.WriteString(strings.TrimSpace(description))
+		builder.WriteString("\n")
+	}
+	builder.WriteString("- Subagent: ")
+	builder.WriteString(subagentDisplayName(subagentType))
+	builder.WriteString("\n")
+	if len(briefLines) > 0 {
+		builder.WriteString("- Key instructions:\n")
+		for _, line := range briefLines {
+			builder.WriteString("  - ")
+			builder.WriteString(line)
+			builder.WriteString("\n")
+		}
+	}
+	if len(anchors) > 0 {
+		builder.WriteString("- Key anchors:\n")
+		for _, anchor := range anchors {
+			builder.WriteString("  - ")
+			builder.WriteString(anchor)
+			builder.WriteString("\n")
+		}
+	}
+	if archivePath != "" {
+		builder.WriteString("- Full delegated prompt saved at ")
+		builder.WriteString(archivePath)
+		builder.WriteString(". Read it only if the brief is insufficient.\n")
+	}
+	return strings.TrimSpace(builder.String())
+}
+
+func collectDelegatedPromptLines(prompt string, maxLines int, maxChars int) []string {
+	lines := strings.Split(prompt, "\n")
+	selected := make([]string, 0, maxLines)
+	seen := make(map[string]struct{}, maxLines)
+	totalChars := 0
+	for _, raw := range lines {
+		line := normalizeDelegatedPromptLine(raw)
+		if line == "" {
+			continue
+		}
+		if _, ok := seen[line]; ok {
+			continue
+		}
+		if totalChars+len(line) > maxChars && len(selected) > 0 {
+			break
+		}
+		selected = append(selected, line)
+		seen[line] = struct{}{}
+		totalChars += len(line)
+		if len(selected) >= maxLines {
+			break
+		}
+	}
+	return selected
+}
+
+func normalizeDelegatedPromptLine(value string) string {
+	line := strings.TrimSpace(value)
+	if line == "" {
+		return ""
+	}
+	line = strings.TrimPrefix(line, "- ")
+	line = strings.TrimPrefix(line, "* ")
+	line = strings.TrimSpace(line)
+	if line == "" || line == "```" {
+		return ""
+	}
+	line = strings.Join(strings.Fields(line), " ")
+	if len(line) > 220 {
+		line = strings.TrimSpace(line[:220])
+	}
+	return line
+}
+
+func extractDelegatedPromptAnchors(prompt string, limit int) []string {
+	matches := delegatedPromptAnchorPattern.FindAllString(prompt, -1)
+	anchors := make([]string, 0, limit)
+	seen := make(map[string]struct{}, limit)
+	for _, match := range matches {
+		anchor := strings.TrimSpace(strings.Trim(match, "`"))
+		if anchor == "" {
+			continue
+		}
+		if _, ok := seen[anchor]; ok {
+			continue
+		}
+		seen[anchor] = struct{}{}
+		anchors = append(anchors, anchor)
+		if len(anchors) >= limit {
+			break
+		}
+	}
+	return anchors
 }
