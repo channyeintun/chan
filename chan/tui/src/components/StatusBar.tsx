@@ -111,7 +111,7 @@ const StatusBar: FC<StatusBarProps> = ({
     summarizeBackgroundCommands(backgroundCommands);
 
   return (
-    <Box paddingX={1} paddingY={0}>
+    <Box paddingX={1} paddingY={0} userSelect="none">
       <Text wrap="truncate-end">
         <Text color={readinessColor}>{readinessLabel.toLowerCase()}</Text>
         <Text color="$muted"> · </Text>

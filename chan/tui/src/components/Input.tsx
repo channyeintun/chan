@@ -348,7 +348,7 @@ const Input: FC<InputProps> = ({
   );
 
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Box flexDirection="column" marginTop={1} userSelect="none">
       {isLoading ? (
         <Box paddingLeft={1} marginBottom={1}>
           <Text color="$muted">

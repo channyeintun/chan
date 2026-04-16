@@ -233,6 +233,7 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
       borderColor={riskColor}
       overflow="scroll"
       paddingX={1}
+      userSelect="contain"
     >
       <Text bold color={riskColor}>
         Permission Required

@@ -1,6 +1,6 @@
 import React from "react";
 import { ThemeProvider } from "silvery";
-import { run } from "silvery/runtime";
+import { createApp } from "silvery/runtime";
 import { presetTheme, type Theme } from "silvery/theme";
 import App from "./App.js";
 
@@ -9,9 +9,11 @@ const model = process.env["CHAN_MODEL"] ?? "anthropic/claude-sonnet-4-20250514";
 const mode = process.env["CHAN_MODE"] ?? "plan";
 const theme: Theme = presetTheme("nord");
 
-const handle = await run(
+const app = createApp(() => () => ({}));
+const handle = await app.run(
 	<ThemeProvider theme={theme}>
 		<App enginePath={enginePath} model={model} mode={mode} />
 	</ThemeProvider>,
+	{ selection: true },
 );
 await handle.waitUntilExit();

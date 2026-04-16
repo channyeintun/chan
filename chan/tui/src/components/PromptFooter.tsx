@@ -129,7 +129,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
     : null;
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" userSelect="none">
       {costWarningText ? (
         <Box paddingX={2} paddingTop={1}>
           <Text color="yellow">{costWarningText}</Text>

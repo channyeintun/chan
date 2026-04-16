@@ -696,6 +696,7 @@ function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
       alignItems="center"
       paddingX={1}
       paddingY={1}
+      userSelect="none"
     >
       <Box
         flexDirection="column"
@@ -704,6 +705,7 @@ function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
         maxHeight="85%"
         flexShrink={1}
         minHeight={0}
+        userSelect="contain"
       >
         {children}
       </Box>

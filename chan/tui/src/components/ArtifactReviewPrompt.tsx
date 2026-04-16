@@ -67,6 +67,7 @@ const ArtifactReviewPrompt: FC<ArtifactReviewPromptProps> = ({
       borderColor="blue"
       paddingX={1}
       marginTop={1}
+      userSelect="contain"
     >
       <Box flexDirection="row" gap={1}>
         <Text bold color="blue">
