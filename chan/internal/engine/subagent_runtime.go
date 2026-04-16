@@ -105,6 +105,7 @@ func makeSubagentRunner(
 	hookRunner *hooks.Runner,
 	modelState *ActiveModelState,
 	subagentModelState *ActiveSubagentModelState,
+	parentState *engineLoopState,
 	cwd string,
 ) toolpkg.AgentRunner {
 	return func(ctx context.Context, req toolpkg.AgentRunRequest) (toolpkg.AgentRunResult, error) {
@@ -132,11 +133,11 @@ func makeSubagentRunner(
 		}
 
 		execute := func(runCtx context.Context) (toolpkg.AgentRunResult, error) {
-			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, cwd, nil, nil)
+			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, activeModelID, childActiveModelID, parentState, cwd, nil, nil)
 		}
 		if req.Background {
 			launch := launchBackgroundAgent(ctx, bridge, strings.TrimSpace(req.Description), subagentType, invocationID, sessionStore, func(runCtx context.Context, stopControl *agent.StopController, reportStatus func(toolpkg.AgentRunResult)) (toolpkg.AgentRunResult, error) {
-				return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, cwd, stopControl, reportStatus)
+				return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, activeModelID, childActiveModelID, parentState, cwd, stopControl, reportStatus)
 			})
 			launch.SubagentType = subagentType
 			launch.Tools = subagentToolNames(subagentType)
@@ -194,7 +195,9 @@ func executeSubagent(
 	artifactManager *artifactspkg.Manager,
 	hookRunner *hooks.Runner,
 	client api.LLMClient,
-	activeModelID string,
+	parentModelID string,
+	childModelID string,
+	parentState *engineLoopState,
 	cwd string,
 	stopControl *agent.StopController,
 	reportStatus func(toolpkg.AgentRunResult),
@@ -213,7 +216,7 @@ func executeSubagent(
 	childMode := agent.ModeFast
 	startHookMessages := runChildStartHooks(ctx, hookRunner, childSessionID, invocationID, req, subagentType)
 	childMessages := []api.Message{{Role: api.RoleUser, Content: injectChildHookContext(req.Prompt, startHookMessages)}}
-	childPrompt := subagentSystemPrompt(subagentType, childRegistry.Definitions())
+	childPrompt, queryTools, executionRegistry := configureSubagentCachePrefix(parentState, parentModelID, childModelID, subagentType, registry, childRegistry)
 	transcriptPath := filepath.Join(sessionStore.SessionDir(childSessionID), "transcript.ndjson")
 	resultFile := filepath.Join(sessionStore.SessionDir(childSessionID), "agent-result.json")
 	lifecycle := &childLifecycleTracker{}
@@ -222,7 +225,7 @@ func executeSubagent(
 		SessionID:     childSessionID,
 		CreatedAt:     childStartedAt,
 		Mode:          childMode,
-		Model:         activeModelID,
+		Model:         childModelID,
 		SubagentModel: "",
 		CWD:           cwd,
 		Branch:        agent.LoadTurnContext().GitBranch,
@@ -236,7 +239,7 @@ func executeSubagent(
 		CreatedAt:     childStartedAt,
 		UpdatedAt:     childStartedAt,
 		Mode:          string(childMode),
-		Model:         activeModelID,
+		Model:         childModelID,
 		SubagentModel: "",
 		CWD:           cwd,
 		Branch:        agent.LoadTurnContext().GitBranch,
@@ -249,7 +252,7 @@ func executeSubagent(
 			return trackModelStream(callCtx, childBridge, childTracker, client, modelReq)
 		},
 		ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-			return executeToolCallsForSubagent(callCtx, subagentType, childRegistry, childPermissionCtx, artifactManager, childSessionID, sessionStore.SessionDir(childSessionID), childTracker, client.Capabilities().MaxOutputTokens, calls)
+			return executeToolCallsForSubagent(callCtx, subagentType, executionRegistry, childPermissionCtx, artifactManager, childSessionID, sessionStore.SessionDir(childSessionID), childTracker, client.Capabilities().MaxOutputTokens, calls)
 		},
 		CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) (compact.CompactResult, error) {
 			sessionMemory, _ := loadSessionMemorySnapshot(callCtx, artifactManager, childSessionID)
@@ -276,7 +279,7 @@ func executeSubagent(
 				SessionID:     childSessionID,
 				CreatedAt:     childStartedAt,
 				Mode:          childMode,
-				Model:         activeModelID,
+				Model:         childModelID,
 				SubagentModel: "",
 				CWD:           cwd,
 				Branch:        agent.LoadTurnContext().GitBranch,
@@ -295,7 +298,7 @@ func executeSubagent(
 		Mode:            childMode,
 		SessionID:       childSessionID,
 		Skills:          childSkills,
-		Tools:           childRegistry.Definitions(),
+		Tools:           queryTools,
 		Capabilities:    client.Capabilities(),
 		ContextWindow:   client.Capabilities().MaxContextWindow,
 		MaxTokens:       client.Capabilities().MaxOutputTokens,
@@ -320,7 +323,7 @@ func executeSubagent(
 		SessionID:     childSessionID,
 		CreatedAt:     childStartedAt,
 		Mode:          childMode,
-		Model:         activeModelID,
+		Model:         childModelID,
 		SubagentModel: "",
 		CWD:           cwd,
 		Branch:        agent.LoadTurnContext().GitBranch,
@@ -633,7 +636,8 @@ func subagentSystemPrompt(subagentType string, defs []api.ToolDefinition) string
 Use tools early. Keep transcript terse. Final answer concise, concrete, evidence-first.
 Always absolute paths. Working directory in environment context below.
 No follow-up questions to the parent/user. If context is thin, inspect workspace, make best reasonable assumptions, continue. State assumptions briefly in final answer.
-Available tools: %s.`, subagentDisplayName(subagentType), toolList)
+Available tools: %s.
+If additional tool schemas appear for cache compatibility, treat any tool not listed above as unavailable; those calls will be rejected.`, subagentDisplayName(subagentType), toolList)
 
 	switch subagentType {
 	case exploreSubagentType:
@@ -787,6 +791,10 @@ func executeToolCallsForSubagent(
 			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: err.Error(), IsError: true}
 			continue
 		}
+		if !subagentAllowsToolName(subagentType, tool.Name()) {
+			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: fmt.Sprintf("tool %q is not allowed in the %s subagent", tool.Name(), subagentType), IsError: true}
+			continue
+		}
 		if !subagentAllowsTool(subagentType, tool.Permission()) {
 			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: fmt.Sprintf("tool %q is not allowed in the %s subagent", tool.Name(), subagentType), IsError: true}
 			continue
@@ -848,6 +856,38 @@ func subagentAllowsTool(subagentType string, permission toolpkg.PermissionLevel)
 	default:
 		return true
 	}
+}
+
+func configureSubagentCachePrefix(parentState *engineLoopState, parentModelID string, childModelID string, subagentType string, fullRegistry *toolpkg.Registry, childRegistry *toolpkg.Registry) (string, []api.ToolDefinition, *toolpkg.Registry) {
+	allowedDefs := childRegistry.Definitions()
+	childPrompt := subagentSystemPrompt(subagentType, allowedDefs)
+	if !shouldReuseSubagentCachePrefix(parentState, parentModelID, childModelID) {
+		return childPrompt, allowedDefs, childRegistry
+	}
+
+	parentPrompt := systemPromptForMode(parentState.mode)
+	combinedPrompt := strings.TrimSpace(strings.Join([]string{strings.TrimSpace(parentPrompt), strings.TrimSpace(childPrompt)}, "\n\n"))
+	return combinedPrompt, fullRegistry.Definitions(), fullRegistry
+}
+
+func shouldReuseSubagentCachePrefix(parentState *engineLoopState, parentModelID string, childModelID string) bool {
+	if parentState == nil {
+		return false
+	}
+	if strings.TrimSpace(parentModelID) == "" || strings.TrimSpace(childModelID) == "" {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(parentModelID), strings.TrimSpace(childModelID))
+}
+
+func subagentAllowsToolName(subagentType string, toolName string) bool {
+	allowed := subagentToolNames(subagentType)
+	for _, name := range allowed {
+		if name == toolName {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeSubagentFinalAnswer(content string) string {
