@@ -1,5 +1,12 @@
 import React, { type FC, useEffect, useMemo, useRef, useState } from "react";
-import { Box, Text, useFocusManager, useInput } from "silvery";
+import {
+  Box,
+  ListView,
+  Text,
+  useBoxRect,
+  useFocusManager,
+  useInput,
+} from "silvery";
 import type {
   UIModelSelection,
   UIModelSelectionOption,
@@ -11,8 +18,6 @@ interface ModelSelectionPromptProps {
   onSelect: (modelId: string, provider?: string) => void;
   onCancel: () => void;
 }
-
-const VISIBLE_WINDOW = 8;
 
 const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
   selection,
@@ -94,7 +99,6 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
   useInput((input, key) => {
     const text = key.text ?? input;
     const isEscape = key.escape || input === "\u001b" || text === "\u001b";
-    const selectedOption = selection.options[selectedIndexRef.current];
 
     if (customModeRef.current) {
       if (isEscape) {
@@ -176,57 +180,27 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
       return;
     }
 
-    if (key.upArrow) {
-      updateSelectedIndex((current) =>
-        current === 0 ? selection.options.length - 1 : current - 1,
-      );
-      return;
-    }
-
-    if (key.downArrow) {
-      updateSelectedIndex(
-        (current) => (current + 1) % selection.options.length,
-      );
-      return;
-    }
-
-    if (key.return) {
-      if (!selectedOption) {
-        return;
-      }
-      if (selectedOption.isCustom) {
-        focusManager.blur();
-        updateCustomMode(true);
-        updateCursorOffset(customValueRef.current.length);
-        return;
-      }
-      if (selectedOption.model) {
-        onSelect(selectedOption.model, selectedOption.provider ?? undefined);
-      }
-      return;
-    }
-
     const shortcut = input?.toLowerCase();
     if (shortcut === "q") {
       onCancel();
     }
   });
 
-  const startIndex = useMemo(() => {
-    if (selection.options.length <= VISIBLE_WINDOW) {
-      return 0;
+  const handleListSelect = (index: number) => {
+    const selectedOption = selection.options[index];
+    if (!selectedOption) {
+      return;
     }
-    const centered = selectedIndex - Math.floor(VISIBLE_WINDOW / 2);
-    return Math.max(
-      0,
-      Math.min(centered, selection.options.length - VISIBLE_WINDOW),
-    );
-  }, [selectedIndex, selection.options.length]);
-
-  const visibleOptions = selection.options.slice(
-    startIndex,
-    startIndex + VISIBLE_WINDOW,
-  );
+    if (selectedOption.isCustom) {
+      focusManager.blur();
+      updateCustomMode(true);
+      updateCursorOffset(customValueRef.current.length);
+      return;
+    }
+    if (selectedOption.model) {
+      onSelect(selectedOption.model, selectedOption.provider ?? undefined);
+    }
+  };
 
   return (
     <Box
@@ -254,45 +228,13 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
         </Box>
       </Box>
 
-      <Box
-        marginTop={1}
-        flexDirection="column"
-        flexGrow={1}
-        flexShrink={1}
-        minHeight={0}
-        minWidth={0}
-        overflow="scroll"
-      >
-        {visibleOptions.map((option, index) => {
-          const actualIndex = startIndex + index;
-          const isSelected = actualIndex === selectedIndex;
-
-          return (
-            <Box
-              key={`${option.label}-${actualIndex}`}
-              flexDirection="column"
-              backgroundColor={isSelected ? "$selectionbg" : undefined}
-              paddingX={1}
-              marginBottom={1}
-              minWidth={0}
-            >
-              <Text color={isSelected ? "$selection" : "$fg"} bold={isSelected}>
-                {isSelected ? "›" : " "} {option.label}
-                {option.active ? (
-                  <Text color={isSelected ? "$selection" : "$success"}>
-                    {" "}
-                    current
-                  </Text>
-                ) : null}
-              </Text>
-              <Text color={isSelected ? "$selection" : "$muted"}>
-                {formatModelLine(option)}
-                {option.description ? `  ·  ${option.description}` : ""}
-              </Text>
-            </Box>
-          );
-        })}
-      </Box>
+      <ModelSelectionList
+        options={selection.options}
+        selectedIndex={selectedIndex}
+        active={!customMode}
+        onCursor={updateSelectedIndex}
+        onSelectIndex={handleListSelect}
+      />
       <Box
         marginTop={1}
         paddingX={1}
@@ -314,10 +256,38 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
         </Text>
       </Box>
       <Box marginTop={1} flexDirection="column" flexShrink={0}>
-        <Text dimColor>
-          {customMode
-            ? "Enter apply · Esc return to list"
-            : "Enter choose · Up/Down change selection · Esc or Q cancel"}
+        <Text color="$fg">
+          {customMode ? (
+            <>
+              <Text color="$primary" bold>
+                Enter
+              </Text>{" "}
+              apply ·{" "}
+              <Text color="$primary" bold>
+                Esc
+              </Text>{" "}
+              return to list
+            </>
+          ) : (
+            <>
+              <Text color="$primary" bold>
+                Enter
+              </Text>{" "}
+              choose ·{" "}
+              <Text color="$primary" bold>
+                Up/Down
+              </Text>{" "}
+              change selection ·{" "}
+              <Text color="$primary" bold>
+                Esc
+              </Text>{" "}
+              or{" "}
+              <Text color="$primary" bold>
+                Q
+              </Text>{" "}
+              cancel
+            </>
+          )}
         </Text>
       </Box>
     </Box>
@@ -325,6 +295,78 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
 };
 
 export default ModelSelectionPrompt;
+
+interface ModelSelectionListProps {
+  options: UIModelSelectionOption[];
+  selectedIndex: number;
+  active: boolean;
+  onCursor: (index: number | ((current: number) => number)) => void;
+  onSelectIndex: (index: number) => void;
+}
+
+const ModelSelectionList: FC<ModelSelectionListProps> = ({
+  options,
+  selectedIndex,
+  active,
+  onCursor,
+  onSelectIndex,
+}) => {
+  const { height: rectHeight } = useBoxRect();
+  const viewportHeight = Math.max(1, rectHeight);
+
+  return (
+    <Box
+      marginTop={1}
+      flexDirection="column"
+      flexGrow={1}
+      flexShrink={1}
+      minHeight={0}
+      minWidth={0}
+      overflow="hidden"
+    >
+      <ListView
+        items={options}
+        height={viewportHeight}
+        nav
+        cursorKey={selectedIndex}
+        onCursor={(index) => onCursor(index)}
+        onSelect={onSelectIndex}
+        active={active}
+        estimateHeight={2}
+        overflowIndicator
+        getKey={(option, index) => `${option.label}-${index}`}
+        renderItem={(option, index, meta) => {
+          const isSelected = meta.isCursor;
+
+          return (
+            <Box
+              key={`${option.label}-${index}`}
+              flexDirection="column"
+              backgroundColor={isSelected ? "$selectionbg" : undefined}
+              paddingX={1}
+              marginBottom={1}
+              minWidth={0}
+            >
+              <Text color={isSelected ? "$selection" : "$fg"} bold={isSelected}>
+                {isSelected ? "›" : " "} {option.label}
+                {option.active ? (
+                  <Text color={isSelected ? "$selection" : "$success"}>
+                    {" "}
+                    current
+                  </Text>
+                ) : null}
+              </Text>
+              <Text color={isSelected ? "$selection" : "$muted"}>
+                {formatModelLine(option)}
+                {option.description ? `  ·  ${option.description}` : ""}
+              </Text>
+            </Box>
+          );
+        }}
+      />
+    </Box>
+  );
+};
 
 function formatModelLine(option: UIModelSelectionOption): string {
   if (option.isCustom) {

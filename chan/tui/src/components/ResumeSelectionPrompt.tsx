@@ -1,5 +1,5 @@
-import React, { type FC, useMemo, useState } from "react";
-import { Box, Text, useInput } from "silvery";
+import React, { type FC, useState } from "react";
+import { Box, ListView, Text, useBoxRect, useInput } from "silvery";
 import type { UIResumeSelection } from "../hooks/useEvents.js";
 import { stripProviderPrefix } from "../utils/formatModel.js";
 
@@ -8,8 +8,6 @@ interface ResumeSelectionPromptProps {
   onSelect: (sessionId: string) => void;
   onCancel: () => void;
 }
-
-const VISIBLE_WINDOW = 8;
 
 const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
   selection,
@@ -24,26 +22,6 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
       return;
     }
 
-    if (key.upArrow) {
-      setSelectedIndex((current) =>
-        current === 0 ? selection.sessions.length - 1 : current - 1,
-      );
-      return;
-    }
-
-    if (key.downArrow) {
-      setSelectedIndex((current) => (current + 1) % selection.sessions.length);
-      return;
-    }
-
-    if (key.return) {
-      const selected = selection.sessions[selectedIndex];
-      if (selected) {
-        onSelect(selected.sessionId);
-      }
-      return;
-    }
-
     const shortcut = input?.toLowerCase();
     if (!shortcut) {
       return;
@@ -54,21 +32,12 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
     }
   });
 
-  const startIndex = useMemo(() => {
-    if (selection.sessions.length <= VISIBLE_WINDOW) {
-      return 0;
+  const handleListSelect = (index: number) => {
+    const selected = selection.sessions[index];
+    if (selected) {
+      onSelect(selected.sessionId);
     }
-    const centered = selectedIndex - Math.floor(VISIBLE_WINDOW / 2);
-    return Math.max(
-      0,
-      Math.min(centered, selection.sessions.length - VISIBLE_WINDOW),
-    );
-  }, [selectedIndex, selection.sessions.length]);
-
-  const visibleSessions = selection.sessions.slice(
-    startIndex,
-    startIndex + VISIBLE_WINDOW,
-  );
+  };
 
   return (
     <Box
@@ -97,18 +66,77 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
         </Box>
       </Box>
 
-      <Box
-        marginTop={1}
-        flexDirection="column"
-        flexGrow={1}
-        flexShrink={1}
-        minHeight={0}
-        minWidth={0}
-        overflow="scroll"
-      >
-        {visibleSessions.map((session, index) => {
-          const actualIndex = startIndex + index;
-          const isSelected = actualIndex === selectedIndex;
+      <ResumeSessionList
+        sessions={selection.sessions}
+        selectedIndex={selectedIndex}
+        onCursor={setSelectedIndex}
+        onSelectIndex={handleListSelect}
+      />
+      <Box marginTop={1} flexDirection="column" flexShrink={0}>
+        <Text color="$fg">
+          <Text color="$primary" bold>
+            Enter
+          </Text>{" "}
+          resume ·{" "}
+          <Text color="$primary" bold>
+            Up/Down
+          </Text>{" "}
+          change selection ·{" "}
+          <Text color="$primary" bold>
+            Esc
+          </Text>{" "}
+          or{" "}
+          <Text color="$primary" bold>
+            Q
+          </Text>{" "}
+          cancel
+        </Text>
+      </Box>
+    </Box>
+  );
+};
+
+export default ResumeSelectionPrompt;
+
+interface ResumeSessionListProps {
+  sessions: UIResumeSelection["sessions"];
+  selectedIndex: number;
+  onCursor: (index: number) => void;
+  onSelectIndex: (index: number) => void;
+}
+
+const ResumeSessionList: FC<ResumeSessionListProps> = ({
+  sessions,
+  selectedIndex,
+  onCursor,
+  onSelectIndex,
+}) => {
+  const { height: rectHeight } = useBoxRect();
+  const viewportHeight = Math.max(1, rectHeight);
+
+  return (
+    <Box
+      marginTop={1}
+      flexDirection="column"
+      flexGrow={1}
+      flexShrink={1}
+      minHeight={0}
+      minWidth={0}
+      overflow="hidden"
+    >
+      <ListView
+        items={sessions}
+        height={viewportHeight}
+        nav
+        cursorKey={selectedIndex}
+        onCursor={onCursor}
+        onSelect={onSelectIndex}
+        active
+        estimateHeight={2}
+        overflowIndicator
+        getKey={(session) => session.sessionId}
+        renderItem={(session, _index, meta) => {
+          const isSelected = meta.isCursor;
           const timestamp = formatUpdatedAt(session.updatedAt);
 
           return (
@@ -133,18 +161,11 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
               </Text>
             </Box>
           );
-        })}
-      </Box>
-      <Box marginTop={1} flexDirection="column" flexShrink={0}>
-        <Text dimColor>
-          Enter resume · Up/Down change selection · Esc or Q cancel
-        </Text>
-      </Box>
+        }}
+      />
     </Box>
   );
 };
-
-export default ResumeSelectionPrompt;
 
 function formatUpdatedAt(value: string | null): string {
   if (!value) {
