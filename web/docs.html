@@ -117,6 +117,9 @@
               >First-Class Outputs</a
             >
             <a href="#options" class="sidebar-link scroll-link">CLI Options</a>
+            <a href="#mcp-management" class="sidebar-link scroll-link"
+              >MCP Management</a
+            >
             <a href="#slash-commands" class="sidebar-link scroll-link"
               >Slash Commands</a
             >
@@ -404,6 +407,73 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code></pre>
                 ><br /><span class="text-brand">$</span> chan --mode fast
               </div>
             </div>
+          </section>
+
+          <!-- MCP Management -->
+          <section id="mcp-management" class="mb-24">
+            <h2 class="subsection-title text-3xl font-bold mb-6">
+              MCP Management
+            </h2>
+            <p class="text-gray-400 mb-8 leading-relaxed">
+              Chan includes a small MCP management CLI for adding, inspecting,
+              listing, and removing configured MCP servers without editing JSON
+              by hand.
+            </p>
+
+            <div
+              class="bg-subtle p-6 border border-[#1a1a1a] rounded-md space-y-4 font-mono text-sm overflow-x-auto mb-8"
+            >
+              <div><span class="text-brand">$</span> chan mcp add my-server -- npx my-mcp-server</div>
+              <div><span class="text-brand">$</span> chan mcp add --transport http sentry https://mcp.sentry.dev/mcp</div>
+              <div><span class="text-brand">$</span> chan mcp add-json docs '{"transport":"stdio","command":"uvx","args":["docs-mcp"]}'</div>
+              <div><span class="text-brand">$</span> chan mcp list</div>
+              <div><span class="text-brand">$</span> chan mcp get sentry</div>
+              <div><span class="text-brand">$</span> chan mcp remove sentry</div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-sm">
+              <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                  Project Scope
+                </p>
+                <p class="text-gray-300">
+                  Writes repo-local MCP config to <code>.chan/mcp.json</code>
+                </p>
+              </div>
+              <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                  User Scope
+                </p>
+                <p class="text-gray-300">
+                  Writes user MCP config to
+                  <code>~/.config/chan/config.json</code>
+                </p>
+              </div>
+            </div>
+
+            <ul class="space-y-3 text-sm text-gray-300">
+              <li>
+                <strong class="text-brand">Supported transports:</strong>
+                <code>stdio</code>, <code>http</code>, <code>sse</code>, and
+                <code>ws</code>
+              </li>
+              <li>
+                <strong class="text-brand">Stdio flags:</strong>
+                <code>--env KEY=value</code> and
+                <code>--startup-timeout-ms</code>
+              </li>
+              <li>
+                <strong class="text-brand">Network flags:</strong>
+                <code>--header 'Key: Value'</code> for <code>http</code>,
+                <code>sse</code>, and <code>ws</code>
+              </li>
+              <li>
+                <strong class="text-brand">Runtime checks:</strong>
+                <code>list</code> and <code>get</code> attempt a real MCP
+                connection, so repo-scoped <code>stdio</code> servers are
+                briefly spawned to inspect health and capabilities
+              </li>
+            </ul>
           </section>
 
           <!-- Slash Commands -->
@@ -1013,7 +1083,9 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code></pre>
                 override. Use the global file when you want the same server in
                 every workspace. Use <code>.chan/mcp.json</code> when you want
                 MCP setup scoped to the current repo. The workspace file is
-                merged on top of the global config for the current session.
+                merged on top of the global config for the current session. For
+                routine setup, prefer the <code>chan mcp add</code> command and
+                related management subcommands instead of editing JSON by hand.
               </p>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-sm">
@@ -2191,6 +2263,9 @@ make install        # Install to /usr/local/bin</code></pre>
             >First-Class Outputs</a
           >
           <a href="#options" class="sidebar-link mobile-link">CLI Options</a>
+          <a href="#mcp-management" class="sidebar-link mobile-link"
+            >MCP Management</a
+          >
           <a href="#slash-commands" class="sidebar-link mobile-link"
             >Slash Commands</a
           >
@@ -2212,6 +2287,9 @@ make install        # Install to /usr/local/bin</code></pre>
           >
           <a href="#config" class="sidebar-link mobile-link"
             >Configuration Reference</a
+          >
+          <a href="#mcp-config" class="sidebar-link mobile-link"
+            >MCP Configuration</a
           >
           <a href="#debug" class="sidebar-link mobile-link">Diagnostics</a>
           <a href="#arch" class="sidebar-link mobile-link">Architecture</a>

@@ -2,6 +2,7 @@
 
 ## 2026-04-16
 
+- Updated the static web docs in `web/docs.html` to document the new MCP management CLI, added sidebar and mobile-nav links for MCP management, and pointed the MCP configuration section at `chan mcp add` for routine setup.
 - Added Claude Code-style MCP management commands to Chan's Go CLI: `chan mcp add`, `add-json`, `list`, `get`, and `remove`, backed by scope-aware config persistence for user config and repo-local `.chan/mcp.json`; rebuilt the release artifacts and reinstalled `chan` and `chan-engine` into `~/.local/bin`.
 - Fixed the fullscreen slash-command preview rendering regression in the TUI by tightening match ranking so short queries no longer hit arbitrary description substrings like `go` in `logging`, constraining preview rows to the available prompt width, and truncating long descriptions instead of letting them spill into the input line; rebuilt and reinstalled `chan` and `chan-engine` into `~/.local/bin`.
 - Made Chan skills invocable as slash commands: startup slash-command descriptors now include loaded skills, `/help` lists them, and entering `/<skill-name> ...` routes through the normal user-turn pipeline while forcing that skill into prompt assembly for deterministic activation.
