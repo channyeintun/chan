@@ -15,20 +15,30 @@ const SlashCommandPreview: FC<SlashCommandPreviewProps> = ({
   const visibleCommands = commands.slice(startIndex, startIndex + 6);
 
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Box flexDirection="column" marginTop={1} minWidth={0}>
       {visibleCommands.map((command, index) => {
         const actualIndex = startIndex + index;
         const selected = actualIndex === selectedIndex;
 
         return (
-          <Box key={command.name} paddingLeft={1}>
+          <Box
+            key={command.name}
+            flexDirection="row"
+            paddingLeft={1}
+            width="100%"
+            minWidth={0}
+          >
             <Text color={selected ? "$primary" : "$muted"}>
               {selected ? "›" : " "}
             </Text>
             <Text color={selected ? "$primary" : undefined} bold>
               {` /${command.name}`}
             </Text>
-            <Text color="$muted">{`  ${command.description}`}</Text>
+            <Box flexGrow={1} minWidth={0}>
+              <Text color="$muted" wrap="truncate-end">
+                {`  ${command.description}`}
+              </Text>
+            </Box>
           </Box>
         );
       })}

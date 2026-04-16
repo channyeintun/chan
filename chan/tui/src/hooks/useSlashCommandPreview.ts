@@ -119,15 +119,21 @@ function rankSlashCommands(
       index,
       name: command.name.toLowerCase(),
       description: command.description.toLowerCase(),
+      nameIndex:
+        normalizedQuery.length > 0
+          ? command.name.toLowerCase().indexOf(normalizedQuery)
+          : 0,
+      descriptionWordIndex:
+        normalizedQuery.length > 0
+          ? firstDescriptionWordMatch(command.description, normalizedQuery)
+          : 0,
     }))
-    .filter(({ name, description }) => {
+    .filter(({ nameIndex, descriptionWordIndex }) => {
       if (normalizedQuery.length === 0) {
         return true;
       }
 
-      return (
-        name.includes(normalizedQuery) || description.includes(normalizedQuery)
-      );
+      return nameIndex !== -1 || descriptionWordIndex !== -1;
     })
     .sort((left, right) => {
       const leftStartsWith = left.name.startsWith(normalizedQuery) ? 0 : 1;
@@ -136,14 +142,44 @@ function rankSlashCommands(
         return leftStartsWith - rightStartsWith;
       }
 
-      const leftIndex = left.name.indexOf(normalizedQuery);
-      const rightIndex = right.name.indexOf(normalizedQuery);
-      if (leftIndex !== rightIndex) {
-        return leftIndex - rightIndex;
+      const leftNameMatchRank = left.nameIndex === -1 ? 1 : 0;
+      const rightNameMatchRank = right.nameIndex === -1 ? 1 : 0;
+      if (leftNameMatchRank !== rightNameMatchRank) {
+        return leftNameMatchRank - rightNameMatchRank;
+      }
+
+      if (left.nameIndex !== right.nameIndex) {
+        return left.nameIndex - right.nameIndex;
+      }
+
+      const leftDescriptionMatchRank = left.descriptionWordIndex === -1 ? 1 : 0;
+      const rightDescriptionMatchRank =
+        right.descriptionWordIndex === -1 ? 1 : 0;
+      if (leftDescriptionMatchRank !== rightDescriptionMatchRank) {
+        return leftDescriptionMatchRank - rightDescriptionMatchRank;
+      }
+
+      if (left.descriptionWordIndex !== right.descriptionWordIndex) {
+        return left.descriptionWordIndex - right.descriptionWordIndex;
       }
 
       return left.index - right.index;
     });
 
   return ranked.map(({ command }) => command);
+}
+
+function firstDescriptionWordMatch(description: string, query: string): number {
+  const tokens = description
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 0);
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]?.startsWith(query)) {
+      return index;
+    }
+  }
+
+  return -1;
 }
