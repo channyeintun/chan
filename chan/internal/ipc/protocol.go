@@ -159,6 +159,7 @@ type PermissionRequestPayload struct {
 	ToolID          string `json:"tool_id"`
 	Tool            string `json:"tool"`
 	Command         string `json:"command"`
+	RawInput        string `json:"raw_input,omitempty"`
 	Risk            string `json:"risk"`
 	RiskReason      string `json:"risk_reason,omitempty"`
 	PermissionLevel string `json:"permission_level,omitempty"`

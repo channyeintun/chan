@@ -15,7 +15,7 @@ const SystemTextMessage: FC<SystemTextMessageProps> = ({ message }) => {
       markerColor={toneColor(message.tone)}
       label={
         <Text color={toneColor(message.tone)} bold>
-          Background Agent
+          {message.label?.trim() || "Notice"}
         </Text>
       }
       meta={renderMetadata(message.timestamp)}

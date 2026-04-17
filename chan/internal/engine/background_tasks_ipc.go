@@ -32,7 +32,16 @@ func handleBackgroundCommandInspectMessage(
 		backgroundCommandDetailTailBytes,
 	)
 	if err != nil {
-		return bridge.EmitNotice(fmt.Sprintf("Inspect background command failed: %v", err))
+		message := fmt.Sprintf("Inspect background command failed: %v", err)
+		if emitErr := bridge.Emit(ipc.EventBackgroundCommandDetail, ipc.BackgroundCommandDetailPayload{
+			CommandID: commandID,
+			Status:    "failed",
+			Running:   false,
+			Error:     message,
+		}); emitErr != nil {
+			return emitErr
+		}
+		return bridge.EmitNotice(message)
 	}
 
 	return bridge.Emit(ipc.EventBackgroundCommandDetail, ipc.BackgroundCommandDetailPayload{
@@ -124,7 +133,15 @@ func handleBackgroundAgentInspectMessage(
 		WaitMs:  payload.WaitMs,
 	})
 	if err != nil {
-		return bridge.EmitNotice(fmt.Sprintf("Inspect background agent failed: %v", err))
+		message := fmt.Sprintf("Inspect background agent failed: %v", err)
+		if emitErr := bridge.Emit(ipc.EventBackgroundAgentDetail, ipc.BackgroundAgentDetailPayload{
+			AgentID: agentID,
+			Status:  "failed",
+			Error:   message,
+		}); emitErr != nil {
+			return emitErr
+		}
+		return bridge.EmitNotice(message)
 	}
 
 	return bridge.Emit(ipc.EventBackgroundAgentDetail, backgroundAgentDetailPayloadFromResult(result))

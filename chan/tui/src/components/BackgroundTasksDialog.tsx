@@ -45,7 +45,10 @@ const BackgroundTasksDialog: FC<BackgroundTasksDialogProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [view, setView] = useState<"list" | "detail">("list");
   const selectedItem = items[selectedIndex] ?? null;
-  const detail = selectedItem ? details[selectedItem.key] : undefined;
+  const liveDetail = selectedItem ? details[selectedItem.key] : undefined;
+  const detail = selectedItem
+    ? liveDetail ?? buildTaskDetailFallback(selectedItem, commands, agents)
+    : undefined;
 
   useEffect(() => {
     if (items.length === 0) {
@@ -170,7 +173,11 @@ const BackgroundTasksDialog: FC<BackgroundTasksDialogProps> = ({
           }}
         />
       ) : (
-        <TaskDetailView item={selectedItem} detail={detail} />
+        <TaskDetailView
+          item={selectedItem}
+          detail={detail}
+          pendingRefresh={Boolean(selectedItem) && !liveDetail}
+        />
       )}
 
       <FooterHint
@@ -287,9 +294,14 @@ const TaskList: FC<TaskListProps> = ({
 interface TaskDetailViewProps {
   item: TaskListItem | null;
   detail: TaskDetail | undefined;
+  pendingRefresh: boolean;
 }
 
-const TaskDetailView: FC<TaskDetailViewProps> = ({ item, detail }) => {
+const TaskDetailView: FC<TaskDetailViewProps> = ({
+  item,
+  detail,
+  pendingRefresh,
+}) => {
   if (!item) {
     return (
       <Box marginTop={1} flexGrow={1} justifyContent="center">
@@ -307,18 +319,34 @@ const TaskDetailView: FC<TaskDetailViewProps> = ({ item, detail }) => {
   }
 
   if (item.kind === "command") {
-    return <CommandDetail detail={detail as BackgroundCommandDetailPayload} />;
+    return (
+      <CommandDetail
+        detail={detail as BackgroundCommandDetailPayload}
+        pendingRefresh={pendingRefresh}
+      />
+    );
   }
 
-  return <AgentDetail detail={detail as BackgroundAgentDetailPayload} />;
+  return (
+    <AgentDetail
+      detail={detail as BackgroundAgentDetailPayload}
+      pendingRefresh={pendingRefresh}
+    />
+  );
 };
 
-const CommandDetail: FC<{ detail: BackgroundCommandDetailPayload }> = ({ detail }) => {
+const CommandDetail: FC<{
+  detail: BackgroundCommandDetailPayload;
+  pendingRefresh: boolean;
+}> = ({ detail, pendingRefresh }) => {
   const runtime = formatRuntime(detail.started_at, detail.updated_at, detail.running);
 
   return (
     <Box marginTop={1} flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0}>
       <Box flexDirection="column" flexShrink={0} minWidth={0}>
+        {pendingRefresh ? (
+          <Text color="$muted">Refreshing retained command detail…</Text>
+        ) : null}
         <Text bold color="$accent">
           Background Command
         </Text>
@@ -371,7 +399,10 @@ const CommandDetail: FC<{ detail: BackgroundCommandDetailPayload }> = ({ detail 
   );
 };
 
-const AgentDetail: FC<{ detail: BackgroundAgentDetailPayload }> = ({ detail }) => {
+const AgentDetail: FC<{
+  detail: BackgroundAgentDetailPayload;
+  pendingRefresh: boolean;
+}> = ({ detail, pendingRefresh }) => {
   const tools = detail.metadata?.tools ?? [];
   const statusMessage = detail.metadata?.status_message?.trim();
   const stopBlockReason = detail.metadata?.stop_block_reason?.trim();
@@ -383,6 +414,9 @@ const AgentDetail: FC<{ detail: BackgroundAgentDetailPayload }> = ({ detail }) =
   return (
     <Box marginTop={1} flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0}>
       <Box flexDirection="column" flexShrink={0} minWidth={0}>
+        {pendingRefresh ? (
+          <Text color="$muted">Refreshing retained agent detail…</Text>
+        ) : null}
         <Text bold color="$primary">
           Background Agent
         </Text>
@@ -529,6 +563,71 @@ function buildTaskItems(
 
 function taskKey(kind: TaskKind, id: string): string {
   return `${kind}:${id}`;
+}
+
+function buildTaskDetailFallback(
+  item: TaskListItem,
+  commands: UIBackgroundCommand[],
+  agents: UIBackgroundAgent[],
+): TaskDetail | undefined {
+  if (item.kind === "command") {
+    const command = commands.find((entry) => entry.commandId === item.id);
+    if (!command) {
+      return undefined;
+    }
+
+    return {
+      command_id: command.commandId,
+      command: command.command,
+      cwd: command.cwd,
+      status: command.status,
+      running: command.running,
+      started_at: command.startedAt,
+      updated_at: command.updatedAt ?? command.retainedAt,
+      output: command.preview,
+      has_unread_output:
+        command.previewKind === "unread" && command.unreadBytes > 0,
+      unread_bytes: command.unreadBytes,
+      exit_code: command.exitCode,
+      error: command.error,
+    };
+  }
+
+  const agent = agents.find((entry) => entry.agentId === item.id);
+  if (!agent) {
+    return undefined;
+  }
+
+  return {
+    agent_id: agent.agentId,
+    invocation_id: agent.invocationId || undefined,
+    description: agent.description || undefined,
+    subagent_type: agent.subagentType || undefined,
+    status: agent.status,
+    summary: agent.summary || undefined,
+    session_id: agent.sessionId,
+    transcript_path: agent.transcriptPath,
+    output_file: agent.outputFile,
+    error: agent.error,
+    total_cost_usd: agent.totalCostUsd || undefined,
+    input_tokens: agent.inputTokens || undefined,
+    output_tokens: agent.outputTokens || undefined,
+    metadata: {
+      invocation_id: agent.invocationId || undefined,
+      agent_id: agent.agentId,
+      description: agent.description || undefined,
+      subagent_type: agent.subagentType || undefined,
+      lifecycle_state: agent.lifecycleState,
+      status_message: agent.statusMessage,
+      stop_block_reason: agent.stopBlockReason,
+      stop_block_count:
+        agent.stopBlockCount > 0 ? agent.stopBlockCount : undefined,
+      session_id: agent.sessionId,
+      transcript_path: agent.transcriptPath,
+      result_path: agent.outputFile,
+      tools: agent.tools.length > 0 ? [...agent.tools] : undefined,
+    },
+  };
 }
 
 function detailStatus(item: TaskListItem, detail: TaskDetail | undefined): string {

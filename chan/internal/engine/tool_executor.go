@@ -554,6 +554,7 @@ func waitForPermissionDecision(
 		ToolID:          toolCallID,
 		Tool:            pending.Tool.Name(),
 		Command:         summarizePermissionTarget(pending),
+		RawInput:        strings.TrimSpace(pending.Input.Raw),
 		Risk:            permissionRisk(pending),
 		RiskReason:      risk.Reason,
 		PermissionLevel: permissionLevelLabel(pending),

@@ -790,6 +790,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           <PermissionPrompt
             tool={uiState.pendingPermission.tool}
             command={uiState.pendingPermission.command}
+            rawInput={uiState.pendingPermission.raw_input}
             risk={uiState.pendingPermission.risk}
             riskReason={uiState.pendingPermission.risk_reason}
             permissionLevel={uiState.pendingPermission.permission_level}

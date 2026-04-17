@@ -145,6 +145,7 @@ export interface UISystemMessage extends UIMessageBase {
   role: "system";
   text: string;
   tone: "info" | "success" | "warning" | "error";
+  label?: string;
 }
 
 export interface UIUserMessage extends UIMessageBase {
@@ -438,6 +439,7 @@ function nextGeneratedMessageID(): string {
 function createSystemMessage(
   text: string,
   tone: UISystemMessage["tone"],
+  label?: string,
 ): UISystemMessage {
   nextMessageId += 1;
   return {
@@ -445,6 +447,7 @@ function createSystemMessage(
     role: "system",
     text,
     tone,
+    label,
     timestamp: new Date().toISOString(),
   };
 }
@@ -800,7 +803,11 @@ export function useEvents(initialModel: string, initialMode: string) {
             p,
           );
           const noticeMessage = backgroundNotice
-            ? createSystemMessage(backgroundNotice.text, backgroundNotice.tone)
+            ? createSystemMessage(
+                backgroundNotice.text,
+                backgroundNotice.tone,
+                "Background Command",
+              )
             : null;
 
           return {
@@ -925,6 +932,7 @@ export function useEvents(initialModel: string, initialMode: string) {
       }
       case "permission_request": {
         const p = event.payload as PermissionRequestPayload;
+        const permissionInput = permissionRequestDisplayInput(p);
         setUIState((s) => ({
           ...s,
           activeTurnStatus: "waiting_permission",
@@ -937,7 +945,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           toolCalls: upsertToolCall(s.toolCalls, {
             id: p.tool_id,
             name: p.tool,
-            input: p.command,
+            input: permissionInput,
             status: "waiting_permission",
             permissionRequestId: p.request_id,
           }),
@@ -1323,7 +1331,11 @@ export function useEvents(initialModel: string, initialMode: string) {
           };
           const notice = buildBackgroundAgentNotice(previousAgent, nextAgent);
           const noticeMessage = notice
-            ? createSystemMessage(notice.text, notice.tone)
+            ? createSystemMessage(
+                notice.text,
+                notice.tone,
+                "Background Agent",
+              )
             : null;
 
           return {
@@ -1363,7 +1375,11 @@ export function useEvents(initialModel: string, initialMode: string) {
             "background_command_updated",
           );
           const noticeMessage = notice
-            ? createSystemMessage(notice.text, notice.tone)
+            ? createSystemMessage(
+                notice.text,
+                notice.tone,
+                "Background Command",
+              )
             : null;
 
           return {
@@ -1604,7 +1620,7 @@ export function useEvents(initialModel: string, initialMode: string) {
         ? upsertToolCall(s.toolCalls, {
             id: s.pendingPermission.tool_id,
             name: s.pendingPermission.tool,
-            input: s.pendingPermission.command,
+            input: permissionRequestDisplayInput(s.pendingPermission),
             status: "waiting_permission",
             permissionRequestId: undefined,
           })
@@ -1627,7 +1643,7 @@ export function useEvents(initialModel: string, initialMode: string) {
         ? upsertToolCall(s.toolCalls, {
             id: s.pendingPermission.tool_id,
             name: s.pendingPermission.tool,
-            input: s.pendingPermission.command,
+            input: permissionRequestDisplayInput(s.pendingPermission),
             status:
               decision === "allow" ||
               decision === "always_allow" ||
@@ -1817,6 +1833,7 @@ function normalizeHydratedMessages(
               role: "system",
               text: taskNotification.summary,
               tone: taskNotification.tone,
+              label: taskNotification.label,
               timestamp,
             },
           ];
@@ -3112,6 +3129,7 @@ function summarizeNoticeWithDetail(prefix: string, detail: string): string {
 interface ParsedTaskNotification {
   summary: string;
   tone: UISystemMessage["tone"];
+  label: string;
 }
 
 function parseTaskNotificationMessage(
@@ -3129,6 +3147,7 @@ function parseTaskNotificationMessage(
       decodeTaskNotificationText(summary?.trim() || "") ||
       fallbackTaskNotificationSummary(status?.trim() || "updated"),
     tone: taskNotificationTone(status?.trim() || "updated"),
+    label: "Background Command",
   };
 }
 
@@ -3209,6 +3228,31 @@ function parseJSONObject<T>(
   } catch {
     return null;
   }
+}
+
+function permissionRequestDisplayInput(
+  permission: PermissionRequestPayload | null | undefined,
+): string {
+  if (!permission) {
+    return "";
+  }
+
+  const command = stringOrEmpty(permission.command).trim();
+  if (command.length > 0) {
+    return command;
+  }
+
+  const targetValue = stringOrEmpty(permission.target_value).trim();
+  if (targetValue.length > 0) {
+    return targetValue;
+  }
+
+  const rawInput = stringOrEmpty(permission.raw_input).trim();
+  if (rawInput.length > 0) {
+    return rawInput;
+  }
+
+  return stringOrEmpty(permission.tool);
 }
 
 function parseJSONArray<T>(

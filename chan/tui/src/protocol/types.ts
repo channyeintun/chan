@@ -138,6 +138,7 @@ export interface PermissionRequestPayload {
   tool_id: string;
   tool: string;
   command: string;
+  raw_input?: string;
   risk: string;
   risk_reason?: string;
   permission_level?: string;

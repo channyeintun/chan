@@ -16,6 +16,7 @@ interface PermissionOption {
 interface PermissionPromptProps {
   tool: string;
   command: string;
+  rawInput?: string;
   risk: string;
   riskReason?: string;
   permissionLevel?: string;
@@ -80,6 +81,7 @@ function getRiskColor(risk: string): "$error" | "$warning" | "$info" {
 const PermissionPrompt: FC<PermissionPromptProps> = ({
   tool,
   command,
+  rawInput,
   risk,
   riskReason,
   permissionLevel,
@@ -133,8 +135,8 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
   const riskColor = getRiskColor(risk);
   const selectedOption = OPTIONS[selectedIndex] ?? OPTIONS[0];
   const detailValue = useMemo(
-    () => resolveDetailValue(tool, command, targetValue),
-    [command, targetValue, tool],
+    () => resolveDetailValue(tool, command, targetValue, rawInput),
+    [command, rawInput, targetValue, tool],
   );
   const question = useMemo(
     () => buildQuestion(tool, targetKind, detailValue),
@@ -359,19 +361,27 @@ function resolveDetailValue(
   tool: string,
   command: string,
   targetValue: string | undefined,
+  rawInput: string | undefined,
 ): string {
   const normalizedCommand = normalizeDetailValue(command);
   const normalizedTarget = normalizeDetailValue(targetValue ?? "");
+  const normalizedRawPreview = normalizeDetailValue(
+    extractRawInputPreview(tool, rawInput),
+  );
 
   if (tool === "bash") {
-    return normalizedCommand || normalizedTarget;
+    return normalizedCommand || normalizedRawPreview || normalizedTarget;
   }
 
   if (normalizedCommand.length > 0) {
     return normalizedCommand;
   }
 
-  return normalizedTarget;
+  if (normalizedTarget.length > 0) {
+    return normalizedTarget;
+  }
+
+  return normalizedRawPreview;
 }
 
 function buildDetailPreview(
@@ -386,7 +396,71 @@ function buildDetailPreview(
 }
 
 function normalizeDetailValue(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+  return value
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractRawInputPreview(tool: string, rawInput: string | undefined): string {
+  const trimmed = rawInput?.trim() ?? "";
+  if (trimmed.length === 0) {
+    return "";
+  }
+
+  const parsed = parseRawInputObject(trimmed);
+  if (!parsed) {
+    return trimmed;
+  }
+
+  if (tool === "bash") {
+    const command = firstStringField(parsed, "command");
+    if (command.length > 0) {
+      return command;
+    }
+  }
+
+  const commonPreview = firstStringField(
+    parsed,
+    "command",
+    "filePath",
+    "file_path",
+    "url",
+    "query",
+    "pattern",
+    "path",
+  );
+  if (commonPreview.length > 0) {
+    return commonPreview;
+  }
+
+  return trimmed;
+}
+
+function parseRawInputObject(rawInput: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(rawInput);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function firstStringField(
+  value: Record<string, unknown>,
+  ...keys: string[]
+): string {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate;
+    }
+  }
+
+  return "";
 }
 
 function truncateEnd(value: string, limit: number): string {
