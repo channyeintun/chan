@@ -72,10 +72,11 @@
    - Notes: Startup now uses provider discovery to fall back from an unusable default to the first safe provider with credentials, emits a clear notice when it switches, avoids optimistic auto-fallback to Ollama, and shows provider state in `/status`.
 
 5. Generalize `/connect`
-   - Status: in progress
+   - Status: completed
+   - Notes: Reworked `/connect` into a generic provider entry point with overview, help, and status modes; kept GitHub Copilot on device auth; added API-key and local-provider onboarding guidance; and made ready providers switch the active session immediately through the same command.
 
 6. Redesign model picker around provider state
-   - Status: not started
+   - Status: in progress
 
 7. Persist recent successful model selections
    - Status: not started

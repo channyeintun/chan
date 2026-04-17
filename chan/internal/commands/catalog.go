@@ -56,26 +56,6 @@ func MergeGitHubCopilotModelIDs(existing []string, extra []string) []string {
 	return merged
 }
 
-func ParseConnectArgs(args string) (string, string, error) {
-	parts := strings.Fields(args)
-	switch len(parts) {
-	case 0:
-		return "github-copilot", "", nil
-	case 1:
-		if strings.EqualFold(parts[0], "github-copilot") {
-			return "github-copilot", "", nil
-		}
-		return "", "", fmt.Errorf("usage: /connect [github-copilot [enterprise-domain]]")
-	case 2:
-		if !strings.EqualFold(parts[0], "github-copilot") {
-			return "", "", fmt.Errorf("usage: /connect [github-copilot [enterprise-domain]]")
-		}
-		return "github-copilot", parts[1], nil
-	default:
-		return "", "", fmt.Errorf("usage: /connect [github-copilot [enterprise-domain]]")
-	}
-}
-
 func ParseReasoningArgs(args string) (string, bool, error) {
 	selection := strings.ToLower(strings.TrimSpace(args))
 	if selection == "default" {

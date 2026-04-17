@@ -211,20 +211,38 @@ type connectProviderFunc func(cmd *slashCommandContext, extraArgs string) (*conn
 
 var connectProviderRegistry = map[string]connectProviderFunc{
 	"github-copilot": connectGitHubCopilot,
+	"anthropic":      makeStaticConnectProviderHandler("anthropic"),
+	"openai":         makeStaticConnectProviderHandler("openai"),
+	"gemini":         makeStaticConnectProviderHandler("gemini"),
+	"deepseek":       makeStaticConnectProviderHandler("deepseek"),
+	"qwen":           makeStaticConnectProviderHandler("qwen"),
+	"glm":            makeStaticConnectProviderHandler("glm"),
+	"mistral":        makeStaticConnectProviderHandler("mistral"),
+	"groq":           makeStaticConnectProviderHandler("groq"),
+	"ollama":         makeStaticConnectProviderHandler("ollama"),
 }
 
 func handleConnectSlashCommand(cmd *slashCommandContext) error {
-	providerName, extraArgs, err := commandspkg.ParseConnectArgs(cmd.args)
+	request, err := commandspkg.ParseConnectArgs(cmd.args)
 	if err != nil {
 		return emitTextResponse(cmd.bridge, err.Error())
 	}
 
-	handler, ok := connectProviderRegistry[providerName]
-	if !ok {
-		return emitTextResponse(cmd.bridge, fmt.Sprintf("unsupported connect provider: %s", providerName))
+	currentCfg := config.LoadForWorkingDir(cmd.state.CWD)
+	snapshot := commandspkg.DiscoverProviderSnapshot(currentCfg)
+	switch request.Action {
+	case commandspkg.ConnectActionOverview, commandspkg.ConnectActionHelp:
+		return emitTextResponse(cmd.bridge, commandspkg.FormatConnectOverviewText(snapshot))
+	case commandspkg.ConnectActionStatus:
+		return emitTextResponse(cmd.bridge, commandspkg.FormatProviderSnapshot(snapshot))
 	}
 
-	result, err := handler(cmd, extraArgs)
+	handler, ok := connectProviderRegistry[request.Provider]
+	if !ok {
+		return emitTextResponse(cmd.bridge, fmt.Sprintf("unsupported connect provider: %s", request.Provider))
+	}
+
+	result, err := handler(cmd, request.Extra)
 	if err != nil {
 		return err
 	}
@@ -257,6 +275,49 @@ func handleConnectSlashCommand(cmd *slashCommandContext) error {
 		return err
 	}
 	return emitTextResponse(cmd.bridge, result.FormatMessage(cmd.state.ActiveModelID))
+}
+
+func makeStaticConnectProviderHandler(providerID string) connectProviderFunc {
+	return func(cmd *slashCommandContext, extraArgs string) (*connectResult, error) {
+		return connectStaticProvider(cmd, providerID, extraArgs)
+	}
+}
+
+func connectStaticProvider(cmd *slashCommandContext, providerID string, extraArgs string) (*connectResult, error) {
+	if strings.TrimSpace(extraArgs) != "" {
+		return nil, emitTextResponse(cmd.bridge, fmt.Sprintf("usage: /connect %s", providerID))
+	}
+
+	spec, ok := commandspkg.LookupConnectProvider(providerID)
+	if !ok {
+		return nil, emitTextResponse(cmd.bridge, fmt.Sprintf("unsupported connect provider: %s", providerID))
+	}
+
+	currentCfg := config.LoadForWorkingDir(cmd.state.CWD)
+	snapshot := commandspkg.DiscoverProviderSnapshot(currentCfg)
+	status, _ := snapshot.LookupProvider(providerID)
+	if !status.Usable {
+		return nil, emitTextResponse(cmd.bridge, commandspkg.FormatConnectProviderGuidance(spec, snapshot))
+	}
+
+	persisted := config.Load()
+	persisted.Model = modelRef(providerID, spec.DefaultModel)
+	if err := config.Save(persisted); err != nil {
+		return nil, emitTextResponse(cmd.bridge, fmt.Sprintf("save %s configuration: %v", spec.Label, err))
+	}
+
+	currentCfg.Model = persisted.Model
+	return &connectResult{
+		Provider: providerID,
+		Model:    spec.DefaultModel,
+		Config:   currentCfg,
+		FormatMessage: func(activeModelID string) string {
+			if status.AuthSource == "local" {
+				return fmt.Sprintf("%s selected. Set main model to %s. Ensure the local runtime is running before the next turn.", spec.Label, activeModelID)
+			}
+			return fmt.Sprintf("%s is ready via %s. Set main model to %s.", spec.Label, status.AuthSource, activeModelID)
+		},
+	}, nil
 }
 
 func connectGitHubCopilot(cmd *slashCommandContext, enterpriseInput string) (*connectResult, error) {

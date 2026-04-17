@@ -37,8 +37,8 @@ func slashCommandSpecs() []slashCommandSpec {
 		{
 			Descriptor: commandspkg.Descriptor{
 				Name:           "connect",
-				Description:    "Connect GitHub Copilot with device login",
-				Usage:          "/connect [github-copilot [enterprise-domain]]",
+				Description:    "Connect and set up model providers",
+				Usage:          "/connect [provider|status|help]",
 				TakesArguments: true,
 			},
 			Handler: slashCommandHandlerFunc(handleConnectSlashCommand),
