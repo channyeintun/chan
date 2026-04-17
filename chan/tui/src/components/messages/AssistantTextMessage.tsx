@@ -7,21 +7,32 @@ import type {
 import { stripProviderPrefix } from "../../utils/formatModel.js";
 import MessageRow from "../MessageRow.js";
 import MarkdownText from "../MarkdownText.js";
+import AssistantThinkingMessage from "./AssistantThinkingMessage.js";
 
 interface AssistantTextMessageProps {
   message: UIAssistantMessage;
   continuation?: boolean;
+  showThinking?: boolean;
+  thinkingShortcutLabel?: string;
 }
 
 const AssistantTextMessage: FC<AssistantTextMessageProps> = ({
   message,
   continuation = false,
+  showThinking = false,
+  thinkingShortcutLabel = "Opt+T",
 }) => {
-  const visibleBlocks = message.blocks.filter(
-    (block) => block.kind === "text" && block.text.trim().length > 0,
+  const contentBlocks = message.blocks.filter(
+    (block) => block.text.trim().length > 0,
   );
+  const visibleBlocks = showThinking
+    ? contentBlocks
+    : contentBlocks.filter((block) => block.kind === "text");
+  const hasHiddenThinking =
+    !showThinking &&
+    contentBlocks.some((block) => block.kind === "thinking");
 
-  if (visibleBlocks.length === 0) {
+  if (visibleBlocks.length === 0 && !hasHiddenThinking) {
     return null;
   }
 
@@ -34,8 +45,18 @@ const AssistantTextMessage: FC<AssistantTextMessageProps> = ({
       marginBottom={continuation ? 0 : 1}
     >
       <Box flexDirection="column" minWidth={0}>
+        {hasHiddenThinking && visibleBlocks.length === 0 ? (
+          <Text color="$muted" italic>
+            {`Thinking (${thinkingShortcutLabel} to show)`}
+          </Text>
+        ) : null}
         {visibleBlocks.map((block, index) =>
-          renderAssistantBlock(block, index, visibleBlocks.length),
+          renderAssistantBlock(
+            block,
+            index,
+            visibleBlocks.length,
+            thinkingShortcutLabel,
+          ),
         )}
       </Box>
     </MessageRow>
@@ -48,6 +69,7 @@ function renderAssistantBlock(
   block: UIAssistantBlock,
   index: number,
   blockCount: number,
+  thinkingShortcutLabel: string,
 ) {
   return (
     <Box
@@ -55,7 +77,14 @@ function renderAssistantBlock(
       marginTop={index === 0 ? 0 : 1}
       minWidth={0}
     >
-      <MarkdownText text={block.text} streaming={index === blockCount - 1} />
+      {block.kind === "thinking" ? (
+        <AssistantThinkingMessage
+          text={block.text}
+          toggleHint={`${thinkingShortcutLabel} to hide`}
+        />
+      ) : (
+        <MarkdownText text={block.text} streaming={false} />
+      )}
     </Box>
   );
 }

@@ -298,6 +298,8 @@ const StreamOutput: FC<StreamOutputProps> = ({
             index,
             searchMatchIndices,
             normalizedSearchSelectedIndex,
+            showThinking,
+            thinkingShortcutLabel,
           );
         }}
       />
@@ -312,6 +314,8 @@ function renderTranscriptBlock(
   index: number,
   searchMatchIndices: number[],
   normalizedSearchSelectedIndex: number,
+  showThinking = false,
+  thinkingShortcutLabel = "Opt+T",
 ) {
   const matchOrdinal = searchMatchIndices.indexOf(index);
   const isSelectedSearchMatch =
@@ -365,6 +369,8 @@ function renderTranscriptBlock(
         <AssistantTextMessage
           message={block.message}
           continuation={block.continuation}
+          showThinking={showThinking}
+          thinkingShortcutLabel={thinkingShortcutLabel}
         />
       </Box>
     );

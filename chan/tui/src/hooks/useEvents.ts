@@ -3352,9 +3352,7 @@ function assistantBlocksHaveText(blocks: UIAssistantBlock[]): boolean {
 function completedAssistantBlocks(
   blocks: UIAssistantBlock[],
 ): UIAssistantBlock[] {
-  return blocks.filter(
-    (block) => block.kind === "text" && block.text.trim().length > 0,
-  );
+  return blocks.filter((block) => block.text.trim().length > 0);
 }
 
 function findArtifactField(
