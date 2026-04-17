@@ -128,7 +128,9 @@ const StatusBar: FC<StatusBarProps> = ({
           {formatModeLabel(mode)}
         </Text>
         <Text color="$muted"> · </Text>
-        <Text color="$accent">{modelLabel}</Text>
+        <Text backgroundColor="$accent" color="$accent-fg" bold>
+          {` ${modelLabel} `}
+        </Text>
         {reasoningLabel ? <Text color="$muted"> [{reasoningLabel}]</Text> : null}
         <Text color="$muted"> · </Text>
         <Text color={contextColor}>{`ctx ~${contextPercent}%`}</Text>
