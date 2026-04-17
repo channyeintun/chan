@@ -151,6 +151,10 @@ func (t *ReadFileAliasTool) Concurrency(input ToolInput) ConcurrencyDecision {
 	return ConcurrencyParallel
 }
 
+func (t *ReadFileAliasTool) Validate(input ToolInput) error {
+	return validateFileReadParams(input.Params)
+}
+
 func (t *ReadFileAliasTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
 	filePath, ok := firstStringParam(input.Params, "path", "filePath", "file_path")
 	if !ok || strings.TrimSpace(filePath) == "" {
@@ -158,7 +162,7 @@ func (t *ReadFileAliasTool) Execute(ctx context.Context, input ToolInput) (ToolO
 	}
 
 	params := map[string]any{
-		"file_path": filePath,
+		"filePath": filePath,
 	}
 	if offset, ok := firstIntParam(input.Params, "offset"); ok {
 		params["offset"] = offset

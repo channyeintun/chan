@@ -37,6 +37,8 @@ type ToolOutput struct {
 	Truncated   bool
 	SpillPath   string // non-empty if result was spilled to disk
 	FilePath    string
+	ReadOffset  int
+	ReadLimit   int
 	Preview     string
 	Insertions  int
 	Deletions   int

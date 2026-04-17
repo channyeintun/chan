@@ -49,6 +49,14 @@ func (t *FileReadTool) InputSchema() any {
 				"type":        "string",
 				"description": "The absolute path to the file to read.",
 			},
+			"file_path": map[string]any{
+				"type":        "string",
+				"description": "Compatibility alias for the absolute path to the file to read.",
+			},
+			"path": map[string]any{
+				"type":        "string",
+				"description": "Compatibility alias for the absolute path to the file to read.",
+			},
 			"offset": map[string]any{
 				"type":        "integer",
 				"description": "Optional 1-based starting line. Defaults to 1.",
@@ -61,11 +69,18 @@ func (t *FileReadTool) InputSchema() any {
 				"maximum":     fileReadMaxLimitLines,
 			},
 		},
-		"required": []string{"filePath"},
+		"anyOf": []map[string]any{
+			{"required": []string{"filePath"}},
+			{"required": []string{"file_path"}},
+			{"required": []string{"path"}},
+		},
 	}
 }
 
 func (t *FileReadTool) Validate(input ToolInput) error {
+	if err := validateFileReadParams(input.Params); err != nil {
+		return err
+	}
 	filePath, ok := firstStringParam(input.Params, "filePath", "file_path", "path")
 	if !ok || strings.TrimSpace(filePath) == "" {
 		return fmt.Errorf("read_file requires filePath")
@@ -208,12 +223,9 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	}
 
 	if len(lines) == 0 {
-		if readState := GetGlobalFileReadState(); readState != nil {
-			readState.Remember(filePath, offset, limit, info)
-		}
 		message := fmt.Sprintf("%s: no content in requested range", filePath)
 		recordFileReadMetric(FileReadMetric{RequestedOffset: offset, RequestedLimit: limit, BytesReturned: len(message)})
-		return ToolOutput{Output: message, FilePath: filePath}, nil
+		return ToolOutput{Output: message, FilePath: filePath, ReadOffset: offset, ReadLimit: limit}, nil
 	}
 
 	output := renderReadOutput(lines, partial, nextOffset, limit)
@@ -221,17 +233,33 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	if len(preview) > PreviewChars {
 		preview = preview[:PreviewChars]
 	}
-	if readState := GetGlobalFileReadState(); readState != nil {
-		readState.Remember(filePath, offset, limit, info)
-	}
 	recordFileReadMetric(FileReadMetric{RequestedOffset: offset, RequestedLimit: limit, LinesReturned: len(lines), BytesReturned: len(output), Truncated: partial || lineClipped})
 
 	return ToolOutput{
-		Output:    output,
-		Truncated: partial || lineClipped,
-		FilePath:  filePath,
-		Preview:   preview,
+		Output:     output,
+		Truncated:  partial || lineClipped,
+		FilePath:   filePath,
+		ReadOffset: offset,
+		ReadLimit:  limit,
+		Preview:    preview,
 	}, nil
+}
+
+func validateFileReadParams(params map[string]any) error {
+	allowed := map[string]struct{}{
+		"filePath":  {},
+		"file_path": {},
+		"path":      {},
+		"offset":    {},
+		"limit":     {},
+	}
+	for key := range params {
+		if _, ok := allowed[key]; ok {
+			continue
+		}
+		return fmt.Errorf("read_file does not accept %q; use filePath with optional offset and limit", key)
+	}
+	return nil
 }
 
 func isLikelyBinaryFile(filePath string, sample []byte) bool {

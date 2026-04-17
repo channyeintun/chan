@@ -35,3 +35,10 @@
 
 - All items from `patch-plan.md` are implemented.
 - No tests were added.
+
+## Follow-up fixes
+
+- Fixed the `read_file` schema/normalization mismatch so validation accepts the actual supported path aliases.
+- Fixed `read_file` parameter validation so unexpected params fail fast instead of being silently ignored.
+- Fixed reread dedup bookkeeping so slices are only remembered after inline delivery survives output budgeting.
+- Tightened the compatibility alias path so it uses the same fail-fast validation and canonical `filePath` forwarding.

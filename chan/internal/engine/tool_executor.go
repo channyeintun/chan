@@ -289,7 +289,7 @@ func handleToolBatchResult(
 		state.results[result.Index] = toolResult
 		return emitToolError(bridge, call, toolResult.Output, result.Output, result.Err)
 	}
-	output, truncated, err := finalizeToolOutput(ctx, bridge, artifactManager, sessionID, turnStats, call, result.Output, state, feedback)
+	output, truncated, spilled, err := finalizeToolOutput(ctx, bridge, artifactManager, sessionID, turnStats, call, result.Output, state, feedback)
 	if err != nil {
 		return err
 	}
@@ -321,6 +321,7 @@ func handleToolBatchResult(
 	}); err != nil {
 		return err
 	}
+	rememberInlineReadResult(result.Output, spilled)
 	runPostToolUseHooks(ctx, hookRunner, sessionID, call, output)
 	return nil
 }
@@ -335,16 +336,18 @@ func finalizeToolOutput(
 	output toolpkg.ToolOutput,
 	state *toolExecutionState,
 	feedback string,
-) (string, bool, error) {
+) (string, bool, bool, error) {
+	spilled := false
 	finalOutput := output.Output
 	spillPath := output.SpillPath
 	truncated := output.Truncated
 	if !output.IsError {
 		budgetedOutput, artifact, budgetInfo, err := budgetToolOutput(ctx, artifactManager, sessionID, state.budget, state.aggregateBudget, call, finalOutput)
 		finalOutput = budgetedOutput
+		spilled = budgetInfo.Spilled
 		if err != nil {
 			if emitErr := bridge.EmitError(fmt.Sprintf("persist tool-log artifact: %v", err), true); emitErr != nil {
-				return "", false, emitErr
+				return "", false, false, emitErr
 			}
 		}
 		updateTurnToolStats(turnStats, budgetInfo)
@@ -352,12 +355,27 @@ func finalizeToolOutput(
 			spillPath = artifact.ContentPath
 			truncated = true
 			if err := emitArtifactCreated(bridge, artifact); err != nil {
-				return "", false, err
+				return "", false, false, err
 			}
 		}
 	}
 	finalOutput = appendPermissionFeedback(finalOutput, feedback)
-	return finalOutput, truncated || spillPath != "", nil
+	return finalOutput, truncated || spillPath != "", spilled, nil
+}
+
+func rememberInlineReadResult(output toolpkg.ToolOutput, spilled bool) {
+	if spilled || strings.TrimSpace(output.FilePath) == "" || output.ReadLimit <= 0 {
+		return
+	}
+	readState := toolpkg.GetGlobalFileReadState()
+	if readState == nil {
+		return
+	}
+	info, err := os.Stat(output.FilePath)
+	if err != nil || info.IsDir() {
+		return
+	}
+	readState.Remember(output.FilePath, max(1, output.ReadOffset), output.ReadLimit, info)
 }
 
 func updateTurnToolStats(turnStats *turnExecutionStats, budgetInfo toolBudgetInfo) {
