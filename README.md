@@ -21,13 +21,12 @@ Chan is built on three core pillars:
 
 1. **TUI (Silvery)** — interactive terminal UX with streaming output, grouped tool transcripts, progress, background task visibility, and artifact panels.
 2. **Go Engine** — high-performance backend for the agent loop, tool execution, provider integration, session persistence, and permission gating.
-3. **Artifacts** — durable structured outputs that can be reviewed, reopened, revised, and resumed across turns.
+3. **Artifacts** — durable structured outputs that can be reviewed, revised, and resumed across turns.
 
 ## Architecture Docs
 
 - [Lean Retrieval Architecture](./docs/lean-retrieval-architecture.md)
 - [Silvery Guide for Chan](./docs/silvery-guide.md)
-- [OpenRouter + Ollama Guide](./docs/openrouter-ollama-guide.md)
 
 ## Quick Start
 
