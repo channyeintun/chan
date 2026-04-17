@@ -253,30 +253,15 @@ func composeSystemPromptStage(
 }
 
 func emitIterationProgress(
-	yield func(ipc.StreamEvent, error) bool,
-	state *QueryState,
-	stageID string,
-	message string,
+	_ func(ipc.StreamEvent, error) bool,
+	_ *QueryState,
+	_ string,
+	_ string,
 ) error {
-	if yield == nil {
-		return nil
-	}
-	// Only show iteration progress on the first iteration to avoid
-	// noisy duplicate status messages in the TUI chat output.
-	if state.TurnCount > 1 {
-		return nil
-	}
-	trimmedStageID := strings.TrimSpace(stageID)
-	trimmedMessage := strings.TrimSpace(message)
-	if trimmedStageID == "" || trimmedMessage == "" {
-		return nil
-	}
-	if !yield(newEvent(ipc.EventProgress, ipc.ProgressPayload{
-		ID:      fmt.Sprintf("msg-%d-iter-%d-progress-%s", state.ProgressIDBase, state.TurnCount, trimmedStageID),
-		Message: trimmedMessage,
-	}), nil) {
-		return context.Canceled
-	}
+	// Iteration progress (session memory, attempt log, live retrieval)
+	// adds noise to the chat without providing actionable information.
+	// Tool-level progress (tool_start / tool_result) already keeps the
+	// user informed about what the agent is doing.
 	return nil
 }
 
