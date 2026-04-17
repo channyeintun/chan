@@ -511,34 +511,40 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
   return (
     <Screen>
-      <Box flexShrink={0}>
-        <StatusBar
-          ready={isEngineReady}
-          mode={uiState.mode}
-          model={uiState.model}
-          reasoningEffort={uiState.reasoningEffort}
-          sessionId={uiState.sessionId}
-          sessionTitle={uiState.sessionTitle}
-          maxContextWindow={uiState.maxContextWindow}
-          maxOutputTokens={uiState.maxOutputTokens}
-          currentContextUsage={uiState.currentContextUsage}
-          totalCostUsd={uiState.cost.totalUsd}
-          inputTokens={uiState.cost.inputTokens}
-          outputTokens={uiState.cost.outputTokens}
-          memoryRecallUsd={uiState.cost.memoryRecallUsd}
-          memoryRecallInputTokens={uiState.cost.memoryRecallInputTokens}
-          memoryRecallOutputTokens={uiState.cost.memoryRecallOutputTokens}
-          childAgentUsd={uiState.cost.childAgentUsd}
-          childAgentInputTokens={uiState.cost.childAgentInputTokens}
-          childAgentOutputTokens={uiState.cost.childAgentOutputTokens}
-          artifacts={uiState.artifacts}
-          focusedArtifactId={uiState.focusedArtifactId}
-          pendingArtifactReview={uiState.pendingArtifactReview}
-          backgroundAgents={uiState.backgroundAgents}
-          backgroundCommands={uiState.backgroundCommands}
-          rateLimits={uiState.rateLimits}
-        />
-      </Box>
+      <Box
+        backgroundColor="$bg"
+        width="100%"
+        height="100%"
+        flexDirection="column"
+      >
+        <Box flexShrink={0}>
+          <StatusBar
+            ready={isEngineReady}
+            mode={uiState.mode}
+            model={uiState.model}
+            reasoningEffort={uiState.reasoningEffort}
+            sessionId={uiState.sessionId}
+            sessionTitle={uiState.sessionTitle}
+            maxContextWindow={uiState.maxContextWindow}
+            maxOutputTokens={uiState.maxOutputTokens}
+            currentContextUsage={uiState.currentContextUsage}
+            totalCostUsd={uiState.cost.totalUsd}
+            inputTokens={uiState.cost.inputTokens}
+            outputTokens={uiState.cost.outputTokens}
+            memoryRecallUsd={uiState.cost.memoryRecallUsd}
+            memoryRecallInputTokens={uiState.cost.memoryRecallInputTokens}
+            memoryRecallOutputTokens={uiState.cost.memoryRecallOutputTokens}
+            childAgentUsd={uiState.cost.childAgentUsd}
+            childAgentInputTokens={uiState.cost.childAgentInputTokens}
+            childAgentOutputTokens={uiState.cost.childAgentOutputTokens}
+            artifacts={uiState.artifacts}
+            focusedArtifactId={uiState.focusedArtifactId}
+            pendingArtifactReview={uiState.pendingArtifactReview}
+            backgroundAgents={uiState.backgroundAgents}
+            backgroundCommands={uiState.backgroundCommands}
+            rateLimits={uiState.rateLimits}
+          />
+        </Box>
 
       <Box
         flexDirection="row"
@@ -745,6 +751,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           />
         </CenteredViewportOverlay>
       ) : null}
+      </Box>
     </Screen>
   );
 };
