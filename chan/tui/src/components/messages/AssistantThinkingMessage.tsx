@@ -1,6 +1,7 @@
 import React, { type FC, useMemo } from "react";
 import { Spinner } from "silvery";
 import { Box, Text } from "silvery";
+import ShimmerText from "../ShimmerText.js";
 
 interface AssistantThinkingMessageProps {
   text: string;
@@ -41,11 +42,24 @@ const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
 
   return (
     <Box flexDirection="column" width="100%" minWidth={0}>
-      <Text color="$muted" italic>
+      <Box flexDirection="row">
         {streaming ? <Spinner type="dots" /> : null}
-        {streaming ? " Thinking" : "Thinking"}
-        {toggleHint ? ` (${toggleHint})` : ""}
-      </Text>
+        {streaming ? (
+          <Text italic>
+            {" "}
+            <ShimmerText text="Thinking" />
+          </Text>
+        ) : (
+          <Text color="$muted" italic>
+            Thinking
+          </Text>
+        )}
+        {toggleHint ? (
+          <Text color="$muted" italic>
+            {` (${toggleHint})`}
+          </Text>
+        ) : null}
+      </Box>
       <Text color="$muted" wrap="wrap">
         {content}
       </Text>

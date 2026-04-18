@@ -29,6 +29,7 @@ import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
 import TranscriptSearchPrompt from "./components/TranscriptSearchPrompt.js";
 import PermissionPrompt from "./components/PermissionPrompt.js";
+import ShimmerText from "./components/ShimmerText.js";
 import { usePromptHistory } from "./hooks/usePromptHistory.js";
 import {
   parseImageReferenceIds,
@@ -726,7 +727,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           {!isEngineReady && !engine.error && (
             <Box paddingLeft={1} marginTop={1}>
               <Text color="$muted">
-                <Spinner type="dots" /> Starting Go engine...
+                <Spinner type="dots" /> <ShimmerText text="Starting Go engine..." />
               </Text>
             </Box>
           )}

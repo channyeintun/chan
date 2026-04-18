@@ -7,6 +7,7 @@ import type { UISlashCommand } from "../hooks/useEvents.js";
 import { useSlashCommandPreview } from "../hooks/useSlashCommandPreview.js";
 import { parsePasteParts, type PastedImageData } from "../utils/imagePaste.js";
 import SlashCommandPreview from "./SlashCommandPreview.js";
+import ShimmerText from "./ShimmerText.js";
 
 interface InputProps {
   prompt: PromptController;
@@ -411,7 +412,7 @@ const Input: FC<InputProps> = ({
       {isLoading ? (
         <Box paddingLeft={1} marginBottom={1}>
           <Text color="$muted">
-            <Spinner type="arc" /> {promptStatusLabel}
+            <Spinner type="arc" /> <ShimmerText text={promptStatusLabel} />
           </Text>
         </Box>
       ) : null}

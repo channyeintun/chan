@@ -5,6 +5,7 @@ import { formatSubagentType } from "../utils/subagentLabels.js";
 import FileDiffPreview from "./FileDiffPreview.js";
 import MarkdownText from "./MarkdownText.js";
 import MessageRow from "./MessageRow.js";
+import ShimmerText from "./ShimmerText.js";
 
 interface ToolProgressProps {
   toolCall: UIToolCall;
@@ -126,7 +127,11 @@ function renderResponse(toolCall: UIToolCall) {
   }
 
   if (toolCall.status === "running") {
-    return <Text dimColor>{runningLabel(toolCall)}</Text>;
+    return (
+      <Text dimColor>
+        <ShimmerText text={runningLabel(toolCall)} />
+      </Text>
+    );
   }
 
   if (toolCall.status === "error") {
