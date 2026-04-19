@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -22,6 +24,7 @@ const (
 )
 
 var webSearchResultAnchorPattern = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
+var webSearchSnippetPattern = regexp.MustCompile(`(?is)<(?:a|div|span)[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</(?:a|div|span)>`)
 var webSearchTagPattern = regexp.MustCompile(`(?is)<[^>]+>`)
 
 // WebSearchTool searches the public web and returns result titles with URLs.
@@ -43,7 +46,7 @@ func (t *WebSearchTool) Name() string {
 }
 
 func (t *WebSearchTool) Description() string {
-	return "Search the public web for current information and return result titles with URLs."
+	return "Search the public web for current information and return structured results with titles, URLs, domains, and snippets."
 }
 
 func (t *WebSearchTool) InputSchema() any {
@@ -54,15 +57,31 @@ func (t *WebSearchTool) InputSchema() any {
 				"type":        "string",
 				"description": "The search query to execute.",
 			},
+			"allowedDomains": map[string]any{
+				"type":        "array",
+				"description": "CamelCase alias for allowed_domains.",
+				"items":       map[string]any{"type": "string"},
+			},
 			"allowed_domains": map[string]any{
 				"type":        "array",
 				"description": "Optional list of domains that results must belong to.",
+				"items":       map[string]any{"type": "string"},
+			},
+			"blockedDomains": map[string]any{
+				"type":        "array",
+				"description": "CamelCase alias for blocked_domains.",
 				"items":       map[string]any{"type": "string"},
 			},
 			"blocked_domains": map[string]any{
 				"type":        "array",
 				"description": "Optional list of domains that results must not belong to.",
 				"items":       map[string]any{"type": "string"},
+			},
+			"maxResults": map[string]any{
+				"type":        "integer",
+				"description": "CamelCase alias for limit.",
+				"minimum":     1,
+				"maximum":     maxWebSearchLimit,
 			},
 			"limit": map[string]any{
 				"type":        "integer",
@@ -89,13 +108,13 @@ func (t *WebSearchTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 		return ToolOutput{}, fmt.Errorf("web_search requires query")
 	}
 
-	allowedDomains := stringSliceParam(input.Params, "allowed_domains")
-	blockedDomains := stringSliceParam(input.Params, "blocked_domains")
+	allowedDomains := firstStringSliceParam(input.Params, "allowed_domains", "allowedDomains")
+	blockedDomains := firstStringSliceParam(input.Params, "blocked_domains", "blockedDomains")
 	if len(allowedDomains) > 0 && len(blockedDomains) > 0 {
 		return ToolOutput{}, fmt.Errorf("web_search cannot use allowed_domains and blocked_domains together")
 	}
 
-	limit := intOrDefault(input.Params, "limit", defaultWebSearchLimit)
+	limit := firstIntOrDefault(input.Params, defaultWebSearchLimit, "limit", "maxResults")
 	if limit < 1 || limit > maxWebSearchLimit {
 		return ToolOutput{}, fmt.Errorf("limit must be between 1 and %d", maxWebSearchLimit)
 	}
@@ -110,13 +129,11 @@ func (t *WebSearchTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 		return ToolOutput{Output: fmt.Sprintf("No web results found for %q", query)}, nil
 	}
 
-	var builder strings.Builder
-	fmt.Fprintf(&builder, "Web search results for %q:\n", query)
-	for index, result := range results {
-		fmt.Fprintf(&builder, "\n%d. %s\n   URL: %s", index+1, result.Title, result.URL)
+	encoded, err := renderWebSearchResponse(query, results)
+	if err != nil {
+		return ToolOutput{}, err
 	}
-
-	return ToolOutput{Output: builder.String()}, nil
+	return ToolOutput{Output: encoded}, nil
 }
 
 func (t *WebSearchTool) fetchSearchResults(ctx context.Context, query string) (string, error) {
@@ -148,8 +165,16 @@ func (t *WebSearchTool) fetchSearchResults(ctx context.Context, query string) (s
 }
 
 type webSearchResult struct {
-	Title string
-	URL   string
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Domain  string `json:"domain,omitempty"`
+	Snippet string `json:"snippet,omitempty"`
+}
+
+type webSearchResponse struct {
+	Query       string            `json:"query"`
+	ResultCount int               `json:"result_count"`
+	Results     []webSearchResult `json:"results"`
 }
 
 func extractWebSearchResults(body string, allowedDomains, blockedDomains []string, limit int) []webSearchResult {
@@ -163,7 +188,7 @@ func extractWebSearchResults(body string, allowedDomains, blockedDomains []strin
 	seen := make(map[string]struct{})
 	results := make([]webSearchResult, 0, min(limit, len(matches)))
 
-	for _, match := range matches {
+	for index, match := range matches {
 		if len(match) < 3 {
 			continue
 		}
@@ -183,15 +208,49 @@ func extractWebSearchResults(body string, allowedDomains, blockedDomains []strin
 		if title == "" {
 			continue
 		}
+		snippet := extractWebSearchSnippet(body, matches, index)
+		domain := searchResultDomain(resolvedURL)
 
 		seen[resolvedURL] = struct{}{}
-		results = append(results, webSearchResult{Title: title, URL: resolvedURL})
+		results = append(results, webSearchResult{Title: title, URL: resolvedURL, Domain: domain, Snippet: snippet})
 		if len(results) == limit {
 			break
 		}
 	}
 
 	return results
+}
+
+func extractWebSearchSnippet(body string, matches [][]string, index int) string {
+	current := matches[index][0]
+	start := strings.Index(body, current)
+	if start < 0 {
+		return ""
+	}
+	searchRegion := body[start+len(current):]
+	if index+1 < len(matches) {
+		next := matches[index+1][0]
+		if end := strings.Index(searchRegion, next); end >= 0 {
+			searchRegion = searchRegion[:end]
+		}
+	}
+	match := webSearchSnippetPattern.FindStringSubmatch(searchRegion)
+	if len(match) < 2 {
+		return ""
+	}
+	return sanitizeSearchTitle(match[1])
+}
+
+func renderWebSearchResponse(query string, results []webSearchResult) (string, error) {
+	encoded, err := json.MarshalIndent(webSearchResponse{
+		Query:       strings.TrimSpace(query),
+		ResultCount: len(results),
+		Results:     results,
+	}, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal web_search response: %w", err)
+	}
+	return string(encoded), nil
 }
 
 func resolveSearchResultURL(rawHref string) (string, error) {
@@ -229,6 +288,15 @@ func sanitizeSearchTitle(raw string) string {
 	clean := webSearchTagPattern.ReplaceAllString(raw, " ")
 	clean = html.UnescapeString(clean)
 	return strings.Join(strings.Fields(clean), " ")
+}
+
+func searchResultDomain(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	return strings.TrimPrefix(host, "www.")
 }
 
 func normalizeDomainRules(domains []string) []string {
@@ -302,4 +370,43 @@ func stringSliceParam(params map[string]any, key string) []string {
 	default:
 		return nil
 	}
+}
+
+func firstStringSliceParam(params map[string]any, keys ...string) []string {
+	for _, key := range keys {
+		if values := stringSliceParam(params, key); len(values) > 0 {
+			return values
+		}
+	}
+	return nil
+}
+
+func firstIntOrDefault(params map[string]any, fallback int, keys ...string) int {
+	for _, key := range keys {
+		if value, ok := webSearchIntParam(params, key); ok {
+			return value
+		}
+	}
+	return fallback
+}
+
+func webSearchIntParam(params map[string]any, key string) (int, bool) {
+	value, ok := params[key]
+	if !ok {
+		return 0, false
+	}
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case string:
+		parsed, err := strconv.Atoi(v)
+		if err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
 }

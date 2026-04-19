@@ -12,7 +12,7 @@
 - [x] Task 5: Strengthen `bash`
 - [x] Task 6: Expose `skill` tool
 - [x] Task 7: Improve `read_file`
-- [ ] Task 8: Improve `web_search`
+- [x] Task 8: Improve `web_search`
 
 ## Phase 3
 
@@ -30,4 +30,5 @@
 - Completed: Task 5
 - Completed: Task 6
 - Completed: Task 7
-- In progress: Task 8
+- Completed: Task 8
+- In progress: Task 9
