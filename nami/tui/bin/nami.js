@@ -9,6 +9,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const engineBinaryName =
   process.platform === "win32" ? "nami-engine.exe" : "nami-engine";
 
+function isFilesystemCandidate(candidate) {
+  return candidate.includes("/") || candidate.includes("\\");
+}
+
 // Resolve the Go engine from installed and source-build layouts before PATH.
 const candidates = [
   join(__dirname, engineBinaryName),
@@ -18,7 +22,7 @@ const candidates = [
 ];
 const enginePath =
   candidates.find((candidate) =>
-    candidate.includes("/") ? existsSync(candidate) : true,
+    isFilesystemCandidate(candidate) ? existsSync(candidate) : true,
   ) ?? "nami-engine";
 
 // Set env so the TUI picks it up
