@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+LAUNCHER_PATH="$SCRIPT_DIR/nami.js"
+
+if command -v node >/dev/null 2>&1; then
+	exec node "$LAUNCHER_PATH" "$@"
+fi
+
+if command -v bun >/dev/null 2>&1; then
+	exec bun "$LAUNCHER_PATH" "$@"
+fi
+
+if command -v deno >/dev/null 2>&1; then
+	exec deno run --allow-env --allow-read --allow-run "$LAUNCHER_PATH" "$@"
+fi
+
+echo "nami requires one of these runtimes on PATH: node, bun, deno." >&2
+exit 1

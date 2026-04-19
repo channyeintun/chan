@@ -1,69 +1,88 @@
 BINARY_NAME := nami
 ENGINE_NAME := nami-engine
+LAUNCHER_JS_NAME := $(BINARY_NAME).js
 VERSION     := 0.1.0
 BUILD_DIR   := release
 GO_SRC      := ../cmd/nami-engine
 PREFIX      ?= /usr/local/bin
-WINDOWS_WRAPPER := bin/nami.cmd
+POSIX_WRAPPER := bin/$(BINARY_NAME)
+WINDOWS_WRAPPER := bin/$(BINARY_NAME).cmd
+LAUNCHER_NORMALIZER := scripts/normalize-launcher-bundle.mjs
 
 UNIX_PLATFORMS := darwin-arm64 darwin-amd64 linux-amd64 linux-arm64
 WINDOWS_PLATFORMS := windows-amd64 windows-arm64
 PLATFORMS := $(UNIX_PLATFORMS) $(WINDOWS_PLATFORMS)
 
-.PHONY: all clean release build-tui-launcher $(PLATFORMS)
+.PHONY: all clean release release-local build-portable-launcher-bundle $(PLATFORMS)
 
 all: release-local
 
 
 # Build for current platform only (fast, for development)
-release-local: clean build-tui-launcher
+release-local: clean build-portable-launcher-bundle
 	@mkdir -p $(BUILD_DIR)
-	GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) go build -o $(BUILD_DIR)/$(ENGINE_NAME) $(GO_SRC)
-	@echo ""
-	@echo "Built: $(BUILD_DIR)/$(BINARY_NAME) + $(BUILD_DIR)/$(ENGINE_NAME)"
-	@echo "The local launcher is a Bun script bundle, so Bun must be installed where it runs."
-	@echo "Copy both to a directory in your PATH to install."
+	@local_os=$$(go env GOOS); \
+	local_arch=$$(go env GOARCH); \
+	if [ "$$local_os" = "windows" ]; then \
+		install -m 644 $(WINDOWS_WRAPPER) $(BUILD_DIR)/$(BINARY_NAME).cmd; \
+		GOOS=$$local_os GOARCH=$$local_arch CGO_ENABLED=0 go build -o $(BUILD_DIR)/$(ENGINE_NAME).exe $(GO_SRC); \
+		echo ""; \
+		echo "Built: $(BUILD_DIR)/$(BINARY_NAME).cmd + $(BUILD_DIR)/$(LAUNCHER_JS_NAME) + $(BUILD_DIR)/$(ENGINE_NAME).exe"; \
+	else \
+		install -m 755 $(POSIX_WRAPPER) $(BUILD_DIR)/$(BINARY_NAME); \
+		GOOS=$$local_os GOARCH=$$local_arch CGO_ENABLED=0 go build -o $(BUILD_DIR)/$(ENGINE_NAME) $(GO_SRC); \
+		echo ""; \
+		echo "Built: $(BUILD_DIR)/$(BINARY_NAME) + $(BUILD_DIR)/$(LAUNCHER_JS_NAME) + $(BUILD_DIR)/$(ENGINE_NAME)"; \
+	fi
+	@echo "The launcher now requires one of these runtimes where it runs: node, bun, or deno."
+	@echo "Copy the launcher shim, $(LAUNCHER_JS_NAME), and the engine binary to a directory in your PATH to install."
 
-# Build a portable Bun launcher script for local installs.
-build-tui-launcher:
+build-portable-launcher-bundle:
 	@mkdir -p $(BUILD_DIR)
 	bun run build
-	bun build --target=bun --outfile=$(BUILD_DIR)/$(BINARY_NAME) \
+	bun build --target=node --format=esm --outfile=$(BUILD_DIR)/$(LAUNCHER_JS_NAME).raw \
 		bin/nami.js
-	chmod +x $(BUILD_DIR)/$(BINARY_NAME)
+	bun $(LAUNCHER_NORMALIZER) \
+		$(BUILD_DIR)/$(LAUNCHER_JS_NAME).raw \
+		$(BUILD_DIR)/$(LAUNCHER_JS_NAME)
+	rm -f $(BUILD_DIR)/$(LAUNCHER_JS_NAME).raw
 
 # Build release assets for all platforms.
-release: clean build-tui-launcher
+release: clean build-portable-launcher-bundle
 	@for platform in $(PLATFORMS); do \
 		os=$$(echo $$platform | cut -d- -f1); \
 		arch=$$(echo $$platform | cut -d- -f2); \
 		dir=$(BUILD_DIR)/$(BINARY_NAME)-$$platform; \
 		asset_dir=$(BUILD_DIR)/assets; \
-		binary_asset=$$asset_dir/$(BINARY_NAME)-$$platform; \
+		launcher_js_asset=$$asset_dir/$(BINARY_NAME)-js-$$platform.js; \
 		echo "Building $$platform..."; \
 		mkdir -p $$dir $$asset_dir; \
-		install -m 755 $(BUILD_DIR)/$(BINARY_NAME) $$dir/$(BINARY_NAME); \
+		install -m 755 $(BUILD_DIR)/$(LAUNCHER_JS_NAME) $$dir/$(LAUNCHER_JS_NAME); \
 		if [ "$$os" = "windows" ]; then \
 			engine_name=$(ENGINE_NAME).exe; \
 			wrapper_asset=$$asset_dir/$(BINARY_NAME)-$$platform.cmd; \
 			engine_asset=$$asset_dir/$(ENGINE_NAME)-$$platform.exe; \
 			GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build -o $$dir/$$engine_name $(GO_SRC); \
 			install -m 644 $(WINDOWS_WRAPPER) $$dir/$(BINARY_NAME).cmd; \
-			install -m 755 $$dir/$(BINARY_NAME) $$binary_asset; \
+			install -m 755 $$dir/$(LAUNCHER_JS_NAME) $$launcher_js_asset; \
 			install -m 644 $$dir/$(BINARY_NAME).cmd $$wrapper_asset; \
 			install -m 755 $$dir/$$engine_name $$engine_asset; \
 			(cd $(BUILD_DIR) && zip -qr $(BINARY_NAME)-$$platform.zip $(BINARY_NAME)-$$platform); \
-			echo "  -> $$binary_asset"; \
+			echo "  -> $$launcher_js_asset"; \
 			echo "  -> $$wrapper_asset"; \
 			echo "  -> $$engine_asset"; \
 			echo "  -> $(BUILD_DIR)/$(BINARY_NAME)-$$platform.zip"; \
 		else \
+			wrapper_asset=$$asset_dir/$(BINARY_NAME)-$$platform; \
 			engine_asset=$$asset_dir/$(ENGINE_NAME)-$$platform; \
+			install -m 755 $(POSIX_WRAPPER) $$dir/$(BINARY_NAME); \
 			GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build -o $$dir/$(ENGINE_NAME) $(GO_SRC); \
-			install -m 755 $$dir/$(BINARY_NAME) $$binary_asset; \
+			install -m 755 $$dir/$(BINARY_NAME) $$wrapper_asset; \
+			install -m 755 $$dir/$(LAUNCHER_JS_NAME) $$launcher_js_asset; \
 			install -m 755 $$dir/$(ENGINE_NAME) $$engine_asset; \
 			tar -czf $(BUILD_DIR)/$(BINARY_NAME)-$$platform.tar.gz -C $(BUILD_DIR) $(BINARY_NAME)-$$platform; \
-			echo "  -> $$binary_asset"; \
+			echo "  -> $$wrapper_asset"; \
+			echo "  -> $$launcher_js_asset"; \
 			echo "  -> $$engine_asset"; \
 			echo "  -> $(BUILD_DIR)/$(BINARY_NAME)-$$platform.tar.gz"; \
 		fi; \
@@ -78,5 +97,6 @@ clean:
 install: release-local
 	install -d $(PREFIX)
 	install -m 755 $(BUILD_DIR)/$(BINARY_NAME) $(PREFIX)/$(BINARY_NAME)
+	install -m 755 $(BUILD_DIR)/$(LAUNCHER_JS_NAME) $(PREFIX)/$(LAUNCHER_JS_NAME)
 	install -m 755 $(BUILD_DIR)/$(ENGINE_NAME) $(PREFIX)/$(ENGINE_NAME)
 	@echo "Installed to $(PREFIX)/"
