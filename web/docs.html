@@ -189,17 +189,22 @@
                   macOS / Linux
                 </h4>
                 <div
-                  class="bg-subtle p-6 border border-[#1a1a1a] rounded-md font-mono text-sm relative group overflow-x-auto mb-3"
+                  class="install-command-shell bg-subtle border border-[#1a1a1a] rounded-md font-mono text-sm relative group mb-3"
                 >
-                  <div class="command-line">
-                    <span class="command-prompt text-brand">$</span>
-                    <code class="inline-command"
-                      >curl -fsSL
-                      https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.sh
-                      | sh</code
-                    >
+                  <div class="install-command-scroll">
+                    <div class="command-line">
+                      <span class="command-prompt text-brand">$</span>
+                      <code class="inline-command"
+                        >curl -fsSL
+                        https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.sh
+                        | sh</code
+                      >
+                    </div>
                   </div>
                   <button
+                    type="button"
+                    aria-label="Copy install command"
+                    data-copy-text="curl -fsSL https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.sh | sh"
                     class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"
                   >
                     <i data-lucide="copy" class="w-4 h-4"></i>
@@ -218,17 +223,22 @@
                   Windows (PowerShell)
                 </h4>
                 <div
-                  class="bg-subtle p-6 border border-[#1a1a1a] rounded-md font-mono text-sm relative group overflow-x-auto mb-3"
+                  class="install-command-shell bg-subtle border border-[#1a1a1a] rounded-md font-mono text-sm relative group mb-3"
                 >
-                  <div class="command-line">
-                    <span class="command-prompt text-brand">PS&gt;</span>
-                    <code class="inline-command"
-                      >Set-ExecutionPolicy -Scope Process Bypass -Force; irm
-                      https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.ps1
-                      | iex</code
-                    >
+                  <div class="install-command-scroll">
+                    <div class="command-line">
+                      <span class="command-prompt text-brand">PS&gt;</span>
+                      <code class="inline-command"
+                        >Set-ExecutionPolicy -Scope Process Bypass -Force; irm
+                        https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.ps1
+                        | iex</code
+                      >
+                    </div>
                   </div>
                   <button
+                    type="button"
+                    aria-label="Copy PowerShell install command"
+                    data-copy-text="Set-ExecutionPolicy -Scope Process Bypass -Force; irm https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.ps1 | iex"
                     class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"
                   >
                     <i data-lucide="copy" class="w-4 h-4"></i>

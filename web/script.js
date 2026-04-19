@@ -52,9 +52,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.closest(".group") ||
                 button.parentElement;
             const code = container.querySelector("code");
-            if (!code) return;
-
-            const text = code.innerText.trim();
+            const text = button.dataset.copyText || code?.innerText.trim();
+            if (!text) return;
 
             try {
                 await navigator.clipboard.writeText(text);
