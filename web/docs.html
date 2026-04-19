@@ -154,7 +154,9 @@
               <li class="flex items-center gap-3">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand"></i>
                 One supported runtime to run the launcher:
-                <code>node</code>, <code>bun</code>, or <code>deno</code>
+                <code>node</code>, <code>bun</code>, or <code>deno</code>. The
+                Windows installer can bootstrap Node.js automatically if none
+                is already available.
               </li>
               <li class="flex items-center gap-3">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand"></i>
@@ -216,10 +218,9 @@
                 >
                   <span class="text-brand mr-3">PS&gt;</span
                   ><code class="inline-command"
-                    >powershell -ExecutionPolicy Bypass -NoProfile -Command
-                    "iwr
+                    >Set-ExecutionPolicy -Scope Process Bypass -Force; irm
                     https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.ps1
-                    -UseBasicParsing | iex"</code
+                    | iex</code
                   >
                   <button
                     class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"
@@ -228,10 +229,13 @@
                   </button>
                 </div>
                 <p class="text-xs text-gray-600">
-                  Installs <code>nami.cmd</code>, <code>nami.js</code>, and
+                  Runs in the current PowerShell session, installs
+                  <code>nami.cmd</code>, <code>nami.js</code>, and
                   <code>nami-engine.exe</code> into
                   <code>%LOCALAPPDATA%\Programs\nami\bin</code> and adds that
-                  directory to the user <code>PATH</code>.
+                  directory to the user <code>PATH</code>. If no supported
+                  runtime is available, it downloads a local Node.js runtime
+                  automatically.
                 </p>
               </div>
             </div>
@@ -254,7 +258,9 @@
                   <code>nami-windows-arm64.zip</code> from GitHub Releases, then
                   place <code>nami.cmd</code>, <code>nami.js</code>, and
                   <code>nami-engine.exe</code> in a directory on your
-                  <code>PATH</code>.
+                  <code>PATH</code>. Manual installs still require
+                  <code>node</code>, <code>bun</code>, or <code>deno</code> on
+                  your <code>PATH</code>.
                 </p>
               </div>
               <div>

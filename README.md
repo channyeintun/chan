@@ -33,7 +33,7 @@ Nami is built on three core pillars:
 ### Prerequisites
 
 - macOS, Linux, or Windows 11
-- One supported JavaScript runtime to run the `nami` launcher: Node.js, Bun, or Deno
+- One supported JavaScript runtime to run the `nami` launcher: Node.js, Bun, or Deno. The Windows installer can bootstrap a local Node.js runtime automatically if none is already available.
 - One configured model provider: Anthropic, OpenAI, Google, DeepSeek, Groq, Mistral, Ollama, or GitHub Copilot
 - Go 1.26+ only if building from source or rebuilding `nami-engine`
 
@@ -75,16 +75,22 @@ export PATH="$HOME/.local/bin:$PATH"
 #### Windows (PowerShell)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.ps1 -UseBasicParsing | iex"
+Set-ExecutionPolicy -Scope Process Bypass -Force; irm https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.ps1 | iex
 ```
 
-This downloads the Windows release archive, installs `nami.cmd`, `nami.js`, and `nami-engine.exe`, and adds the install directory to your user `PATH`.
+This runs in your current PowerShell session, downloads the Windows release archive, installs `nami.cmd`, `nami.js`, and `nami-engine.exe`, and adds the install directory to your user `PATH`.
+
+If `node`, `bun`, or `deno` is already on your `PATH`, the installer reuses it. If not, it downloads a local Node.js runtime automatically and wires `nami` to use it.
 
 Current Windows releases install into:
 
 - `%LOCALAPPDATA%\Programs\nami\bin`
 
-After install, open a new PowerShell window and verify:
+If the installer had to bootstrap Node.js, it stores it here:
+
+- `%LOCALAPPDATA%\Programs\nami\runtime\node`
+
+After install in the same PowerShell window, verify:
 
 ```powershell
 nami --help

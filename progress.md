@@ -28,3 +28,11 @@ Current follow-up focus: complete
 - [x] Task 5: run final formatting and verification for the launcher migration
 
 Current launcher focus: complete
+
+## Windows Installer UX
+
+- [x] Task 1: bootstrap a local Node runtime from the Windows installer when no runtime is available
+- [x] Task 2: update Windows install docs for same-session PowerShell installation and portable runtime fallback
+- [x] Task 3: run final verification for the Windows installer UX updates
+
+Current Windows installer focus: complete
