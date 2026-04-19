@@ -6,6 +6,7 @@ import { stripProviderPrefix } from "../../utils/formatModel.js";
 import MessageRow from "../MessageRow.js";
 import MarkdownText from "../MarkdownText.js";
 import AssistantThinkingMessage from "./AssistantThinkingMessage.js";
+import ShimmerText from "../ShimmerText.js";
 
 interface StreamingAssistantMessageProps {
   blocks: UIAssistantBlock[];
@@ -55,9 +56,15 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
     >
       <Box flexDirection="column" minWidth={0}>
         {showStatusRow ? (
-          <Text color="$muted">
-            <Spinner type="dots" /> {statusText}
-          </Text>
+          <Box flexDirection="row" minWidth={0}>
+            <Spinner type="dots" />
+            <Box flexDirection="row" minWidth={0} marginLeft={1}>
+              <ShimmerText text="Thinking" />
+              <Text color="$muted" italic>
+                {statusText.slice("Thinking".length)}
+              </Text>
+            </Box>
+          </Box>
         ) : null}
         {visibleBlocks.map((block, index) => (
           <Box

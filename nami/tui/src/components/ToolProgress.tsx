@@ -127,11 +127,7 @@ function renderResponse(toolCall: UIToolCall) {
   }
 
   if (toolCall.status === "running") {
-    return (
-      <Text dimColor>
-        <ShimmerText text={runningLabel(toolCall)} />
-      </Text>
-    );
+    return <ShimmerText text={runningLabel(toolCall)} />;
   }
 
   if (toolCall.status === "error") {

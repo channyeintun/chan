@@ -782,10 +782,12 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
 
             {!isEngineReady && !engine.error && (
               <Box paddingLeft={1} marginTop={1}>
-                <Text color="$muted">
-                  <Spinner type="dots" />{" "}
-                  <ShimmerText text="Starting Go engine..." />
-                </Text>
+                <Box flexDirection="row" minWidth={0}>
+                  <Spinner type="dots" />
+                  <Box marginLeft={1}>
+                    <ShimmerText text="Starting Go engine..." />
+                  </Box>
+                </Box>
               </Box>
             )}
 

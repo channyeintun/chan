@@ -45,10 +45,9 @@ const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
       <Box flexDirection="row">
         {streaming ? <Spinner type="dots" /> : null}
         {streaming ? (
-          <Text italic>
-            {" "}
+          <Box marginLeft={1}>
             <ShimmerText text="Thinking" />
-          </Text>
+          </Box>
         ) : (
           <Text color="$muted" italic>
             Thinking

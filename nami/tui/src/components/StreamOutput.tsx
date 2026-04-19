@@ -29,6 +29,7 @@ import AssistantTextMessage from "./messages/AssistantTextMessage.js";
 import StreamingAssistantMessage from "./messages/StreamingAssistantMessage.js";
 import SystemTextMessage from "./messages/SystemTextMessage.js";
 import UserTextMessage from "./messages/UserTextMessage.js";
+import WelcomeBanner from "./WelcomeBanner.js";
 
 interface StreamOutputProps {
   messages: UIMessage[];
@@ -254,7 +255,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
     liveBlocks.length === 0 &&
     !isStreaming
   ) {
-    return null;
+    return <WelcomeBanner />;
   }
 
   return (

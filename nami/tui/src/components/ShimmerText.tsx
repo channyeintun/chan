@@ -1,11 +1,22 @@
-import React, { type FC, useEffect, useState } from "react";
-import { Text } from "silvery";
+import React, {
+  type ComponentProps,
+  type FC,
+  useEffect,
+  useState,
+} from "react";
+import { Box, Text } from "silvery";
 
 interface ShimmerTextProps {
   text: string;
+  activeColor?: ComponentProps<typeof Text>["color"];
+  inactiveColor?: ComponentProps<typeof Text>["color"];
 }
 
-const ShimmerText: FC<ShimmerTextProps> = ({ text }) => {
+const ShimmerText: FC<ShimmerTextProps> = ({
+  text,
+  activeColor = "$info",
+  inactiveColor = "$muted",
+}) => {
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
@@ -20,7 +31,7 @@ const ShimmerText: FC<ShimmerTextProps> = ({ text }) => {
   }, [text.length]);
 
   return (
-    <>
+    <Box flexDirection="row" minWidth={0}>
       {text.split("").map((char, i) => {
         // We want the shimmer to move from left to right.
         // A character is highlighted if it's within the 'shimmer' window.
@@ -29,14 +40,18 @@ const ShimmerText: FC<ShimmerTextProps> = ({ text }) => {
         const isHighlight = dist >= 0 && dist < shimmerWidth;
 
         // Optionally, we could have different levels of brightness,
-        // but simple toggle between $primary and $muted is a good start.
+        // but simple toggle between a light accent and muted is a good start.
         return (
-          <Text key={i} color={isHighlight ? "$primary" : "$muted"} italic>
+          <Text
+            key={i}
+            color={isHighlight ? activeColor : inactiveColor}
+            italic
+          >
             {char}
           </Text>
         );
       })}
-    </>
+    </Box>
   );
 };
 

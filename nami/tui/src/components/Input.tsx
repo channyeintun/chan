@@ -418,9 +418,12 @@ const Input: FC<InputProps> = ({
     <Box flexDirection="column" marginTop={1} userSelect="none">
       {isLoading ? (
         <Box paddingLeft={1} marginBottom={1}>
-          <Text color="$muted">
-            <Spinner type="arc" /> <ShimmerText text={promptStatusLabel} />
-          </Text>
+          <Box flexDirection="row" minWidth={0}>
+            <Spinner type="arc" />
+            <Box marginLeft={1}>
+              <ShimmerText text={promptStatusLabel} />
+            </Box>
+          </Box>
         </Box>
       ) : null}
       <Box
