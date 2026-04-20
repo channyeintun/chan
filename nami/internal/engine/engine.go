@@ -198,6 +198,13 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 			return err
 		}
 	}
+
+	// Start the message router as soon as the UI is ready so any immediate user
+	// input is buffered while startup capability refresh completes.
+	router := ipc.NewMessageRouter(ctx, bridge)
+	toolpkg.SetAskUserQuestionRuntime(newAskUserQuestionRuntime(bridge, router))
+	defer toolpkg.ShutdownBackgroundCommandsForSession()
+
 	if startupNotice != "" {
 		if err := bridge.EmitNotice(startupNotice); err != nil {
 			return err
@@ -207,6 +214,12 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	if client != nil {
+		refreshedClient, refreshErr := refreshStartupModelCapabilities(ctx, activeModelID, client, cfg)
+		if refreshErr == nil {
+			client = refreshedClient
+			loopState.client = refreshedClient
+			modelState.Set(refreshedClient, activeModelID)
+		}
 		if err := emitModelChanged(bridge, activeModelID, client); err != nil {
 			return err
 		}
@@ -219,11 +232,6 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 			return err
 		}
 	}
-
-	// Start the message router — single reader goroutine for the bridge.
-	router := ipc.NewMessageRouter(ctx, bridge)
-	toolpkg.SetAskUserQuestionRuntime(newAskUserQuestionRuntime(bridge, router))
-	defer toolpkg.ShutdownBackgroundCommandsForSession()
 
 	// Fire session_start hooks (best-effort)
 	_, _ = hookRunner.Run(ctx, hooks.Payload{
@@ -416,6 +424,7 @@ func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, err
 }
 
 const clientWarmupTimeout = 3 * time.Second
+const startupCapabilityRefreshTimeout = 5 * time.Second
 
 func startClientWarmup(ctx context.Context, logger *timing.Logger, startupMetrics *timing.CheckpointRecorder, sessionID, activeModelID string, client api.LLMClient) {
 	if api.IsNilLLMClient(client) {
@@ -457,6 +466,54 @@ func startClientWarmup(ctx context.Context, logger *timing.Logger, startupMetric
 			Metadata:   metadata,
 		})
 	}()
+}
+
+func refreshStartupModelCapabilities(ctx context.Context, activeModelID string, client api.LLMClient, cfg config.Config) (api.LLMClient, error) {
+	if api.IsNilLLMClient(client) {
+		return client, nil
+	}
+
+	provider, model := config.ParseModel(strings.TrimSpace(activeModelID))
+	if normalizeProvider(provider) != "github-copilot" || strings.TrimSpace(model) == "" {
+		return client, nil
+	}
+
+	resolved, err := resolveGitHubCopilotConfig(cfg)
+	if err != nil {
+		return client, nil
+	}
+
+	refresher := newCopilotTokenRefresher(resolved.GitHubCopilot)
+	api.SetGitHubCopilotEnterpriseDomain(client, resolved.GitHubCopilot.EnterpriseDomain)
+	api.SetAPIKeyFunc(client, refresher.resolve)
+
+	refreshCtx, cancel := context.WithTimeout(ctx, startupCapabilityRefreshTimeout)
+	defer cancel()
+
+	apiKey, err := refresher.resolve()
+	if err != nil {
+		return client, err
+	}
+
+	capabilities, ok, err := api.ResolveGitHubCopilotModelCapabilities(
+		refreshCtx,
+		apiKey,
+		resolved.GitHubCopilot.EnterpriseDomain,
+		model,
+	)
+	if err != nil {
+		if !ok {
+			return client, err
+		}
+	}
+	if !ok {
+		return client, nil
+	}
+
+	updatedClient := api.WithCapabilities(client, capabilities)
+	api.SetGitHubCopilotEnterpriseDomain(updatedClient, resolved.GitHubCopilot.EnterpriseDomain)
+	api.SetAPIKeyFunc(updatedClient, refresher.resolve)
+	return updatedClient, nil
 }
 
 func ensureClientForSelection(modelSelection string, cfg config.Config, current api.LLMClient) (api.LLMClient, string, error) {

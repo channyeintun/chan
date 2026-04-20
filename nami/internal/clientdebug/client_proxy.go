@@ -91,6 +91,22 @@ func (p *proxy) Capabilities() api.ModelCapabilities {
 	return p.inner.Capabilities()
 }
 
+func (p *proxy) SetAPIKeyFunc(fn func() (string, error)) {
+	setter, ok := p.inner.(api.APIKeyFuncSetter)
+	if !ok || api.IsNilValue(setter) {
+		return
+	}
+	setter.SetAPIKeyFunc(fn)
+}
+
+func (p *proxy) SetGitHubCopilotEnterpriseDomain(domain string) {
+	setter, ok := p.inner.(api.GitHubCopilotEnterpriseDomainSetter)
+	if !ok || api.IsNilValue(setter) {
+		return
+	}
+	setter.SetGitHubCopilotEnterpriseDomain(domain)
+}
+
 func (p *proxy) Warmup(ctx context.Context) error {
 	warmable, ok := p.inner.(api.WarmupCapable)
 	if !ok || api.IsNilValue(warmable) {
