@@ -799,14 +799,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
               </Box>
             )}
 
-            {uiState.statusLine && (
-              <Box paddingLeft={1} marginTop={1}>
-                <Text color={uiState.error ? "$error" : "$primary"}>
-                  {uiState.statusLine}
-                </Text>
-              </Box>
-            )}
-
             {uiState.compact && (
               <Box paddingLeft={1} marginTop={1}>
                 <Text color="$warning">
