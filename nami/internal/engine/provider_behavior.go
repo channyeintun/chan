@@ -313,6 +313,10 @@ func resolveGitHubCopilotCapabilities(cfg config.Config, model string) (api.Mode
 
 	capabilities, ok, err := api.ResolveGitHubCopilotModelCapabilities(ctx, accessToken, cfg.GitHubCopilot.EnterpriseDomain, model)
 	if err != nil {
+		if ok {
+			fmt.Fprintf(os.Stderr, "warning: failed to fetch GitHub Copilot model metadata for %q; using inferred fallback: %v\n", model, err)
+			return capabilities, true
+		}
 		fmt.Fprintf(os.Stderr, "warning: failed to fetch GitHub Copilot model metadata for %q: %v\n", model, err)
 		return api.ModelCapabilities{}, false
 	}

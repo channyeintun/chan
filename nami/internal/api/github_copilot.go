@@ -561,16 +561,40 @@ func ResolveGitHubCopilotModelCapabilities(ctx context.Context, accessToken, ent
 		return capabilities, false, nil
 	}
 
+	fallbackCapabilities, hasFallback := inferGitHubCopilotModelCapabilities(model)
+
 	models, err := FetchGitHubCopilotModels(ctx, accessToken, enterpriseDomain)
 	if err != nil {
+		if hasFallback {
+			return fallbackCapabilities, true, err
+		}
 		return capabilities, false, err
 	}
 	remote, ok := models[model]
 	if !ok {
+		if hasFallback {
+			return fallbackCapabilities, true, nil
+		}
 		return capabilities, false, nil
 	}
 
 	return mergeGitHubCopilotCapabilities(capabilities, remote), true, nil
+}
+
+func inferGitHubCopilotModelCapabilities(model string) (ModelCapabilities, bool) {
+	capabilities := Presets["github-copilot"].Capabilities
+	if !GitHubCopilotUsesAnthropicMessages(model) {
+		return ModelCapabilities{}, false
+	}
+
+	if anthropicPreset, ok := Presets["anthropic"]; ok {
+		if anthropicPreset.Capabilities.MaxContextWindow > capabilities.MaxContextWindow {
+			capabilities.MaxContextWindow = anthropicPreset.Capabilities.MaxContextWindow
+		}
+	}
+	capabilities.SupportsExtendedThinking = true
+
+	return capabilities, true
 }
 
 func mergeGitHubCopilotCapabilities(base ModelCapabilities, remote gitHubCopilotRemoteModel) ModelCapabilities {
