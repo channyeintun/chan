@@ -249,6 +249,12 @@ type APIKeyFuncSetter interface {
 	SetAPIKeyFunc(fn func() (string, error))
 }
 
+// GitHubCopilotEnterpriseDomainSetter is implemented by clients that can
+// recompute GitHub Copilot endpoints from refreshed access tokens.
+type GitHubCopilotEnterpriseDomainSetter interface {
+	SetGitHubCopilotEnterpriseDomain(domain string)
+}
+
 // SetAPIKeyFunc sets an API key resolver on the client if it supports it.
 // It unwraps decorator layers (e.g. WithCapabilities) to reach the inner client.
 func SetAPIKeyFunc(client LLMClient, fn func() (string, error)) {
@@ -261,6 +267,21 @@ func SetAPIKeyFunc(client LLMClient, fn func() (string, error)) {
 	}
 	if wrapper, ok := client.(*capabilitiesOverrideClient); ok {
 		SetAPIKeyFunc(wrapper.inner, fn)
+	}
+}
+
+// SetGitHubCopilotEnterpriseDomain configures the enterprise domain on a
+// client if it supports GitHub Copilot endpoint recomputation.
+func SetGitHubCopilotEnterpriseDomain(client LLMClient, domain string) {
+	if IsNilLLMClient(client) {
+		return
+	}
+	if setter, ok := client.(GitHubCopilotEnterpriseDomainSetter); ok {
+		setter.SetGitHubCopilotEnterpriseDomain(domain)
+		return
+	}
+	if wrapper, ok := client.(*capabilitiesOverrideClient); ok {
+		SetGitHubCopilotEnterpriseDomain(wrapper.inner, domain)
 	}
 }
 

@@ -24,13 +24,14 @@ var errStopStream = errors.New("stop stream")
 
 // AnthropicClient implements the Anthropic Messages API streaming protocol.
 type AnthropicClient struct {
-	provider     string
-	model        string
-	baseURL      string
-	apiKey       string
-	apiKeyFunc   func() (string, error)
-	httpClient   *http.Client
-	capabilities ModelCapabilities
+	provider         string
+	model            string
+	baseURL          string
+	enterpriseDomain string
+	apiKey           string
+	apiKeyFunc       func() (string, error)
+	httpClient       *http.Client
+	capabilities     ModelCapabilities
 }
 
 // SetAPIKeyFunc sets a callback that returns a fresh API key on each call.
@@ -39,11 +40,26 @@ func (c *AnthropicClient) SetAPIKeyFunc(fn func() (string, error)) {
 	c.apiKeyFunc = fn
 }
 
+func (c *AnthropicClient) SetGitHubCopilotEnterpriseDomain(domain string) {
+	c.enterpriseDomain = strings.TrimSpace(domain)
+}
+
 func (c *AnthropicClient) resolveAPIKey() (string, error) {
 	if c.apiKeyFunc != nil {
 		return c.apiKeyFunc()
 	}
 	return c.apiKey, nil
+}
+
+func (c *AnthropicClient) resolveBaseURL(apiKey string) string {
+	if c.provider != "github-copilot" {
+		return c.baseURL
+	}
+	resolved := strings.TrimRight(GetGitHubCopilotBaseURL(apiKey, c.enterpriseDomain), "/")
+	if resolved == "" {
+		return c.baseURL
+	}
+	return resolved
 }
 
 // NewAnthropicClient constructs a streaming Anthropic client using configured defaults.
@@ -74,7 +90,7 @@ func NewAnthropicClientForProvider(provider, model, apiKey, baseURL string) (*An
 	if apiKey == "" {
 		apiKey = os.Getenv(preset.EnvKeyVar)
 	}
-	if apiKey == "" {
+	if apiKey == "" && provider != "github-copilot" {
 		return nil, &APIError{Type: ErrAuth, Message: fmt.Sprintf("missing API key for provider %q", provider)}
 	}
 
@@ -105,6 +121,7 @@ func (c *AnthropicClient) Warmup(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	baseURL := c.resolveBaseURL(apiKey)
 	headers := map[string]string{
 		"accept":            "application/json",
 		"anthropic-version": anthropicVersion,
@@ -118,7 +135,7 @@ func (c *AnthropicClient) Warmup(ctx context.Context) error {
 		headers["x-api-key"] = apiKey
 	}
 
-	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/v1/messages", headers)
+	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, baseURL+"/v1/messages", headers)
 }
 
 // Stream opens a streaming Messages API request and yields model events.
@@ -214,7 +231,8 @@ func (c *AnthropicClient) openStream(ctx context.Context, payload anthropicReque
 	)
 
 	err = RetryWithBackoff(ctx, DefaultRetryPolicy(), func() error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/messages", bytes.NewReader(body))
+		baseURL := c.resolveBaseURL(apiKey)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/v1/messages", bytes.NewReader(body))
 		if err != nil {
 			return fmt.Errorf("create anthropic request: %w", err)
 		}

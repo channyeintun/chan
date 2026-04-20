@@ -16,12 +16,42 @@ import (
 
 // OpenAICompatClient implements OpenAI-compatible chat completions streaming.
 type OpenAICompatClient struct {
-	provider     string
-	model        string
-	baseURL      string
-	apiKey       string
-	httpClient   *http.Client
-	capabilities ModelCapabilities
+	provider         string
+	model            string
+	baseURL          string
+	enterpriseDomain string
+	apiKey           string
+	apiKeyFunc       func() (string, error)
+	httpClient       *http.Client
+	capabilities     ModelCapabilities
+}
+
+// SetAPIKeyFunc sets a callback that returns a fresh API key on each call.
+// When set, the client calls this instead of using the static apiKey.
+func (c *OpenAICompatClient) SetAPIKeyFunc(fn func() (string, error)) {
+	c.apiKeyFunc = fn
+}
+
+func (c *OpenAICompatClient) SetGitHubCopilotEnterpriseDomain(domain string) {
+	c.enterpriseDomain = strings.TrimSpace(domain)
+}
+
+func (c *OpenAICompatClient) resolveAPIKey() (string, error) {
+	if c.apiKeyFunc != nil {
+		return c.apiKeyFunc()
+	}
+	return c.apiKey, nil
+}
+
+func (c *OpenAICompatClient) resolveBaseURL(apiKey string) string {
+	if c.provider != "github-copilot" {
+		return c.baseURL
+	}
+	resolved := strings.TrimRight(GetGitHubCopilotBaseURL(apiKey, c.enterpriseDomain), "/")
+	if resolved == "" {
+		return c.baseURL
+	}
+	return resolved
 }
 
 // NewOpenAICompatClient constructs a streaming client for OpenAI-compatible providers.
@@ -49,7 +79,7 @@ func NewOpenAICompatClient(provider, model, apiKey, baseURL string) (*OpenAIComp
 	if apiKey == "" {
 		apiKey = os.Getenv(preset.EnvKeyVar)
 	}
-	if apiKey == "" {
+	if apiKey == "" && provider != "github-copilot" {
 		return nil, &APIError{Type: ErrAuth, Message: fmt.Sprintf("missing API key for provider %q", provider)}
 	}
 
@@ -75,16 +105,21 @@ func (c *OpenAICompatClient) Capabilities() ModelCapabilities {
 
 // Warmup preconnects the OpenAI-compatible transport before the first streamed turn.
 func (c *OpenAICompatClient) Warmup(ctx context.Context) error {
+	apiKey, err := c.resolveAPIKey()
+	if err != nil {
+		return err
+	}
+	baseURL := c.resolveBaseURL(apiKey)
 	headers := map[string]string{
 		"accept":        "application/json",
-		"authorization": "Bearer " + c.apiKey,
+		"authorization": "Bearer " + apiKey,
 	}
 	if c.provider == "github-copilot" {
 		for key, value := range GitHubCopilotStaticHeaders() {
 			headers[strings.ToLower(key)] = value
 		}
 	}
-	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/models", headers)
+	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, baseURL+"/models", headers)
 }
 
 // Stream opens a streaming chat completions request and yields model events.
@@ -127,13 +162,18 @@ func (c *OpenAICompatClient) openStream(ctx context.Context, payload openAICompa
 	)
 
 	err = RetryWithBackoff(ctx, DefaultRetryPolicy(), func() error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
+		apiKey, err := c.resolveAPIKey()
+		if err != nil {
+			return err
+		}
+		baseURL := c.resolveBaseURL(apiKey)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(body))
 		if err != nil {
 			return fmt.Errorf("create OpenAI-compatible request: %w", err)
 		}
 		req.Header.Set("content-type", "application/json")
 		req.Header.Set("accept", "text/event-stream")
-		req.Header.Set("authorization", "Bearer "+c.apiKey)
+		req.Header.Set("authorization", "Bearer "+apiKey)
 		for key, value := range extraHeaders {
 			req.Header.Set(key, value)
 		}

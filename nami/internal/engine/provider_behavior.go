@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -76,6 +75,7 @@ func (gitHubCopilotProviderBehavior) NewClient(provider, model string, cfg confi
 	if capabilities, ok := resolveGitHubCopilotCapabilities(resolved, model); ok {
 		client = api.WithCapabilities(client, capabilities)
 	}
+	api.SetGitHubCopilotEnterpriseDomain(client, resolved.GitHubCopilot.EnterpriseDomain)
 	api.SetAPIKeyFunc(client, newCopilotTokenRefresher(resolved.GitHubCopilot).resolve)
 	return client, nil
 }
@@ -268,58 +268,26 @@ func resolveGitHubCopilotConfig(cfg config.Config) (config.Config, error) {
 
 	if strings.TrimSpace(cfg.APIKey) == "" {
 		creds := cfg.GitHubCopilot
-		if strings.TrimSpace(creds.GitHubToken) == "" {
+		if strings.TrimSpace(creds.GitHubToken) == "" && strings.TrimSpace(creds.AccessToken) == "" {
 			return cfg, &api.APIError{Type: api.ErrAuth, Message: "GitHub Copilot is not connected. Run /connect first."}
 		}
-
-		expiresAt := time.UnixMilli(creds.ExpiresAtUnixMS)
-		if strings.TrimSpace(creds.AccessToken) == "" || time.Now().After(expiresAt) {
-			refreshCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-
-			refreshed, err := api.RefreshGitHubCopilotToken(refreshCtx, creds.GitHubToken, creds.EnterpriseDomain)
-			if err != nil {
-				return cfg, err
-			}
-
-			creds.AccessToken = refreshed.AccessToken
-			creds.ExpiresAtUnixMS = refreshed.ExpiresAt.UnixMilli()
-			cfg.GitHubCopilot = creds
-
-			loaded.GitHubCopilot = creds
-			if err := config.Save(loaded); err != nil {
-				return cfg, fmt.Errorf("save refreshed GitHub Copilot credentials: %w", err)
-			}
-		}
-
+		cfg.GitHubCopilot = creds
 		cfg.APIKey = creds.AccessToken
 	}
 
 	if strings.TrimSpace(cfg.BaseURL) == "" {
-		cfg.BaseURL = api.GetGitHubCopilotBaseURL(cfg.GitHubCopilot.AccessToken, cfg.GitHubCopilot.EnterpriseDomain)
+		cfg.BaseURL = api.GetGitHubCopilotBaseURL(strings.TrimSpace(cfg.GitHubCopilot.AccessToken), cfg.GitHubCopilot.EnterpriseDomain)
 	}
 
 	return cfg, nil
 }
 
 func resolveGitHubCopilotCapabilities(cfg config.Config, model string) (api.ModelCapabilities, bool) {
-	accessToken := strings.TrimSpace(cfg.GitHubCopilot.AccessToken)
-	if accessToken == "" {
-		return api.ModelCapabilities{}, false
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	capabilities, ok, err := api.ResolveGitHubCopilotModelCapabilities(ctx, accessToken, cfg.GitHubCopilot.EnterpriseDomain, model)
-	if err != nil {
-		if ok {
-			fmt.Fprintf(os.Stderr, "warning: failed to fetch GitHub Copilot model metadata for %q; using inferred fallback: %v\n", model, err)
-			return capabilities, true
-		}
-		fmt.Fprintf(os.Stderr, "warning: failed to fetch GitHub Copilot model metadata for %q: %v\n", model, err)
-		return api.ModelCapabilities{}, false
-	}
+	capabilities, ok := api.ResolveGitHubCopilotModelCapabilitiesCached(
+		strings.TrimSpace(cfg.GitHubCopilot.AccessToken),
+		cfg.GitHubCopilot.EnterpriseDomain,
+		model,
+	)
 	return capabilities, ok
 }
 

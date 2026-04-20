@@ -16,13 +16,14 @@ import (
 
 // OpenAIResponsesClient implements streaming over the OpenAI Responses API.
 type OpenAIResponsesClient struct {
-	provider     string
-	model        string
-	baseURL      string
-	apiKey       string
-	apiKeyFunc   func() (string, error)
-	httpClient   *http.Client
-	capabilities ModelCapabilities
+	provider         string
+	model            string
+	baseURL          string
+	enterpriseDomain string
+	apiKey           string
+	apiKeyFunc       func() (string, error)
+	httpClient       *http.Client
+	capabilities     ModelCapabilities
 }
 
 // SetAPIKeyFunc sets a callback that returns a fresh API key on each call.
@@ -31,11 +32,26 @@ func (c *OpenAIResponsesClient) SetAPIKeyFunc(fn func() (string, error)) {
 	c.apiKeyFunc = fn
 }
 
+func (c *OpenAIResponsesClient) SetGitHubCopilotEnterpriseDomain(domain string) {
+	c.enterpriseDomain = strings.TrimSpace(domain)
+}
+
 func (c *OpenAIResponsesClient) resolveAPIKey() (string, error) {
 	if c.apiKeyFunc != nil {
 		return c.apiKeyFunc()
 	}
 	return c.apiKey, nil
+}
+
+func (c *OpenAIResponsesClient) resolveBaseURL(apiKey string) string {
+	if c.provider != "github-copilot" {
+		return c.baseURL
+	}
+	resolved := strings.TrimRight(GetGitHubCopilotBaseURL(apiKey, c.enterpriseDomain), "/")
+	if resolved == "" {
+		return c.baseURL
+	}
+	return resolved
 }
 
 // NewOpenAIResponsesClient constructs a streaming client for Responses-compatible providers.
@@ -60,7 +76,7 @@ func NewOpenAIResponsesClient(provider, model, apiKey, baseURL string) (*OpenAIR
 	if apiKey == "" {
 		apiKey = os.Getenv(preset.EnvKeyVar)
 	}
-	if apiKey == "" {
+	if apiKey == "" && provider != "github-copilot" {
 		return nil, &APIError{Type: ErrAuth, Message: fmt.Sprintf("missing API key for provider %q", provider)}
 	}
 
@@ -87,6 +103,7 @@ func (c *OpenAIResponsesClient) Warmup(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	baseURL := c.resolveBaseURL(apiKey)
 	headers := map[string]string{
 		"accept":        "application/json",
 		"authorization": "Bearer " + apiKey,
@@ -96,7 +113,7 @@ func (c *OpenAIResponsesClient) Warmup(ctx context.Context) error {
 			headers[strings.ToLower(key)] = value
 		}
 	}
-	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/models", headers)
+	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, baseURL+"/models", headers)
 }
 
 func (c *OpenAIResponsesClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
@@ -136,18 +153,18 @@ func (c *OpenAIResponsesClient) openStream(ctx context.Context, payload openAIRe
 		return nil, fmt.Errorf("marshal OpenAI Responses request: %w", err)
 	}
 
-	apiKey, err := c.resolveAPIKey()
-	if err != nil {
-		return nil, err
-	}
-
 	var (
 		resp *http.Response
 		mu   sync.Mutex
 	)
 
 	err = RetryWithBackoff(ctx, DefaultRetryPolicy(), func() error {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/responses", bytes.NewReader(body))
+		apiKey, err := c.resolveAPIKey()
+		if err != nil {
+			return err
+		}
+		baseURL := c.resolveBaseURL(apiKey)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/responses", bytes.NewReader(body))
 		if err != nil {
 			return fmt.Errorf("create OpenAI Responses request: %w", err)
 		}

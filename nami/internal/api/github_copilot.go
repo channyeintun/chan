@@ -581,6 +581,42 @@ func ResolveGitHubCopilotModelCapabilities(ctx context.Context, accessToken, ent
 	return mergeGitHubCopilotCapabilities(capabilities, remote), true, nil
 }
 
+func ResolveGitHubCopilotModelCapabilitiesCached(accessToken, enterpriseDomain, model string) (ModelCapabilities, bool) {
+	capabilities := Presets["github-copilot"].Capabilities
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return capabilities, false
+	}
+
+	fallbackCapabilities, hasFallback := inferGitHubCopilotModelCapabilities(model)
+	accessToken = strings.TrimSpace(accessToken)
+	if accessToken == "" {
+		if hasFallback {
+			return fallbackCapabilities, true
+		}
+		return capabilities, false
+	}
+
+	baseURL := GetGitHubCopilotBaseURL(accessToken, enterpriseDomain)
+	models, ok := cachedGitHubCopilotModels(baseURL, true)
+	if !ok {
+		if hasFallback {
+			return fallbackCapabilities, true
+		}
+		return capabilities, false
+	}
+
+	remote, ok := models[model]
+	if !ok {
+		if hasFallback {
+			return fallbackCapabilities, true
+		}
+		return capabilities, false
+	}
+
+	return mergeGitHubCopilotCapabilities(capabilities, remote), true
+}
+
 func inferGitHubCopilotModelCapabilities(model string) (ModelCapabilities, bool) {
 	capabilities := Presets["github-copilot"].Capabilities
 	if !GitHubCopilotUsesAnthropicMessages(model) {
@@ -590,6 +626,9 @@ func inferGitHubCopilotModelCapabilities(model string) (ModelCapabilities, bool)
 	if anthropicPreset, ok := Presets["anthropic"]; ok {
 		if anthropicPreset.Capabilities.MaxContextWindow > capabilities.MaxContextWindow {
 			capabilities.MaxContextWindow = anthropicPreset.Capabilities.MaxContextWindow
+		}
+		if anthropicPreset.Capabilities.SupportsCaching {
+			capabilities.SupportsCaching = true
 		}
 	}
 	capabilities.SupportsExtendedThinking = true
