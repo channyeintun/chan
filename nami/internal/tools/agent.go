@@ -21,6 +21,7 @@ const subagentTypeVerification = "verification"
 type AgentRunRequest struct {
 	Description  string
 	Prompt       string
+	Role         string
 	SubagentType string
 	Background   bool
 }
@@ -150,6 +151,10 @@ func (t *AgentTool) InputSchema() any {
 				"description": "The child agent type: Explore for read-only codebase search, general-purpose for broader delegated work, and verification for build/test validation without file edits.",
 				"enum":        []string{subagentTypeExplore, subagentTypeGeneralPurpose, subagentTypeVerification},
 			},
+			"role": map[string]any{
+				"type":        "string",
+				"description": "Optional project-local swarm role name. When set, Nami loads matching files from .nami/swarm to refine the child agent prompt.",
+			},
 			"run_in_background": map[string]any{
 				"type":        "boolean",
 				"description": "Launch the child agent asynchronously and return an agent_id for later status checks.",
@@ -189,12 +194,14 @@ func (t *AgentTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, e
 
 	description, _ := stringParam(input.Params, "description")
 	prompt, _ := stringParam(input.Params, "prompt")
+	role, _ := stringParam(input.Params, "role")
 	subagentType, _ := stringParam(input.Params, "subagent_type")
 	subagentType = NormalizeSubagentType(subagentType)
 
 	result, err := t.runner(ctx, AgentRunRequest{
 		Description:  strings.TrimSpace(description),
 		Prompt:       strings.TrimSpace(prompt),
+		Role:         strings.TrimSpace(role),
 		SubagentType: subagentType,
 		Background:   boolOrDefault(input.Params, "run_in_background", false),
 	})

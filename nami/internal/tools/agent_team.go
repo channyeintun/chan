@@ -10,6 +10,7 @@ import (
 type AgentTeamTask struct {
 	Description  string `json:"description"`
 	Prompt       string `json:"prompt"`
+	Role         string `json:"role,omitempty"`
 	SubagentType string `json:"subagent_type,omitempty"`
 }
 
@@ -75,6 +76,7 @@ func (t *AgentTeamTool) InputSchema() any {
 					"properties": map[string]any{
 						"description":   map[string]any{"type": "string"},
 						"prompt":        map[string]any{"type": "string"},
+						"role":          map[string]any{"type": "string"},
 						"subagent_type": map[string]any{"type": "string", "enum": []string{subagentTypeExplore, subagentTypeGeneralPurpose, subagentTypeVerification}},
 					},
 					"required": []string{"description", "prompt"},
@@ -127,6 +129,7 @@ func (t *AgentTeamTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 		tasks = append(tasks, AgentTeamTask{
 			Description:  strings.TrimSpace(firstStringOrEmpty(task, "description")),
 			Prompt:       strings.TrimSpace(firstStringOrEmpty(task, "prompt")),
+			Role:         strings.TrimSpace(firstStringOrEmpty(task, "role")),
 			SubagentType: NormalizeSubagentType(firstStringOrEmpty(task, "subagent_type")),
 		})
 	}

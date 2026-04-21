@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -24,6 +25,7 @@ import (
 	memorypkg "github.com/channyeintun/nami/internal/memory"
 	"github.com/channyeintun/nami/internal/permissions"
 	"github.com/channyeintun/nami/internal/session"
+	"github.com/channyeintun/nami/internal/swarm"
 	"github.com/channyeintun/nami/internal/timing"
 	toolpkg "github.com/channyeintun/nami/internal/tools"
 )
@@ -247,10 +249,15 @@ func executeSubagent(
 	if archiveErr != nil && bridge != nil {
 		_ = bridge.EmitNotice(fmt.Sprintf("archive child prompt: %v", archiveErr))
 	}
-	childHandoff := buildDelegatedPromptBrief(req.Description, req.Prompt, subagentType, promptArchivePath)
+	childHandoff := buildDelegatedPromptBrief(req.Description, req.Prompt, req.Role, subagentType, promptArchivePath)
 	childMessages := []api.Message{{Role: api.RoleUser, Content: injectChildHookContext(childHandoff, startHookMessages)}}
 	allowedDefs := childRegistry.Definitions()
 	childPrompt := subagentSystemPrompt(subagentType, allowedDefs)
+	if overlay, overlayErr := swarm.LoadRolePromptOverlay(cwd, req.Role); overlayErr == nil {
+		childPrompt = swarm.JoinPromptSections(childPrompt, overlay.Content)
+	} else if !errors.Is(overlayErr, os.ErrNotExist) {
+		return toolpkg.AgentRunResult{}, overlayErr
+	}
 	queryTools := allowedDefs
 	executionRegistry := childRegistry
 	transcriptPath := filepath.Join(sessionStore.SessionDir(childSessionID), "transcript.ndjson")
@@ -444,6 +451,7 @@ func runChildStartHooks(
 			"invocation_id":     invocationID,
 			"description":       req.Description,
 			"prompt":            req.Prompt,
+			"role":              req.Role,
 			"subagent_type":     subagentType,
 			"run_in_background": req.Background,
 		},
@@ -503,6 +511,7 @@ func evaluateChildStopHooks(
 			"agent_type":        subagentType,
 			"invocation_id":     invocationID,
 			"description":       req.Description,
+			"role":              req.Role,
 			"subagent_type":     subagentType,
 			"run_in_background": req.Background,
 			"stop_reason":       stopReq.StopReason,
@@ -564,6 +573,7 @@ func runChildStopFailureHooks(
 			"agent_type":        subagentType,
 			"invocation_id":     invocationID,
 			"description":       req.Description,
+			"role":              req.Role,
 			"subagent_type":     subagentType,
 			"run_in_background": req.Background,
 		},
@@ -945,7 +955,7 @@ func archiveDelegatedPrompt(sessionDir string, description string, prompt string
 	return path, nil
 }
 
-func buildDelegatedPromptBrief(description string, prompt string, subagentType string, archivePath string) string {
+func buildDelegatedPromptBrief(description string, prompt string, role string, subagentType string, archivePath string) string {
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		return ""
@@ -962,6 +972,11 @@ func buildDelegatedPromptBrief(description string, prompt string, subagentType s
 	if strings.TrimSpace(description) != "" {
 		builder.WriteString("- Summary: ")
 		builder.WriteString(strings.TrimSpace(description))
+		builder.WriteString("\n")
+	}
+	if strings.TrimSpace(role) != "" {
+		builder.WriteString("- Role: ")
+		builder.WriteString(strings.TrimSpace(role))
 		builder.WriteString("\n")
 	}
 	builder.WriteString("- Subagent: ")

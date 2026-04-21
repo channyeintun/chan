@@ -451,6 +451,7 @@ func launchBackgroundTeam(ctx context.Context, runner toolpkg.AgentRunner, req t
 		result, err := runner(ctx, toolpkg.AgentRunRequest{
 			Description:  task.Description,
 			Prompt:       task.Prompt,
+			Role:         task.Role,
 			SubagentType: toolpkg.NormalizeSubagentType(task.SubagentType),
 			Background:   true,
 		})
