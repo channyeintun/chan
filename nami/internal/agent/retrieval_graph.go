@@ -53,11 +53,8 @@ const (
 	edgeWeightImports    = 2
 	edgeWeightContains   = 2
 	edgeWeightTestCovers = 2
-	edgeWeightReferences = 1
-	edgeWeightTool       = 1
 	edgeWeightDiff       = 3
 	edgeWeightTouched    = 1
-	edgeWeightPref       = 1
 
 	graphSecondHopPenalty       = 50 // percent
 	graphSecondHopMinCandidates = 3

@@ -973,17 +973,6 @@ func (s *anthropicToolUseState) inputJSON() (string, error) {
 	return "{}", nil
 }
 
-func newAnthropicClientForTesting(model, apiKey, baseURL string, httpClient *http.Client) *AnthropicClient {
-	preset := Presets["anthropic"]
-	return &AnthropicClient{
-		model:        model,
-		baseURL:      strings.TrimRight(baseURL, "/"),
-		apiKey:       apiKey,
-		httpClient:   httpClient,
-		capabilities: preset.Capabilities,
-	}
-}
-
 func init() {
 	_ = time.Second
 }

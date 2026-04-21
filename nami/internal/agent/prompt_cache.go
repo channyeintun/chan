@@ -62,15 +62,6 @@ func (c *PromptAssemblyCache) memoize(entry *promptCacheEntry, key string, build
 	return entry.value
 }
 
-func memoryPromptCacheKey(currentUserPrompt string, recalls []MemoryRecallResult) string {
-	parts := []string{"memory", currentUserPrompt}
-	for _, recall := range recalls {
-		parts = append(parts, recall.Path, recall.Source)
-		parts = append(parts, recall.Lines...)
-	}
-	return hashStrings(parts...)
-}
-
 func memoryInstructionPromptCacheKey(files []MemoryFile) string {
 	parts := []string{"memory-instructions"}
 	for _, file := range files {

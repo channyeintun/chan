@@ -20,9 +20,7 @@ func ParseFrontmatter(content string) (map[string]string, string) {
 
 	fmBlock := rest[:idx]
 	body := rest[idx+4:] // skip \n---
-	if strings.HasPrefix(body, "\n") {
-		body = body[1:]
-	}
+	body = strings.TrimPrefix(body, "\n")
 
 	// Parse simple key: value pairs
 	for _, line := range strings.Split(fmBlock, "\n") {

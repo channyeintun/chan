@@ -99,7 +99,7 @@ func maybeRefreshSessionMemory(ctx context.Context, bridge *ipc.Bridge, artifact
 	if artifactManager == nil || strings.TrimSpace(sessionID) == "" {
 		return nil
 	}
-	if !shouldRefreshSessionMemory(ctx, artifactManager, sessionID, turnID, messages, fromIndex) {
+	if !shouldRefreshSessionMemory(ctx, artifactManager, sessionID, messages, fromIndex) {
 		return nil
 	}
 
@@ -221,7 +221,7 @@ func syncSessionMemoryAfterRewind(ctx context.Context, bridge *ipc.Bridge, artif
 	return emitArtifactUpdated(bridge, artifact, content)
 }
 
-func shouldRefreshSessionMemory(ctx context.Context, artifactManager *artifactspkg.Manager, sessionID string, turnID int, messages []api.Message, fromIndex int) bool {
+func shouldRefreshSessionMemory(ctx context.Context, artifactManager *artifactspkg.Manager, sessionID string, messages []api.Message, fromIndex int) bool {
 	if len(messages) < sessionMemoryMinMessages {
 		return false
 	}
@@ -409,14 +409,6 @@ func parseBulletList(section string) []string {
 		items = append(items, "- "+trimmed)
 	}
 	return items
-}
-
-func firstListEntry(section string) string {
-	items := parseBulletList(section)
-	if len(items) == 0 {
-		return ""
-	}
-	return items[0]
 }
 
 func mergeBulletLists(primary, fallback []string, limit int) []string {
@@ -820,14 +812,6 @@ func extractPathsFromToolInput(raw string) []string {
 		paths = append(paths, value)
 	}
 	return paths
-}
-
-func bulletOrFallback(value string, fallback string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "- " + fallback
-	}
-	return "- " + value
 }
 
 func fallbackText(value string, fallback string) string {

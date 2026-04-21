@@ -84,13 +84,6 @@ func emitTurnTimingCheckpoint(bridge *ipc.Bridge, recorder *timing.CheckpointRec
 	})
 }
 
-func emitArtifactStatusChanged(bridge *ipc.Bridge, artifact artifactspkg.Artifact) error {
-	return bridge.Emit(ipc.EventArtifactStatusChanged, ipc.ArtifactStatusChangedPayload{
-		ID:     artifact.ID,
-		Status: artifactMetadataString(artifact, "status"),
-	})
-}
-
 func budgetToolOutput(
 	ctx context.Context,
 	artifactManager *artifactspkg.Manager,

@@ -11,13 +11,9 @@ import (
 )
 
 const (
-	plannerSource                  = "planner"
 	planArtifactSlot               = "active"
 	planStatusDraft                = "draft"
 	planStatusFinal                = "final"
-	planArtifactTitle              = "Implementation Plan"
-	taskListArtifactSlot           = "active"
-	taskListArtifactTitle          = "Task List"
 	saveImplementationPlanToolName = "save_implementation_plan"
 	saveWalkthroughToolName        = "save_walkthrough"
 	planModePromptHint             = "Plan mode: Ultrathink. Not read-only — create/modify if user asks. Non-trivial work: save/update plan via save_implementation_plan as primary review artifact. Choreograph child agents: focused objective, let finish, synthesize. read_project_structure = directory layout. project_overview = semantic summary."
@@ -124,10 +120,6 @@ func PlanModePromptHint() string {
 	return planModePromptHint
 }
 
-func (p *Planner) enabled() bool {
-	return p != nil && p.mode == ModePlan && p.hasSessionArtifacts()
-}
-
 func (p *Planner) hasSessionArtifacts() bool {
 	return p != nil && strings.TrimSpace(p.sessionID) != "" && p.artifactManager != nil
 }
@@ -159,102 +151,6 @@ func (p *Planner) planStatus(ctx context.Context) (string, string, error) {
 	return planStatusFinal, artifact.Title, nil
 }
 
-func latestAssistantPlanSince(messages []api.Message, fromIndex int) string {
-	if fromIndex < 0 {
-		fromIndex = 0
-	}
-	if fromIndex > len(messages) {
-		fromIndex = len(messages)
-	}
-	for index := len(messages) - 1; index >= fromIndex; index-- {
-		message := messages[index]
-		if message.Role != api.RoleAssistant {
-			continue
-		}
-		if strings.TrimSpace(message.Content) == "" {
-			continue
-		}
-		return message.Content
-	}
-	return ""
-}
-
-func turnUsedToolSince(messages []api.Message, fromIndex int, toolName string) bool {
-	if fromIndex < 0 {
-		fromIndex = 0
-	}
-	if fromIndex > len(messages) {
-		fromIndex = len(messages)
-	}
-	for index := fromIndex; index < len(messages); index++ {
-		for _, toolCall := range messages[index].ToolCalls {
-			if toolCall.Name == toolName {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func shouldMaintainPlanDraft(userRequest string) bool {
-	request := normalizeIntentText(userRequest)
-	if request == "" {
-		return false
-	}
-	return containsAny(request, planIntentTerms) || containsAny(request, implementationIntentTerms)
-}
-
-func shouldMaintainTaskList(userRequest string) bool {
-	request := normalizeIntentText(userRequest)
-	if request == "" {
-		return false
-	}
-	return containsAny(request, planIntentTerms) || containsAny(request, implementationIntentTerms)
-}
-
-func shouldUpdateDraftPlan(userRequest string, assistantResponse string) bool {
-	request := normalizeIntentText(userRequest)
-	response := strings.ToLower(strings.TrimSpace(assistantResponse))
-
-	if request == "" || response == "" {
-		return false
-	}
-	if !shouldMaintainPlanDraft(userRequest) {
-		return false
-	}
-	if looksLikeQuestion(assistantResponse) {
-		return false
-	}
-	return containsAny(response, explicitPlanResponseTerms) || containsStructuredSteps(assistantResponse)
-}
-
-func (p *Planner) shouldManageSessionArtifact(ctx context.Context, kind artifactspkg.Kind, slot string) (bool, error) {
-	if p == nil || strings.TrimSpace(p.sessionID) == "" || p.artifactManager == nil {
-		return false, nil
-	}
-
-	artifact, found, err := p.artifactManager.FindSessionArtifact(ctx, kind, artifactspkg.ScopeSession, p.sessionID, slot)
-	if err != nil {
-		return false, err
-	}
-	if !found {
-		return true, nil
-	}
-	return strings.TrimSpace(artifact.Source) == "" || artifact.Source == plannerSource, nil
-}
-
-var planIntentTerms = []string{
-	"implementation plan",
-	"plan this",
-	"make a plan",
-	"give me a plan",
-	"step by step plan",
-	"plan for",
-	"approach for",
-	"how should we implement",
-	"how should i implement",
-}
-
 var implementationIntentTerms = []string{
 	"implement",
 	"implementation",
@@ -274,18 +170,6 @@ var implementationIntentTerms = []string{
 	"migrate",
 	"remove",
 	"replace",
-}
-
-var explicitPlanResponseTerms = []string{
-	"implementation plan",
-	"proposed plan",
-	"here's the plan",
-	"here is the plan",
-	"steps:",
-	"next steps",
-	"plan:",
-	"approach:",
-	"i would",
 }
 
 var questionPrefixes = []string{
@@ -332,11 +216,4 @@ func normalizeIntentText(text string) string {
 		text = strings.TrimPrefix(text, prefix)
 	}
 	return text
-}
-
-func containsStructuredSteps(text string) bool {
-	return strings.Contains(text, "\n1.") ||
-		strings.HasPrefix(text, "1.") ||
-		strings.Contains(text, "\n- ") ||
-		strings.Contains(text, "\n## ")
 }

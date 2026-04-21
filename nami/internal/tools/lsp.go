@@ -428,7 +428,7 @@ func newLSPClient(ctx context.Context, request lspRequest) (*lspClient, error) {
 
 func (c *lspClient) Run(ctx context.Context, request lspRequest) ([]lspResultRow, error) {
 	if request.FilePath != "" {
-		if err := c.didOpen(ctx, request.FilePath); err != nil {
+		if err := c.didOpen(request.FilePath); err != nil {
 			return nil, err
 		}
 	}
@@ -523,7 +523,7 @@ func (c *lspClient) initialize(ctx context.Context) error {
 	return nil
 }
 
-func (c *lspClient) didOpen(ctx context.Context, filePath string) error {
+func (c *lspClient) didOpen(filePath string) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("read file for didOpen %q: %w", filePath, err)

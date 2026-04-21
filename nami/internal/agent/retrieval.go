@@ -114,7 +114,7 @@ func ScoreCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText string
 	scores := make(map[string]int)
 	reasons := make(map[string]string)
 	seedFallbackCandidates(anchors, cwd, gitStatusText, sessionTouched, scores, reasons)
-	edgesExpanded := expandFallbackCandidates(cwd, anchors, scores, reasons)
+	edgesExpanded := expandFallbackCandidates(cwd, scores, reasons)
 	return rankFallbackCandidates(scores, reasons), edgesExpanded
 }
 
@@ -141,7 +141,7 @@ func seedFallbackCandidates(anchors []RetrievalAnchor, cwd string, gitStatusText
 	scoreErrorAnchors(anchors, scores, reasons)
 }
 
-func expandFallbackCandidates(cwd string, anchors []RetrievalAnchor, scores map[string]int, reasons map[string]string) int {
+func expandFallbackCandidates(cwd string, scores map[string]int, reasons map[string]string) int {
 	// Expand one hop through structural edges from the initial seed set.
 	seedPaths := make([]string, 0, len(scores))
 	for path := range scores {

@@ -351,14 +351,6 @@ func fileUpdatedAt(path string) time.Time {
 	return info.ModTime()
 }
 
-func formatMemoryIndexContent(file MemoryFile) string {
-	note := memoryAgeNote(file.UpdatedAt)
-	if note == "" {
-		return file.Content
-	}
-	return note + "\n" + file.Content
-}
-
 func formatRelevantMemoryIndexContent(file MemoryFile, currentUserPrompt string, recalled MemoryRecallResult) string {
 	selectedLines := recalled.Lines
 	selectionSource := strings.TrimSpace(recalled.Source)
