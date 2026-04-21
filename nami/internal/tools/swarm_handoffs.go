@@ -44,6 +44,12 @@ func getSwarmRuntime() (string, *artifactspkg.Manager, *session.Store, string, e
 	return globalSwarmRuntime.sessionID, globalSwarmRuntime.manager, globalSwarmRuntime.store, globalSwarmRuntime.cwd, nil
 }
 
+func CurrentSwarmRuntimeSessionID() string {
+	globalSwarmRuntime.mu.RLock()
+	defer globalSwarmRuntime.mu.RUnlock()
+	return strings.TrimSpace(globalSwarmRuntime.sessionID)
+}
+
 type SwarmSubmitHandoffTool struct{}
 
 type SwarmListInboxTool struct{}

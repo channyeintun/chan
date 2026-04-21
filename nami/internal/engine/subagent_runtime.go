@@ -157,16 +157,21 @@ func makeSubagentRunner(
 		}
 
 		currentCWD := currentSubagentCWD(state, fallbackCWD)
+		rolePolicy, childToolNames, err := loadSubagentRolePolicy(currentCWD, req.Role, registry, subagentType)
+		if err != nil {
+			return toolpkg.AgentRunResult{}, err
+		}
+		swarmSessionID := toolpkg.CurrentSwarmRuntimeSessionID()
 
 		execute := func(runCtx context.Context) (toolpkg.AgentRunResult, error) {
-			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, currentCWD, nil, nil)
+			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, currentCWD, rolePolicy, childToolNames, swarmSessionID, nil, nil)
 		}
 		if req.Background {
 			launch := launchBackgroundAgent(ctx, bridge, strings.TrimSpace(req.Description), strings.TrimSpace(req.Role), subagentType, invocationID, sessionStore, func(runCtx context.Context, stopControl *agent.StopController, reportStatus func(toolpkg.AgentRunResult)) (toolpkg.AgentRunResult, error) {
-				return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, currentCWD, stopControl, reportStatus)
+				return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, childClient, childActiveModelID, currentCWD, rolePolicy, childToolNames, swarmSessionID, stopControl, reportStatus)
 			})
 			launch.SubagentType = subagentType
-			launch.Tools = subagentToolNames(subagentType)
+			launch.Tools = append([]string(nil), childToolNames...)
 			return withChildMetadata(launch, strings.TrimSpace(req.Description), strings.TrimSpace(req.Role)), nil
 		}
 		result, err := execute(ctx)
@@ -238,6 +243,9 @@ func executeSubagent(
 	client api.LLMClient,
 	childModelID string,
 	cwd string,
+	rolePolicy *subagentRolePolicy,
+	childToolNames []string,
+	swarmSessionID string,
 	stopControl *agent.StopController,
 	reportStatus func(toolpkg.AgentRunResult),
 ) (toolpkg.AgentRunResult, error) {
@@ -252,7 +260,7 @@ func executeSubagent(
 	}
 	childStartedAt := time.Now()
 	childTracker := costpkg.NewTracker()
-	childRegistry := registry.CloneFiltered(subagentToolNames(subagentType))
+	childRegistry := registry.CloneFiltered(childToolNames)
 	childPermissionCtx := permissions.CloneContext(permissionCtx)
 	childBridge := ipc.NewBridge(strings.NewReader(""), io.Discard)
 	childTimingLogger := timing.NewSessionLogger(sessionStore.SessionDir(childSessionID))
@@ -317,7 +325,7 @@ func executeSubagent(
 			return trackModelStream(callCtx, childBridge, childTracker, client, modelReq)
 		},
 		ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-			return executeToolCallsForSubagent(callCtx, subagentType, executionRegistry, childPermissionCtx, artifactManager, childSessionID, sessionStore.SessionDir(childSessionID), childTracker, client.Capabilities().MaxOutputTokens, calls)
+			return executeToolCallsForSubagent(callCtx, subagentType, rolePolicy, executionRegistry, childPermissionCtx, artifactManager, childSessionID, sessionStore.SessionDir(childSessionID), childTracker, client.Capabilities().MaxOutputTokens, calls)
 		},
 		CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) (compact.CompactResult, error) {
 			sessionMemory, _ := loadSessionMemorySnapshot(callCtx, artifactManager, childSessionID)
@@ -331,7 +339,7 @@ func executeSubagent(
 			return loadSessionMemorySnapshot(callCtx, artifactManager, childSessionID)
 		},
 		BeforeStop: func(callCtx context.Context, stopReq agent.StopRequest) (agent.StopDecision, error) {
-			return evaluateChildStopHooks(callCtx, hookRunner, childSessionID, invocationID, req, subagentType, stopReq, lifecycle, transcriptPath, resultFile, reportStatus)
+			return evaluateChildStopHooks(callCtx, hookRunner, childSessionID, invocationID, req, subagentType, stopReq, lifecycle, transcriptPath, resultFile, reportStatus, rolePolicy, sessionStore, swarmSessionID, childStartedAt)
 		},
 		StopController: stopControl,
 		ApplyResultBudget: func(current []api.Message) []api.Message {
@@ -535,7 +543,17 @@ func evaluateChildStopHooks(
 	transcriptPath string,
 	resultFile string,
 	reportStatus func(toolpkg.AgentRunResult),
+	rolePolicy *subagentRolePolicy,
+	store *session.Store,
+	swarmSessionID string,
+	childStartedAt time.Time,
 ) (agent.StopDecision, error) {
+	if blocked, reason, followUp, err := rolePolicy.completionBlocked(store, swarmSessionID, childStartedAt, stopReq.StopReason); err != nil {
+		return agent.StopDecision{}, err
+	} else if blocked {
+		return blockChildStop(lifecycle, reason, followUp, childSessionID, invocationID, req.Role, subagentType, transcriptPath, resultFile, reportStatus), nil
+	}
+
 	if hookRunner == nil {
 		return agent.StopDecision{}, nil
 	}
@@ -564,6 +582,21 @@ func evaluateChildStopHooks(
 	if !blocked {
 		return agent.StopDecision{}, nil
 	}
+	return blockChildStop(lifecycle, reason, childStopBlockedFollowUp(reason), childSessionID, invocationID, req.Role, subagentType, transcriptPath, resultFile, reportStatus), nil
+}
+
+func blockChildStop(
+	lifecycle *childLifecycleTracker,
+	reason string,
+	followUp string,
+	childSessionID string,
+	invocationID string,
+	role string,
+	subagentType string,
+	transcriptPath string,
+	resultFile string,
+	reportStatus func(toolpkg.AgentRunResult),
+) agent.StopDecision {
 	lifecycle.noteStopBlock(reason)
 	if reportStatus != nil {
 		reportStatus(toolpkg.AgentRunResult{
@@ -574,6 +607,7 @@ func evaluateChildStopHooks(
 			TranscriptPath: transcriptPath,
 			OutputFile:     resultFile,
 			Metadata: &toolpkg.ChildAgentMetadata{
+				Role:            strings.TrimSpace(role),
 				LifecycleState:  "stop_blocked",
 				StatusMessage:   reason,
 				StopBlockReason: lifecycle.stopBlockReason,
@@ -584,8 +618,8 @@ func evaluateChildStopHooks(
 	return agent.StopDecision{
 		Continue:        true,
 		Reason:          reason,
-		FollowUpMessage: childStopBlockedFollowUp(reason),
-	}, nil
+		FollowUpMessage: followUp,
+	}
 }
 
 func runChildStopFailureHooks(
@@ -847,6 +881,7 @@ func latestAssistantContent(messages []api.Message) string {
 func executeToolCallsForSubagent(
 	ctx context.Context,
 	subagentType string,
+	rolePolicy *subagentRolePolicy,
 	registry *toolpkg.Registry,
 	permissionCtx *permissions.Context,
 	artifactManager *artifactspkg.Manager,
@@ -868,6 +903,14 @@ func executeToolCallsForSubagent(
 			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
 			continue
 		}
+		if !subagentAllowsToolName(subagentType, normalized.Name) {
+			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: fmt.Sprintf("tool %q is not allowed in the %s subagent", normalized.Name, subagentType), IsError: true}
+			continue
+		}
+		if rolePolicy != nil && !rolePolicy.allowsToolName(normalized.Name) {
+			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: rolePolicy.toolDeniedMessage(normalized.Name), IsError: true}
+			continue
+		}
 		tool, err := registry.Get(normalized.Name)
 		if err != nil {
 			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: err.Error(), IsError: true}
@@ -880,10 +923,6 @@ func executeToolCallsForSubagent(
 		}
 		if err := toolpkg.ValidateToolCall(tool, input); err != nil {
 			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: err.Error(), IsError: true}
-			continue
-		}
-		if !subagentAllowsToolName(subagentType, tool.Name()) {
-			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: fmt.Sprintf("tool %q is not allowed in the %s subagent", tool.Name(), subagentType), IsError: true}
 			continue
 		}
 		if !subagentAllowsTool(subagentType, tool.Permission()) {

@@ -31,6 +31,15 @@ const (
 	QueueLatestWins  QueuePolicy = "latest-wins"
 )
 
+type PermissionProfile string
+
+const (
+	PermissionProfileInherit  PermissionProfile = "inherit"
+	PermissionProfileReadOnly PermissionProfile = "read-only"
+	PermissionProfileExecute  PermissionProfile = "execute"
+	PermissionProfileWrite    PermissionProfile = "write"
+)
+
 type HandoffField string
 
 const (
@@ -54,6 +63,7 @@ type RoleSpec struct {
 	Model        string       `json:"model,omitempty"`
 	Workspace    string       `json:"workspace,omitempty"`
 	QueuePolicy  string       `json:"queue_policy,omitempty"`
+	Permission   string       `json:"permission_profile,omitempty"`
 	AllowTools   []string     `json:"allow_tools,omitempty"`
 	DenyTools    []string     `json:"deny_tools,omitempty"`
 	Handoff      HandoffSpec  `json:"handoff,omitempty"`
@@ -84,6 +94,7 @@ type ResolvedRole struct {
 	Model             string
 	WorkspaceStrategy WorkspaceStrategy
 	QueuePolicy       QueuePolicy
+	PermissionProfile PermissionProfile
 	AllowTools        []string
 	DenyTools         []string
 	Handoff           ResolvedHandoff
@@ -249,6 +260,7 @@ func (s ResolvedSpec) SummaryMarkdown() string {
 		}
 		b.WriteString(fmt.Sprintf("- Workspace: %s\n", role.WorkspaceStrategy))
 		b.WriteString(fmt.Sprintf("- Queue policy: %s\n", role.QueuePolicy))
+		b.WriteString(fmt.Sprintf("- Permission profile: %s\n", role.PermissionProfile))
 		if strings.TrimSpace(role.Metadata.Owner) != "" {
 			b.WriteString(fmt.Sprintf("- Owner: %s\n", role.Metadata.Owner))
 		}
@@ -333,6 +345,11 @@ func resolveRole(role RoleSpec, idx int) (ResolvedRole, []string) {
 		problems = append(problems, fmt.Sprintf("role[%d] queue_policy %q is invalid", idx, role.QueuePolicy))
 	}
 
+	permissionProfile := normalizePermissionProfile(role.Permission)
+	if permissionProfile == "" {
+		problems = append(problems, fmt.Sprintf("role[%d] permission_profile %q is invalid", idx, role.Permission))
+	}
+
 	model := strings.TrimSpace(role.Model)
 	if model != "" {
 		if modelProblem := validateModelRef(model); modelProblem != "" {
@@ -362,6 +379,7 @@ func resolveRole(role RoleSpec, idx int) (ResolvedRole, []string) {
 		Model:             model,
 		WorkspaceStrategy: workspace,
 		QueuePolicy:       queuePolicy,
+		PermissionProfile: permissionProfile,
 		AllowTools:        allowTools,
 		DenyTools:         denyTools,
 		Handoff:           handoff,
@@ -425,6 +443,21 @@ func normalizeQueuePolicy(raw string) QueuePolicy {
 		return QueueBatchReview
 	case string(QueueLatestWins), "latest_wins":
 		return QueueLatestWins
+	default:
+		return ""
+	}
+}
+
+func normalizePermissionProfile(raw string) PermissionProfile {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", string(PermissionProfileInherit):
+		return PermissionProfileInherit
+	case string(PermissionProfileReadOnly), "readonly", "read_only":
+		return PermissionProfileReadOnly
+	case string(PermissionProfileExecute):
+		return PermissionProfileExecute
+	case string(PermissionProfileWrite):
+		return PermissionProfileWrite
 	default:
 		return ""
 	}

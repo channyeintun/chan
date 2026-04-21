@@ -368,7 +368,7 @@ func updateBackgroundAgentRunningState(bridge *ipc.Bridge, bg *backgroundAgent, 
 	if result.OutputFile == "" {
 		result.OutputFile = bg.result.OutputFile
 	}
-	bg.result = withChildMetadata(result, bg.description, "")
+	bg.result = withChildMetadata(result, bg.description, bg.role)
 	current := bg.result
 	bg.mu.Unlock()
 	emitBackgroundAgentUpdated(bridge, bg, current)
@@ -417,7 +417,7 @@ func stopBackgroundAgent(ctx context.Context, bridge *ipc.Bridge, req toolpkg.Ag
 	}
 	if bg.running {
 		bg.result.Status = "cancelling"
-		bg.result = withChildMetadata(bg.result, bg.description, "")
+		bg.result = withChildMetadata(bg.result, bg.description, bg.role)
 		shouldEmit = true
 	}
 	current := bg.result

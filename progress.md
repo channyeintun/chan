@@ -16,11 +16,11 @@
 - [x] Phase 4: Add durable inboxes and queue policy
 - [x] Phase 5: Add optional worktree-backed child agents
 - [x] Phase 6: Add swarm dashboard in the TUI
-- [ ] Phase 7: Add role-aware policy enforcement
+- [x] Phase 7: Add role-aware policy enforcement
 
 ## Current Focus
 
-- Next task: Phase 7: add role-aware policy enforcement.
+- Next task: enhancement plan completed.
 
 ## Completed Tasks
 
@@ -32,3 +32,4 @@
 - Phase 4 completed: added a durable session-backed swarm inbox, inbox listing tool, and role-specific handoff guidance for delegated child agents.
 - Phase 5 completed: added optional `worktree` child-agent workspace strategy support, role-derived worktree selection, and child metadata for worktree path and branch details. Background worktree launches are explicitly blocked until cwd handling is no longer process-global.
 - Phase 6 completed: added a live swarm dashboard view to the existing background tasks dialog, including active roles, queue depth, recent handoffs, and role/workspace metadata for retained child agents.
+- Phase 7 completed: enforced role-specific tool filters and permission profiles in the child-agent runtime, and blocked role completion when a required structured handoff was missing.
