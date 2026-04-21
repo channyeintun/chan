@@ -23,6 +23,7 @@ const (
 	HandoffStatusInProgress HandoffStatus = "in_progress"
 	HandoffStatusCompleted  HandoffStatus = "completed"
 	HandoffStatusBlocked    HandoffStatus = "blocked"
+	HandoffStatusSuperseded HandoffStatus = "superseded"
 )
 
 type Handoff struct {
@@ -77,6 +78,8 @@ func NormalizeHandoffStatus(value string) HandoffStatus {
 		return HandoffStatusCompleted
 	case "blocked":
 		return HandoffStatusBlocked
+	case "superseded":
+		return HandoffStatusSuperseded
 	default:
 		return HandoffStatus("")
 	}
@@ -84,7 +87,7 @@ func NormalizeHandoffStatus(value string) HandoffStatus {
 
 func IsValidHandoffStatus(status HandoffStatus) bool {
 	switch status {
-	case HandoffStatusPending, HandoffStatusAcked, HandoffStatusInProgress, HandoffStatusCompleted, HandoffStatusBlocked:
+	case HandoffStatusPending, HandoffStatusAcked, HandoffStatusInProgress, HandoffStatusCompleted, HandoffStatusBlocked, HandoffStatusSuperseded:
 		return true
 	default:
 		return false

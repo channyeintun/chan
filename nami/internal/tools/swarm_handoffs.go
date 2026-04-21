@@ -160,7 +160,7 @@ func (t *SwarmListInboxTool) InputSchema() any {
 			"role": map[string]any{"type": "string", "description": "Optional role filter. Matches either source or target role."},
 			"statuses": map[string]any{
 				"type":        "array",
-				"items":       map[string]any{"type": "string", "enum": []string{"pending", "acked", "in_progress", "completed", "blocked"}},
+				"items":       map[string]any{"type": "string", "enum": []string{"pending", "acked", "in_progress", "completed", "blocked", "superseded"}},
 				"description": "Optional status filters.",
 			},
 			"status": map[string]any{"type": "string", "description": "Optional single status filter."},
@@ -206,7 +206,7 @@ func (t *SwarmUpdateHandoffTool) InputSchema() any {
 		"type": "object",
 		"properties": map[string]any{
 			"handoff_id": map[string]any{"type": "string", "description": "The handoff identifier returned by swarm_submit_handoff."},
-			"status":     map[string]any{"type": "string", "enum": []string{"pending", "acked", "in_progress", "completed", "blocked"}},
+			"status":     map[string]any{"type": "string", "enum": []string{"pending", "acked", "in_progress", "completed", "blocked", "superseded"}},
 			"note":       map[string]any{"type": "string", "description": "Optional status note or resolution detail."},
 		},
 		"required": []string{"handoff_id", "status"},
