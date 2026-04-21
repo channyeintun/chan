@@ -138,12 +138,6 @@ var allowedHandoffFields = map[HandoffField]struct{}{
 	HandoffFieldNextAction:   {},
 }
 
-var supportedSubagentTypes = map[string]struct{}{
-	"Explore":         {},
-	"general-purpose": {},
-	"verification":    {},
-}
-
 func ProjectSpecPath(cwd string) string {
 	projectRoot := config.FindProjectRoot(cwd)
 	if strings.TrimSpace(projectRoot) == "" {
@@ -329,9 +323,6 @@ func resolveRole(role RoleSpec, idx int) (ResolvedRole, []string) {
 
 	subagentType := normalizeSubagentType(role.SubagentType)
 	if subagentType == "" {
-		subagentType = normalizeSubagentType("general-purpose")
-	}
-	if !isSupportedSubagentType(subagentType) {
 		problems = append(problems, fmt.Sprintf("role[%d] subagent_type %q is not supported", idx, role.SubagentType))
 	}
 
@@ -595,11 +586,6 @@ func normalizeSubagentType(value string) string {
 	case "verification":
 		return "verification"
 	default:
-		return strings.TrimSpace(value)
+		return ""
 	}
-}
-
-func isSupportedSubagentType(value string) bool {
-	_, ok := supportedSubagentTypes[normalizeSubagentType(value)]
-	return ok
 }
