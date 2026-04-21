@@ -83,6 +83,9 @@
             >
               Workflow
             </h5>
+            <a href="#swarm-guide" class="sidebar-link scroll-link"
+              >Agent Swarms</a
+            >
             <a href="#usage" class="sidebar-link scroll-link"
               >First-Class Outputs</a
             >
@@ -434,6 +437,384 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
               <li class="p-4 border border-[#1a1a1a] rounded-md">
                 <strong class="text-brand">Durable Returns:</strong> Large
                 fetch/diff results.
+              </li>
+            </ul>
+          </section>
+
+          <!-- Swarm Guide -->
+          <section id="swarm-guide" class="mb-24">
+            <h2 class="subsection-title text-3xl font-bold mb-6">
+              Agent Swarms
+            </h2>
+            <p class="text-gray-400 mb-8 leading-relaxed">
+              Nami can run project-local agent swarms for planning,
+              implementation, and review inside one repo. There is no separate
+              launcher. Add a swarm file to your project, start Nami in that
+              repo, and delegate child agents with a <code>role</code>. This
+              workflow is also based on ideas from
+              <a
+                href="https://github.com/unclebob/swarm-forge"
+                class="text-brand hover:text-white transition"
+                >Uncle Bob's SwarmForge</a
+              >.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-sm">
+              <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                  Setup
+                </p>
+                <p class="text-gray-300">
+                  Add <code>.nami/swarm.json</code> and optional role notes
+                  under <code>.nami/swarm/</code>.
+                </p>
+              </div>
+              <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                  Usage
+                </p>
+                <p class="text-gray-300">
+                  Launch child agents with a role such as architect, coder, or
+                  reviewer.
+                </p>
+              </div>
+              <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                  Visibility
+                </p>
+                <p class="text-gray-300">
+                  Use the background tasks dialog to follow active roles and
+                  handoffs.
+                </p>
+              </div>
+            </div>
+
+            <h4
+              class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+            >
+              1. Add a Swarm File
+            </h4>
+            <p class="text-sm text-gray-300 mb-6 leading-relaxed">
+              Create <code>.nami/swarm.json</code> in your repository. This is
+              the file Nami uses to understand which roles your swarm should
+              have.
+            </p>
+            <pre
+              class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto mb-8"
+            ><code>{
+  "version": 1,
+  "roles": [
+    {
+      "name": "architect",
+      "purpose": "Plan the work",
+      "subagent_type": "Explore",
+      "model": "github-copilot/gpt-5.4",
+      "workspace": "shared",
+      "queue_policy": "fifo",
+      "permission_profile": "read-only",
+      "allow_tools": [
+        "think",
+        "read_file",
+        "file_search",
+        "grep_search",
+        "swarm_submit_handoff",
+        "swarm_list_inbox"
+      ],
+      "deny_tools": [],
+      "handoff": {
+        "required": false,
+        "targets": ["coder"],
+        "required_fields": ["summary", "verification"]
+      },
+      "metadata": {
+        "owner": "planning"
+      }
+    },
+    {
+      "name": "coder",
+      "purpose": "Implement the changes",
+      "subagent_type": "general-purpose",
+      "workspace": "worktree",
+      "queue_policy": "latest-wins",
+      "permission_profile": "write",
+      "handoff": {
+        "required": true,
+        "targets": ["reviewer"],
+        "required_fields": [
+          "summary",
+          "changed_files",
+          "verification",
+          "next_action"
+        ]
+      }
+    },
+    {
+      "name": "reviewer",
+      "purpose": "Review the result",
+      "subagent_type": "verification",
+      "workspace": "shared",
+      "queue_policy": "batch-review",
+      "permission_profile": "execute"
+    }
+  ]
+}</code></pre>
+
+            <ul class="space-y-3 text-sm text-gray-300 mb-8">
+              <li>
+                <strong class="text-brand">version:</strong>
+                optional. Omit it or set it to <code>1</code>.
+              </li>
+              <li>
+                <strong class="text-brand">roles:</strong>
+                required array with at least one role.
+              </li>
+              <li>
+                <strong class="text-brand">name:</strong>
+                required. Lowercase letters, numbers, <code>_</code>, and
+                <code>-</code> are supported.
+              </li>
+              <li>
+                <strong class="text-brand">purpose:</strong>
+                required short description of what the role is for.
+              </li>
+              <li>
+                <strong class="text-brand">subagent_type:</strong>
+                optional. Supported values are <code>Explore</code>,
+                <code>general-purpose</code>, and <code>verification</code>.
+                Default: <code>Explore</code>.
+              </li>
+              <li>
+                <strong class="text-brand">model:</strong>
+                optional. Set a specific model such as
+                <code>github-copilot/gpt-5.4</code> or
+                <code>openai/gpt-4o</code>.
+              </li>
+              <li>
+                <strong class="text-brand">workspace:</strong>
+                optional. Supported values are <code>shared</code>,
+                <code>worktree</code>, and <code>snapshot</code>. Default:
+                <code>shared</code>.
+              </li>
+              <li>
+                <strong class="text-brand">queue_policy:</strong>
+                optional. Supported values are <code>fifo</code>,
+                <code>batch-review</code>, and <code>latest-wins</code>.
+                Default: <code>fifo</code>.
+              </li>
+              <li>
+                <strong class="text-brand">permission_profile:</strong>
+                optional. Supported values are <code>inherit</code>,
+                <code>read-only</code>, <code>execute</code>, and
+                <code>write</code>. Default: <code>inherit</code>.
+              </li>
+              <li>
+                <strong class="text-brand">allow_tools / deny_tools:</strong>
+                optional. Use tool names to narrow what a role may use.
+              </li>
+              <li>
+                <strong class="text-brand">handoff.required:</strong>
+                optional boolean. Set to <code>true</code> if the role must
+                submit a structured handoff before it can finish.
+              </li>
+              <li>
+                <strong class="text-brand">handoff.targets:</strong>
+                optional array of role names this role may hand work to.
+              </li>
+              <li>
+                <strong class="text-brand">handoff.required_fields:</strong>
+                optional array using <code>summary</code>,
+                <code>changed_files</code>, <code>commands_run</code>,
+                <code>verification</code>, <code>risks</code>, and
+                <code>next_action</code>. If handoff is required and you omit
+                this list, Nami defaults to <code>summary</code> and
+                <code>verification</code>.
+              </li>
+              <li>
+                <strong class="text-brand">metadata.owner:</strong>
+                optional freeform label for your own organization.
+              </li>
+            </ul>
+
+            <p class="text-sm text-gray-300 mb-4 leading-relaxed">
+              If you want extra guidance for the whole swarm or for specific
+              roles, add markdown files under <code>.nami/swarm/</code>, for
+              example <code>.nami/swarm/constitution.md</code> or
+              <code>.nami/swarm/roles/coder.md</code>.
+            </p>
+
+            <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40 mb-8">
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">
+                Template Files
+              </p>
+              <p class="text-sm text-gray-300 mb-4 leading-relaxed">
+                Starting-point templates are available under <code>docs/swarm/</code>. Copy them into your project's <code>.nami/swarm/</code> directory and then customize them.
+              </p>
+              <ul class="space-y-2 text-sm text-gray-300">
+                <li><a href="../docs/swarm/README.md" class="text-brand hover:text-white transition">Template overview</a></li>
+                <li><a href="../docs/swarm/constitution-template.md" class="text-brand hover:text-white transition">Constitution template</a></li>
+                <li><a href="../docs/swarm/project-rules-template.md" class="text-brand hover:text-white transition">Project rules template</a></li>
+                <li><a href="../docs/swarm/engineering-rules-template.md" class="text-brand hover:text-white transition">Engineering rules template</a></li>
+                <li><a href="../docs/swarm/workflow-rules-template.md" class="text-brand hover:text-white transition">Workflow rules template</a></li>
+                <li><a href="../docs/swarm/architect-template.md" class="text-brand hover:text-white transition">Architect role template</a></li>
+                <li><a href="../docs/swarm/coder-template.md" class="text-brand hover:text-white transition">Coder role template</a></li>
+                <li><a href="../docs/swarm/reviewer-template.md" class="text-brand hover:text-white transition">Reviewer role template</a></li>
+              </ul>
+            </div>
+
+            <h4
+              class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+            >
+              2. Start Nami in the Project
+            </h4>
+            <p class="text-sm text-gray-300 mb-8 leading-relaxed">
+              Open Nami from the repository root. If the swarm file is valid,
+              Nami loads it automatically and shows a
+              <strong class="text-brand">Swarm Spec</strong> artifact. If
+              there is a problem, check that artifact first.
+            </p>
+
+            <h4
+              class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+            >
+              3. Delegate Work by Role
+            </h4>
+            <p class="text-sm text-gray-300 mb-4 leading-relaxed">
+              Swarm mode becomes useful when you launch child agents with a
+              role. Use whatever role names you defined in
+              <code>.nami/swarm.json</code>.
+            </p>
+            <div
+              class="bg-subtle p-6 border border-[#1a1a1a] rounded-md space-y-4 font-mono text-sm overflow-x-auto mb-8"
+            >
+              <div>
+                <span class="text-gray-500"># ask the architect to plan</span><br />
+                <span class="text-brand">Use:</span> <code>agent</code> with
+                <code>role: "architect"</code>
+              </div>
+              <div>
+                <span class="text-gray-500"># send coding work to the implementer</span><br />
+                <span class="text-brand">Use:</span> <code>agent</code> with
+                <code>role: "coder"</code>
+              </div>
+              <div>
+                <span class="text-gray-500"># launch several roles together</span><br />
+                <span class="text-brand">Use:</span> <code>agent_team</code>
+                with role values per child
+              </div>
+            </div>
+
+            <h4
+              class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+            >
+              4. Pass Work with Handoffs
+            </h4>
+            <p class="text-sm text-gray-300 mb-4 leading-relaxed">
+              In normal swarm use, the role-aware child agent submits the
+              handoff for you when one role finishes work for another. You only
+              need to call the handoff tools yourself if you want to steer the
+              workflow manually. In practice, that usually means asking Nami in
+              plain language rather than typing a raw tool payload yourself.
+            </p>
+            <div class="table-wrapper mb-8">
+              <table class="w-full text-left text-sm">
+                <thead>
+                  <tr>
+                    <th class="p-4">Tool</th>
+                    <th class="p-4">Purpose</th>
+                  </tr>
+                </thead>
+                <tbody class="text-gray-300">
+                  <tr>
+                    <td class="p-4 border-t border-[#1a1a1a]"><code>swarm_submit_handoff</code></td>
+                    <td class="p-4 border-t border-[#1a1a1a]">Send work from one role to another</td>
+                  </tr>
+                  <tr>
+                    <td class="p-4 border-t border-[#1a1a1a]"><code>swarm_list_inbox</code></td>
+                    <td class="p-4 border-t border-[#1a1a1a]">See what work is waiting for a role</td>
+                  </tr>
+                  <tr>
+                    <td class="p-4 border-t border-[#1a1a1a]"><code>swarm_update_handoff</code></td>
+                    <td class="p-4 border-t border-[#1a1a1a]">Mark a handoff as acknowledged, in progress, completed, or blocked</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div
+              class="bg-subtle p-6 border border-[#1a1a1a] rounded-md space-y-4 font-mono text-sm overflow-x-auto mb-8"
+            >
+              <div>
+                <span class="text-gray-500"># ask Nami to submit a handoff</span><br />
+                <span class="text-brand">Prompt:</span> submit a handoff from
+                coder to reviewer saying the queue policy work is ready for
+                review, mention the files changed, and note that go build
+                passed.
+              </div>
+              <div>
+                <span class="text-gray-500"># ask Nami to inspect a role inbox</span><br />
+                <span class="text-brand">Prompt:</span> show me the reviewer
+                inbox.
+              </div>
+              <div>
+                <span class="text-gray-500"># ask Nami to pull the next queued item</span><br />
+                <span class="text-brand">Prompt:</span> get the next handoff
+                for the reviewer role.
+              </div>
+            </div>
+
+            <h4
+              class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+            >
+              5. Check the Inbox
+            </h4>
+            <p class="text-sm text-gray-300 mb-4 leading-relaxed">
+              When you want to see what is waiting for a role, use
+              <code>swarm_list_inbox</code>. If you want the next piece of work
+              for a role, use it with <code>dequeue: true</code>. This is also
+              the mechanism a receiving agent can use to pull its next queued
+              handoff.
+            </p>
+            <ul class="space-y-3 text-sm text-gray-300 mb-6">
+              <li>
+                <strong class="text-brand">List work:</strong>
+                see everything waiting for a role
+              </li>
+              <li>
+                <strong class="text-brand">Pull next work:</strong>
+                ask for the next handoff with <code>dequeue: true</code>
+              </li>
+            </ul>
+
+            <h4
+              class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+            >
+              6. Watch the Dashboard
+            </h4>
+            <p class="text-sm text-gray-300 mb-8 leading-relaxed">
+              Open the background tasks dialog to see active roles, recent
+              handoffs, and running background work in one place.
+            </p>
+
+            <h4
+              class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+            >
+              Tips
+            </h4>
+            <ul class="space-y-3 text-sm text-gray-300">
+              <li>
+                Start simple with three roles: architect, coder, and reviewer.
+              </li>
+              <li>
+                If a role is not behaving as expected, check the Swarm Spec
+                artifact first.
+              </li>
+              <li>
+                Use handoffs to move work forward instead of relying on long
+                freeform summaries.
+              </li>
+              <li>
+                Use the dashboard when you have multiple background roles active
+                at once.
               </li>
             </ul>
           </section>
