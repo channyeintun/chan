@@ -39,6 +39,7 @@ type Config struct {
 
 	// Provider auth
 	GitHubCopilot GitHubCopilotAuth `json:"github_copilot,omitempty"`
+	Codex         CodexAuth         `json:"codex,omitempty"`
 }
 
 type GitHubCopilotAuth struct {
@@ -46,6 +47,13 @@ type GitHubCopilotAuth struct {
 	AccessToken      string `json:"access_token,omitempty"`
 	ExpiresAtUnixMS  int64  `json:"expires_at_unix_ms,omitempty"`
 	EnterpriseDomain string `json:"enterprise_domain,omitempty"`
+}
+
+type CodexAuth struct {
+	AccessToken     string `json:"access_token,omitempty"`
+	RefreshToken    string `json:"refresh_token,omitempty"`
+	ExpiresAtUnixMS int64  `json:"expires_at_unix_ms,omitempty"`
+	AccountID       string `json:"account_id,omitempty"`
 }
 
 // DefaultConfig returns the configuration with sensible defaults.

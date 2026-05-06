@@ -334,3 +334,65 @@ func (r *copilotTokenRefresher) resolve() (string, error) {
 
 	return r.accessToken, nil
 }
+
+type codexTokenRefresher struct {
+	mu           sync.Mutex
+	refreshToken string
+	accessToken  string
+	accountID    string
+	expiresAt    time.Time
+}
+
+func newCodexTokenRefresher(creds config.CodexAuth) *codexTokenRefresher {
+	return &codexTokenRefresher{
+		refreshToken: creds.RefreshToken,
+		accessToken:  creds.AccessToken,
+		accountID:    creds.AccountID,
+		expiresAt:    time.UnixMilli(creds.ExpiresAtUnixMS),
+	}
+}
+
+func (r *codexTokenRefresher) resolve() (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.accessToken != "" && time.Now().Before(r.expiresAt) {
+		return r.accessToken, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tokens, err := api.RefreshCodexAccessToken(ctx, r.refreshToken)
+	if err != nil {
+		return "", fmt.Errorf("refresh Codex token: %w", err)
+	}
+
+	r.accessToken = tokens.AccessToken
+	if tokens.RefreshToken != "" {
+		r.refreshToken = tokens.RefreshToken
+	}
+	if accountID := api.ExtractCodexAccountID(tokens); accountID != "" {
+		r.accountID = accountID
+	}
+	expiresIn := tokens.ExpiresIn
+	if expiresIn <= 0 {
+		expiresIn = 3600
+	}
+	r.expiresAt = time.Now().Add(time.Duration(expiresIn) * time.Second)
+
+	loaded := config.Load()
+	loaded.Codex.AccessToken = r.accessToken
+	loaded.Codex.RefreshToken = r.refreshToken
+	loaded.Codex.ExpiresAtUnixMS = r.expiresAt.UnixMilli()
+	loaded.Codex.AccountID = r.accountID
+	_ = config.Save(loaded)
+
+	return r.accessToken, nil
+}
+
+func (r *codexTokenRefresher) currentAccountID() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.accountID
+}
