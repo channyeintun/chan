@@ -26,7 +26,7 @@ const enginePath =
   candidates.find((p) => existsSync(p)) ??
   "nami-engine";
 
-let model = "github-copilot/gpt-5.5";
+let model = "github-copilot/gpt-5.4";
 let mode = "plan";
 let autoMode = false;
 const theme = createTheme()
@@ -52,7 +52,7 @@ for (let i = 0; i < args.length; i++) {
     console.log(`Usage: nami [options]
 
 Options:
-  --model, -m <provider/model>  Model to use (default: github-copilot/gpt-5.5)
+  --model, -m <provider/model>  Model to use (default: github-copilot/gpt-5.4)
   --mode <plan|fast>            Execution mode (default: plan)
   --auto-mode                   Auto-approve non-destructive tool calls
   --help, -h                    Show this help`);

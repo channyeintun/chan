@@ -447,7 +447,7 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
               <ul class="space-y-3 text-xs text-gray-500">
                 <li>&bull; Default model is codex/gpt-5.5</li>
                 <li>&bull; Sends Codex requests to the ChatGPT Codex Responses endpoint</li>
-                <li>&bull; Keeps bare gpt-5.5 selections on OpenAI unless Codex is explicit</li>
+                <li>&bull; Keeps bare gpt-5.4 as the default OpenAI selection and bare gpt-5.5 as another OpenAI option unless Codex is explicit</li>
               </ul>
             </div>
           </section>
@@ -551,7 +551,7 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
       "name": "architect",
       "purpose": "Plan the work",
       "subagent_type": "Explore",
-      "model": "github-copilot/gpt-5.5",
+      "model": "github-copilot/gpt-5.4",
       "workspace": "shared",
       "queue_policy": "fifo",
       "permission_profile": "read-only",
@@ -629,7 +629,8 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
               <li>
                 <strong class="text-brand">model:</strong>
                 optional. Set a specific model such as
-                <code>github-copilot/gpt-5.5</code> or
+                <code>github-copilot/gpt-5.4</code>,
+                <code>github-copilot/gpt-5.5</code>, or
                 <code>deepseek/deepseek-v4-pro</code>.
               </li>
               <li>

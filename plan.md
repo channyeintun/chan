@@ -6,7 +6,7 @@ This is a planning-only document. No implementation changes should be made until
 
 - Add `codex` as a first-class provider in the Go engine, with `gpt-5.5` as its default model.
 - Use the opencode Codex reference at `reference/opencode/packages/opencode/src/plugin/codex.ts` for auth, endpoint, headers, model limits, and request behavior.
-- Remove existing `gpt-5.4` usage from Nami's built-in defaults and surfaced model options so only `gpt-5.5` remains for that GPT generation.
+- Keep `gpt-5.4` as Nami's built-in GPT default while adding `gpt-5.5` as another surfaced option for that GPT generation.
 - Update `web/docs.html` to document the new Codex provider and GPT 5.5 model selection.
 - Replace the TUI's local Silvery dependency with a registry npm dependency instead of `file:vendor/silvery-local`.
 - Add DeepSeek V4 Flash and DeepSeek V4 Pro to Nami's built-in DeepSeek support, following how opencode surfaces the official DeepSeek provider models from `models.dev`.
@@ -17,7 +17,7 @@ This is a planning-only document. No implementation changes should be made until
 - `OpenAIResponsesClient` already exists in `nami/internal/api/openai_responses.go`, but normal presets currently route through chat completions unless provider behavior selects Responses explicitly.
 - The opencode Codex plugin routes model requests to `https://chatgpt.com/backend-api/codex/responses` and allows `gpt-5.5`, setting larger limits for that model: context `400000`, input `272000`, output `128000`.
 - The opencode Codex plugin authenticates with ChatGPT OAuth, stores `access`, `refresh`, `expires`, and optional `accountId`, refreshes expired tokens, and sends `ChatGPT-Account-Id` when present.
-- Nami currently has built-in `gpt-5.4` references, including OpenAI and GitHub Copilot defaults; these should be replaced or removed as part of the GPT 5.5 migration.
+- Nami currently has built-in `gpt-5.4` references, including OpenAI and GitHub Copilot defaults; these should remain the defaults while `gpt-5.5` is added as another surfaced GPT option.
 - The TUI currently declares `"silvery": "file:vendor/silvery-local"` in `nami/tui/package.json`, and `nami/tui/bun.lock` still records the same local file dependency.
 - The vendored Silvery package metadata reports version `0.19.2`, so the registry dependency should target that version unless a newer compatible published version is intentionally chosen.
 - opencode does not hard-code DeepSeek model IDs in provider source. Its `reference/opencode/packages/opencode/src/provider/models.ts` loads provider/model metadata from `https://models.dev/api.json`, with a cache and bundled snapshot fallback.
@@ -60,10 +60,10 @@ This is a planning-only document. No implementation changes should be made until
    - Use an env fallback such as `CODEX_ACCESS_TOKEN` for manual bearer-token setup.
    - Set capabilities from the reference: tool use enabled, JSON mode if Responses schema behavior remains compatible, context `400000`, prompt/input `272000`, output `128000`.
 
-3. Remove existing GPT 5.4 usage.
-   - Replace built-in `gpt-5.4` defaults with `gpt-5.5`, including the OpenAI preset in `nami/internal/api/provider_config.go` and the GitHub Copilot main-model default in `nami/internal/api/github_copilot.go`.
-   - Audit curated model-selection options, provider setup copy, docs, web files, and examples for `gpt-5.4` and remove or update them to `gpt-5.5`.
-   - Keep older non-5.4 model references only when they are unrelated historical compatibility entries; the surfaced current GPT default should be `gpt-5.5`.
+3. Keep GPT 5.4 as the default while adding GPT 5.5.
+   - Preserve built-in `gpt-5.4` defaults, including the OpenAI preset in `nami/internal/api/provider_config.go` and the GitHub Copilot main-model default in `nami/internal/api/github_copilot.go`.
+   - Add `gpt-5.5` to curated model-selection options, provider setup copy, docs, web files, and examples without removing surfaced `gpt-5.4` guidance.
+   - Keep the surfaced current GPT default on `gpt-5.4` while allowing `gpt-5.5` as an explicit newer alternative.
 
 4. Add Codex-specific request behavior in the Responses client.
    - Add provider-specific headers for `codex`, matching the reference as closely as the current API layer allows: `originator: nami`, a stable `User-Agent`, and bearer `authorization`.
@@ -87,7 +87,7 @@ This is a planning-only document. No implementation changes should be made until
    - Add Codex auth methods to `nami/internal/commands/connect.go`: browser OAuth, headless OAuth, and manual bearer token via env.
    - Add `connectCodex` to `connectProviderRegistry` in `nami/internal/engine/slash_command_handlers.go`.
    - Add a `codexProviderBehavior` in `nami/internal/engine/provider_behavior.go` so `newLLMClient` can load stored Codex auth, attach a token refresher, and select `codex/gpt-5.5` after `/connect codex`.
-   - Keep bare `gpt-5.5` inference mapped to `openai`; require `codex/gpt-5.5` or `/connect codex` for Codex to avoid changing existing model inference behavior.
+   - Keep bare `gpt-5.4` as the default OpenAI inference and allow bare `gpt-5.5` as another OpenAI choice; require `codex/gpt-5.5` or `/connect codex` for Codex to avoid changing existing model inference behavior.
 
 7. Update GPT 5.5 reasoning handling.
    - Confirm whether `gpt-5.5` should allow `xhigh` reasoning.
@@ -95,13 +95,13 @@ This is a planning-only document. No implementation changes should be made until
 
 8. Update project documentation.
    - Update `web/docs.html` to add Codex provider setup and model-selection documentation.
-   - Mention `codex/gpt-5.5` as the Codex model path and remove any surfaced `gpt-5.4` guidance.
+   - Mention `codex/gpt-5.5` as the Codex model path and keep surfaced `gpt-5.4` guidance for the default OpenAI/Copilot path.
    - Keep the docs aligned with `/connect codex`, the chosen env var name, and any OAuth methods implemented.
 
 9. Run focused compile/build checks after implementation.
    - Run the Go build path for the engine.
    - Exercise `/providers`, `/connect codex`, and model switching paths manually enough to confirm the provider appears and uses `codex/gpt-5.5`.
-   - Confirm repository search no longer finds surfaced `gpt-5.4` references in current defaults, docs, or model selection paths.
+   - Confirm repository search still shows surfaced `gpt-5.4` defaults and also includes `gpt-5.5` where it is intended as an additional option.
 
 ## Silvery Dependency Plan
 

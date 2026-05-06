@@ -32,7 +32,7 @@ var Presets = map[string]ProviderPreset{
 		ClientType:   OpenAICompatAPI,
 		BaseURL:      "https://api.openai.com/v1",
 		EnvKeyVar:    "OPENAI_API_KEY",
-		DefaultModel: "gpt-5.5",
+		DefaultModel: "gpt-5.4",
 		Capabilities: ModelCapabilities{
 			SupportsToolUse:  true,
 			SupportsVision:   true,

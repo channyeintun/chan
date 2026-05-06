@@ -185,7 +185,7 @@ Nami will:
 - try to open the verification page automatically
 - wait for authorization to complete
 - save credentials in the platform config file (`~/.config/nami/config.json` on macOS/Linux)
-- switch the main model to `github-copilot/gpt-5.5`
+- switch the main model to `github-copilot/gpt-5.4`
 - set the subagent model to `github-copilot/claude-haiku-4.5`
 
 For GitHub Enterprise:
@@ -215,7 +215,7 @@ Then run:
 /connect codex env
 ```
 
-Use `codex/gpt-5.5` to select the Codex provider explicitly. Bare `gpt-5.5` remains an OpenAI model selection.
+Use `codex/gpt-5.5` to select the Codex provider explicitly. Bare `gpt-5.4` stays the default OpenAI model selection, and bare `gpt-5.5` remains available as another OpenAI model selection.
 
 DeepSeek defaults to `deepseek/deepseek-v4-flash`. Use `deepseek/deepseek-v4-pro` when you want the Pro v4 model explicitly.
 

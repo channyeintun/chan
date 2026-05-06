@@ -82,16 +82,16 @@ var curatedModelSelectionPresets = []modelSelectionPreset{
 		Description: "Sonnet preset",
 	},
 	{
-		Label:       "Claude Opus 4.7",
+		Label:       "Claude Opus 4.7 (Expensive)",
 		Model:       "claude-opus-4-7",
 		Provider:    "anthropic",
-		Description: "Latest Opus preset",
+		Description: "Expensive latest Opus preset",
 	},
 	{
-		Label:       "Claude Opus 4.6",
+		Label:       "Claude Opus 4.6 (Expensive)",
 		Model:       "claude-opus-4-6",
 		Provider:    "anthropic",
-		Description: "Previous Opus preset",
+		Description: "Expensive previous Opus preset",
 	},
 	{
 		Label:       "Claude Haiku 4.5",
@@ -100,10 +100,16 @@ var curatedModelSelectionPresets = []modelSelectionPreset{
 		Description: "Haiku preset",
 	},
 	{
-		Label:       "GPT 5.5",
+		Label:       "GPT 5.4",
+		Model:       "gpt-5.4",
+		Provider:    "openai",
+		Description: "Default GPT preset",
+	},
+	{
+		Label:       "GPT 5.5 (Expensive)",
 		Model:       "gpt-5.5",
 		Provider:    "openai",
-		Description: "GPT preset",
+		Description: "Expensive latest GPT preset",
 	},
 	{
 		Label:       "GPT 5 Mini",
