@@ -748,7 +748,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
   return (
     <Screen>
       <Box
-        backgroundColor="$bg"
         width="100%"
         height="100%"
         flexDirection="column"
