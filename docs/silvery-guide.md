@@ -15,9 +15,9 @@ It is not a general Silvery tutorial. It is a practical note for working on `nam
 
 ### Package source
 
-- `nami/tui` depends on `silvery` via the local wrapper package at `nami/tui/vendor/silvery-local`.
-- That wrapper package is built from the latest reference repo dist output, not from the stale published npm package.
-- This matters because several APIs and behaviors used by the TUI depend on newer Silvery codepaths.
+- `nami/tui` depends on the registry `silvery` package with version `^0.19.2`.
+- `nami/tui/bun.lock` resolves `silvery`, `@silvery/color`, and `@silvery/commander` from the registry at compatible `0.19.2` versions.
+- The old local wrapper package has been removed.
 
 ## What Works Well
 
@@ -178,7 +178,7 @@ Do not try to pass theme data through `Screen`.
 
 ### 2. `presetTheme()` is safer than theme lookup APIs that return unions
 
-In the local Silvery type surface, some theme lookup helpers can return a union that is not typed as a concrete `Theme`.
+In the Silvery type surface, some theme lookup helpers can return a union that is not typed as a concrete `Theme`.
 
 What worked reliably:
 
@@ -186,14 +186,14 @@ What worked reliably:
 
 This avoids the `Theme | ColorPalette` typing problem that showed up during integration.
 
-### 3. The vendored package layout matters
+### 3. The registry package layout matters
 
-`nami/tui/vendor/silvery-local` exposes built `dist` files, not source files.
+The installed `silvery` package exposes built `dist` files, not source files.
 
-So when checking types or behavior in the vendored package:
+So when checking types or behavior in the installed package:
 
-- inspect `dist/*.d.mts` for types
-- inspect `dist/*.mjs` for implementation details
+- inspect `node_modules/silvery/dist/*.d.mts` for types
+- inspect `node_modules/silvery/dist/*.mjs` for implementation details
 
 Do not assume the same source tree layout as `reference/silvery`.
 
@@ -237,7 +237,7 @@ If you need to work on the TUI again, these are the most useful files to inspect
 - `nami/tui/src/components/StreamOutput.tsx`
 - `nami/tui/src/components/MessageRow.tsx`
 - `nami/tui/src/components/messages/StreamingAssistantMessage.tsx`
-- `nami/tui/vendor/silvery-local/dist/index.d.mts`
+- `nami/tui/node_modules/silvery/dist/index.d.mts`
 - `reference/silvery/docs/api/spinner.md`
 - `reference/silvery/docs/guides/theming.md`
 

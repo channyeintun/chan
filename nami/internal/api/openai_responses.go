@@ -16,15 +16,16 @@ import (
 
 // OpenAIResponsesClient implements streaming over the OpenAI Responses API.
 type OpenAIResponsesClient struct {
-	provider         string
-	model            string
-	baseURL          string
-	enterpriseDomain string
-	codexAccountID   string
-	apiKey           string
-	apiKeyFunc       func() (string, error)
-	httpClient       *http.Client
-	capabilities     ModelCapabilities
+	provider           string
+	model              string
+	baseURL            string
+	enterpriseDomain   string
+	codexAccountID     string
+	codexAccountIDFunc func() string
+	apiKey             string
+	apiKeyFunc         func() (string, error)
+	httpClient         *http.Client
+	capabilities       ModelCapabilities
 }
 
 // SetAPIKeyFunc sets a callback that returns a fresh API key on each call.
@@ -41,11 +42,24 @@ func (c *OpenAIResponsesClient) SetCodexAccountID(accountID string) {
 	c.codexAccountID = strings.TrimSpace(accountID)
 }
 
+func (c *OpenAIResponsesClient) SetCodexAccountIDFunc(fn func() string) {
+	c.codexAccountIDFunc = fn
+}
+
 func (c *OpenAIResponsesClient) resolveAPIKey() (string, error) {
 	if c.apiKeyFunc != nil {
 		return c.apiKeyFunc()
 	}
 	return c.apiKey, nil
+}
+
+func (c *OpenAIResponsesClient) resolveCodexAccountID() string {
+	if c.codexAccountIDFunc != nil {
+		if accountID := strings.TrimSpace(c.codexAccountIDFunc()); accountID != "" {
+			return accountID
+		}
+	}
+	return c.codexAccountID
 }
 
 func (c *OpenAIResponsesClient) resolveBaseURL(apiKey string) string {
@@ -118,7 +132,7 @@ func (c *OpenAIResponsesClient) Warmup(ctx context.Context) error {
 			headers[strings.ToLower(key)] = value
 		}
 	} else if c.provider == "codex" {
-		for key, value := range CodexStaticHeaders(c.codexAccountID) {
+		for key, value := range CodexStaticHeaders(c.resolveCodexAccountID()) {
 			headers[key] = value
 		}
 	}
@@ -183,6 +197,11 @@ func (c *OpenAIResponsesClient) openStream(ctx context.Context, payload openAIRe
 		for key, value := range extraHeaders {
 			req.Header.Set(key, value)
 		}
+		if c.provider == "codex" {
+			for key, value := range CodexStaticHeaders(c.resolveCodexAccountID()) {
+				req.Header.Set(key, value)
+			}
+		}
 
 		currentResp, err := c.httpClient.Do(req)
 		if err != nil {
@@ -246,7 +265,7 @@ func (c *OpenAIResponsesClient) buildRequest(req ModelRequest) (openAIResponsesR
 			extraHeaders[key] = value
 		}
 	} else if c.provider == "codex" {
-		extraHeaders = CodexStaticHeaders(c.codexAccountID)
+		extraHeaders = CodexStaticHeaders(c.resolveCodexAccountID())
 	}
 
 	return payload, extraHeaders, nil

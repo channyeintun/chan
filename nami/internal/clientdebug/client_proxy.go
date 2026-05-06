@@ -115,6 +115,14 @@ func (p *proxy) SetCodexAccountID(accountID string) {
 	setter.SetCodexAccountID(accountID)
 }
 
+func (p *proxy) SetCodexAccountIDFunc(fn func() string) {
+	setter, ok := p.inner.(api.CodexAccountIDFuncSetter)
+	if !ok || api.IsNilValue(setter) {
+		return
+	}
+	setter.SetCodexAccountIDFunc(fn)
+}
+
 func (p *proxy) Warmup(ctx context.Context) error {
 	warmable, ok := p.inner.(api.WarmupCapable)
 	if !ok || api.IsNilValue(warmable) {

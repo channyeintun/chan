@@ -144,7 +144,9 @@ func (codexProviderBehavior) NewClient(provider, model string, cfg config.Config
 	}
 	api.SetCodexAccountID(client, resolved.Codex.AccountID)
 	if strings.TrimSpace(resolved.Codex.RefreshToken) != "" {
-		api.SetAPIKeyFunc(client, newCodexTokenRefresher(resolved.Codex).resolve)
+		refresher := newCodexTokenRefresher(resolved.Codex)
+		api.SetAPIKeyFunc(client, refresher.resolve)
+		api.SetCodexAccountIDFunc(client, refresher.currentAccountID)
 	}
 	return client, nil
 }
@@ -329,6 +331,9 @@ func resolveCodexConfig(cfg config.Config) (config.Config, error) {
 		creds := cfg.Codex
 		if strings.TrimSpace(creds.AccessToken) == "" && strings.TrimSpace(creds.RefreshToken) == "" {
 			return cfg, &api.APIError{Type: api.ErrAuth, Message: "Codex is not connected. Run /connect codex or set CODEX_ACCESS_TOKEN."}
+		}
+		if strings.TrimSpace(creds.RefreshToken) == "" && codexAccessTokenExpired(creds, time.Now()) {
+			return cfg, &api.APIError{Type: api.ErrAuth, Message: "Codex access token expired. Run /connect codex or set CODEX_ACCESS_TOKEN."}
 		}
 		cfg.Codex = creds
 		cfg.APIKey = creds.AccessToken
