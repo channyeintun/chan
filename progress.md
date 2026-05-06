@@ -12,13 +12,13 @@
 - Updated docs for Codex setup, `codex/gpt-5.5`, and GPT 5.5 defaults.
 - Replaced the TUI Silvery local file dependency with registry `silvery@^0.19.2`, refreshed `bun.lock`, and removed the vendored copy.
 - Explored how opencode sources DeepSeek model metadata from `models.dev` and updated `plan.md` for DeepSeek V4 Flash/Pro support.
+- Updated the DeepSeek provider preset, curated model selection, and docs for DeepSeek V4 Flash/Pro.
+- Ran focused formatting, diagnostics, stale-default search, and Go engine build checks for DeepSeek V4 Flash/Pro support.
 
 ## In Progress
 
-- Implementing DeepSeek V4 Flash/Pro support.
+- None.
 
 ## Pending
 
-- Update the DeepSeek provider preset and surfaced model options.
-- Update DeepSeek documentation if needed.
-- Run focused formatting and build checks.
+- None.

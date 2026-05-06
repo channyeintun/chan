@@ -163,7 +163,7 @@ Supported providers:
 | Codex          | `CODEX_ACCESS_TOKEN` or `/connect codex` |
 | OpenAI         | `OPENAI_API_KEY`         |
 | Google         | `GEMINI_API_KEY`         |
-| DeepSeek       | `DEEPSEEK_API_KEY`       |
+| DeepSeek       | `DEEPSEEK_API_KEY` for `deepseek/deepseek-v4-flash` or `deepseek/deepseek-v4-pro` |
 | Groq           | `GROQ_API_KEY`           |
 | Mistral        | `MISTRAL_API_KEY`        |
 | Ollama         | none — runs locally      |
@@ -217,6 +217,8 @@ Then run:
 
 Use `codex/gpt-5.5` to select the Codex provider explicitly. Bare `gpt-5.5` remains an OpenAI model selection.
 
+DeepSeek defaults to `deepseek/deepseek-v4-flash`. Use `deepseek/deepseek-v4-pro` when you want the Pro v4 model explicitly.
+
 ## Usage
 
 Start the CLI:
@@ -236,6 +238,7 @@ Then type what you want, for example:
 
 ```bash
 nami --model openai/gpt-4o
+nami --model deepseek/deepseek-v4-flash
 nami --model ollama/gemma3
 nami --model ollama/gemma4:e4b
 nami --mode fast

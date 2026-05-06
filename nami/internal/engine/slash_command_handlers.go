@@ -137,6 +137,18 @@ var curatedModelSelectionPresets = []modelSelectionPreset{
 		Provider:    "gemini",
 		Description: "Gemini pro preset",
 	},
+	{
+		Label:       "DeepSeek V4 Flash",
+		Model:       "deepseek-v4-flash",
+		Provider:    "deepseek",
+		Description: "DeepSeek fast v4 preset",
+	},
+	{
+		Label:       "DeepSeek V4 Pro",
+		Model:       "deepseek-v4-pro",
+		Provider:    "deepseek",
+		Description: "DeepSeek pro v4 preset",
+	},
 }
 
 func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayload, snapshot commandspkg.ProviderSnapshot, currentSelection string) []ipc.ModelSelectionOptionPayload {

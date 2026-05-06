@@ -358,7 +358,9 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                   <tr>
                     <td class="p-4 border-t border-[#1a1a1a]">DeepSeek</td>
                     <td class="p-4 border-t border-[#1a1a1a]">
-                      <code>DEEPSEEK_API_KEY</code>
+                      <code>DEEPSEEK_API_KEY</code> for
+                      <code>deepseek/deepseek-v4-flash</code> or
+                      <code>deepseek/deepseek-v4-pro</code>
                     </td>
                   </tr>
                   <tr>
@@ -391,6 +393,17 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                 Ollama Example
               </div>
               <code>nami --model ollama/gemma4:e4b</code>
+              <button class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"><i data-lucide="copy" class="w-4 h-4"></i></button>
+            </div>
+            <div
+              class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 font-mono overflow-x-auto relative group mt-4"
+            >
+              <div
+                class="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-3"
+              >
+                DeepSeek Example
+              </div>
+              <code>nami --model deepseek/deepseek-v4-flash</code>
               <button class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"><i data-lucide="copy" class="w-4 h-4"></i></button>
             </div>
           </section>
@@ -617,7 +630,7 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                 <strong class="text-brand">model:</strong>
                 optional. Set a specific model such as
                 <code>github-copilot/gpt-5.5</code> or
-                <code>openai/gpt-4o</code>.
+                <code>deepseek/deepseek-v4-pro</code>.
               </li>
               <li>
                 <strong class="text-brand">workspace:</strong>

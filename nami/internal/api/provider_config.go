@@ -74,11 +74,12 @@ var Presets = map[string]ProviderPreset{
 		ClientType:   OpenAICompatAPI,
 		BaseURL:      "https://api.deepseek.com/v1",
 		EnvKeyVar:    "DEEPSEEK_API_KEY",
-		DefaultModel: "deepseek-chat",
+		DefaultModel: "deepseek-v4-flash",
 		Capabilities: ModelCapabilities{
-			SupportsToolUse:  true,
-			MaxContextWindow: 64000,
-			MaxOutputTokens:  8192,
+			SupportsToolUse:          true,
+			SupportsExtendedThinking: true,
+			MaxContextWindow:         1000000,
+			MaxOutputTokens:          384000,
 		},
 	},
 	"qwen": {
