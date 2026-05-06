@@ -20,6 +20,7 @@ type OpenAIResponsesClient struct {
 	model            string
 	baseURL          string
 	enterpriseDomain string
+	codexAccountID   string
 	apiKey           string
 	apiKeyFunc       func() (string, error)
 	httpClient       *http.Client
@@ -34,6 +35,10 @@ func (c *OpenAIResponsesClient) SetAPIKeyFunc(fn func() (string, error)) {
 
 func (c *OpenAIResponsesClient) SetGitHubCopilotEnterpriseDomain(domain string) {
 	c.enterpriseDomain = strings.TrimSpace(domain)
+}
+
+func (c *OpenAIResponsesClient) SetCodexAccountID(accountID string) {
+	c.codexAccountID = strings.TrimSpace(accountID)
 }
 
 func (c *OpenAIResponsesClient) resolveAPIKey() (string, error) {
@@ -111,6 +116,10 @@ func (c *OpenAIResponsesClient) Warmup(ctx context.Context) error {
 	if c.provider == "github-copilot" {
 		for key, value := range GitHubCopilotStaticHeaders() {
 			headers[strings.ToLower(key)] = value
+		}
+	} else if c.provider == "codex" {
+		for key, value := range CodexStaticHeaders(c.codexAccountID) {
+			headers[key] = value
 		}
 	}
 	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, baseURL+"/models", headers)
@@ -219,6 +228,9 @@ func (c *OpenAIResponsesClient) buildRequest(req ModelRequest) (openAIResponsesR
 		Stream:          true,
 		Store:           false,
 	}
+	if c.provider == "codex" {
+		payload.MaxOutputTokens = 0
+	}
 	if effort := ClampReasoningEffort(c.model, req.ReasoningEffort); effort != "" {
 		payload.Reasoning = &openAIResponsesReasoning{
 			Effort:  effort,
@@ -233,6 +245,8 @@ func (c *OpenAIResponsesClient) buildRequest(req ModelRequest) (openAIResponsesR
 		for key, value := range BuildGitHubCopilotDynamicHeaders(req.Messages) {
 			extraHeaders[key] = value
 		}
+	} else if c.provider == "codex" {
+		extraHeaders = CodexStaticHeaders(c.codexAccountID)
 	}
 
 	return payload, extraHeaders, nil
