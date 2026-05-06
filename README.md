@@ -160,6 +160,7 @@ Supported providers:
 | Provider       | Environment variable     |
 | -------------- | ------------------------ |
 | Anthropic      | `ANTHROPIC_API_KEY`      |
+| Codex          | `CODEX_ACCESS_TOKEN` or `/connect codex` |
 | OpenAI         | `OPENAI_API_KEY`         |
 | Google         | `GEMINI_API_KEY`         |
 | DeepSeek       | `DEEPSEEK_API_KEY`       |
@@ -184,7 +185,7 @@ Nami will:
 - try to open the verification page automatically
 - wait for authorization to complete
 - save credentials in the platform config file (`~/.config/nami/config.json` on macOS/Linux)
-- switch the main model to `github-copilot/gpt-5.4`
+- switch the main model to `github-copilot/gpt-5.5`
 - set the subagent model to `github-copilot/claude-haiku-4.5`
 
 For GitHub Enterprise:
@@ -192,6 +193,29 @@ For GitHub Enterprise:
 ```text
 /connect github-copilot your-company.example
 ```
+
+### Codex setup
+
+Codex uses ChatGPT OAuth or a bearer token.
+
+```text
+/connect codex
+/connect codex headless
+```
+
+For manual token setup:
+
+```bash
+export CODEX_ACCESS_TOKEN="..."
+```
+
+Then run:
+
+```text
+/connect codex env
+```
+
+Use `codex/gpt-5.5` to select the Codex provider explicitly. Bare `gpt-5.5` remains an OpenAI model selection.
 
 ## Usage
 
@@ -248,7 +272,7 @@ Notes:
 
 | Command               | Description                                    |
 | --------------------- | ---------------------------------------------- |
-| `/connect`            | Connect GitHub Copilot with device login       |
+| `/connect`            | Connect provider auth and switch providers     |
 | `/plan`               | Switch to plan mode                            |
 | `/fast`               | Switch to fast mode                            |
 | `/model [name]`       | Show or switch the active model                |

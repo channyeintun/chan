@@ -337,6 +337,13 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                     </td>
                   </tr>
                   <tr>
+                    <td class="p-4 border-t border-[#1a1a1a]">Codex</td>
+                    <td class="p-4 border-t border-[#1a1a1a]">
+                      <code>CODEX_ACCESS_TOKEN</code> or
+                      <code>/connect codex</code>
+                    </td>
+                  </tr>
+                  <tr>
                     <td class="p-4 border-t border-[#1a1a1a]">OpenAI</td>
                     <td class="p-4 border-t border-[#1a1a1a]">
                       <code>OPENAI_API_KEY</code>
@@ -404,7 +411,30 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
               <ul class="space-y-3 text-xs text-gray-500">
                 <li>&bull; Prints device code in transcript</li>
                 <li>&bull; Opens verification URL automatically</li>
-                <li>&bull; Authorizes v5.4 models</li>
+                <li>&bull; Authorizes v5.5 models</li>
+              </ul>
+            </div>
+          </section>
+
+          <!-- Codex -->
+          <section id="codex" class="mb-24">
+            <h2 class="subsection-title text-3xl font-bold mb-6">Codex</h2>
+            <div class="p-8 border border-[#1a1a1a] bg-subtle rounded-lg">
+              <p class="text-gray-300 mb-6 leading-relaxed">
+                Codex uses ChatGPT OAuth or a bearer token. Run
+                <code class="text-brand">/connect codex</code> for browser
+                OAuth, <code class="text-brand">/connect codex headless</code>
+                for device-style login, or set
+                <code class="text-brand">CODEX_ACCESS_TOKEN</code> and run
+                <code class="text-brand">/connect codex env</code>.
+              </p>
+              <code class="bg-black p-4 rounded block mb-6 text-brand"
+                >/model codex/gpt-5.5</code
+              >
+              <ul class="space-y-3 text-xs text-gray-500">
+                <li>&bull; Default model is codex/gpt-5.5</li>
+                <li>&bull; Sends Codex requests to the ChatGPT Codex Responses endpoint</li>
+                <li>&bull; Keeps bare gpt-5.5 selections on OpenAI unless Codex is explicit</li>
               </ul>
             </div>
           </section>
@@ -508,7 +538,7 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
       "name": "architect",
       "purpose": "Plan the work",
       "subagent_type": "Explore",
-      "model": "github-copilot/gpt-5.4",
+      "model": "github-copilot/gpt-5.5",
       "workspace": "shared",
       "queue_policy": "fifo",
       "permission_profile": "read-only",
@@ -586,7 +616,7 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
               <li>
                 <strong class="text-brand">model:</strong>
                 optional. Set a specific model such as
-                <code>github-copilot/gpt-5.4</code> or
+                <code>github-copilot/gpt-5.5</code> or
                 <code>openai/gpt-4o</code>.
               </li>
               <li>
@@ -935,6 +965,14 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                     </td>
                     <td class="p-4 border-t border-[#1a1a1a]">
                       Connect GitHub Copilot login
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="p-4 border-t border-[#1a1a1a]">
+                      <code>/connect codex</code>
+                    </td>
+                    <td class="p-4 border-t border-[#1a1a1a]">
+                      Connect Codex browser, headless, or env-token auth
                     </td>
                   </tr>
                   <tr>
@@ -2709,6 +2747,7 @@ make install        # Install to /usr/local/bin</code></pre>
           >
           <a href="#setup" class="sidebar-link mobile-link">Setup</a>
           <a href="#copilot" class="sidebar-link mobile-link">GitHub Copilot</a>
+          <a href="#codex" class="sidebar-link mobile-link">Codex</a>
         </div>
         <div>
           <h5 class="sidebar-title">Workflow</h5>

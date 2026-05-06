@@ -9,11 +9,10 @@
 - Added Codex auth config storage, OAuth/device-flow token helpers, JWT account-id extraction, and a token refresher.
 - Wired Codex into provider discovery, `/connect codex`, model switching, stored auth loading, and token refresh.
 - Added `gpt-5.5` to `xhigh` reasoning support.
+- Updated docs for Codex setup, `codex/gpt-5.5`, and GPT 5.5 defaults.
 
 ## In Progress
 
-- Next: update project documentation.
+- Next: replace the TUI Silvery local dependency with an npm registry dependency.
 
 ## Pending
-
-- Replace the TUI Silvery local dependency with an npm registry dependency.
