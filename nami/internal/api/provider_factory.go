@@ -17,6 +17,9 @@ var clientFactories = map[ClientType]ClientFactory{
 	OpenAICompatAPI: func(provider, model, apiKey, baseURL string) (LLMClient, error) {
 		return NewOpenAICompatClient(provider, model, apiKey, baseURL)
 	},
+	OpenAIResponsesAPI: func(provider, model, apiKey, baseURL string) (LLMClient, error) {
+		return NewOpenAIResponsesClient(provider, model, apiKey, baseURL)
+	},
 	OllamaAPI: func(_ string, model, apiKey, baseURL string) (LLMClient, error) {
 		return NewOllamaClient(model, apiKey, baseURL)
 	},

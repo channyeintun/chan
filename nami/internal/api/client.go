@@ -38,6 +38,7 @@ const (
 	AnthropicAPI ClientType = iota
 	GeminiAPI
 	OpenAICompatAPI
+	OpenAIResponsesAPI
 	OllamaAPI
 )
 
