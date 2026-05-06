@@ -41,6 +41,20 @@ var Presets = map[string]ProviderPreset{
 			MaxOutputTokens:  16384,
 		},
 	},
+	"codex": {
+		Name:         "codex",
+		ClientType:   OpenAIResponsesAPI,
+		BaseURL:      "https://chatgpt.com/backend-api/codex",
+		EnvKeyVar:    "CODEX_ACCESS_TOKEN",
+		DefaultModel: "gpt-5.5",
+		Capabilities: ModelCapabilities{
+			SupportsToolUse:  true,
+			SupportsJsonMode: true,
+			MaxContextWindow: 400000,
+			MaxPromptTokens:  272000,
+			MaxOutputTokens:  128000,
+		},
+	},
 	"gemini": {
 		Name:         "gemini",
 		ClientType:   GeminiAPI,

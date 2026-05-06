@@ -3,14 +3,14 @@
 ## Completed
 
 - Added the `OpenAIResponsesAPI` client type and registered it in provider factory wiring.
+- Added the `codex` provider preset with Responses API routing, `gpt-5.5`, `CODEX_ACCESS_TOKEN`, and Codex model limits.
 
 ## In Progress
 
-- Next: add the `codex` provider preset.
+- Next: remove surfaced `gpt-5.4` defaults and model options.
 
 ## Pending
 
-- Remove surfaced `gpt-5.4` defaults and model options.
 - Add Codex-specific Responses request behavior.
 - Add Codex OAuth support.
 - Wire Codex into provider setup and model selection.
