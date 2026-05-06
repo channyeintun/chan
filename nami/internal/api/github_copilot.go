@@ -24,7 +24,7 @@ const (
 	githubCopilotSlowDownPollMultiplier  = 1.4
 	githubCopilotModelsCacheTTL          = 24 * time.Hour
 	githubCopilotModelsRequestTimeout    = 5 * time.Second
-	GitHubCopilotDefaultMainModel        = "gpt-5.4"
+	GitHubCopilotDefaultMainModel        = "gpt-5.5"
 	GitHubCopilotDefaultSubagentModel    = "claude-haiku-4.5"
 )
 

@@ -100,16 +100,10 @@ var curatedModelSelectionPresets = []modelSelectionPreset{
 		Description: "Haiku preset",
 	},
 	{
-		Label:       "GPT 5.4",
-		Model:       "gpt-5.4",
+		Label:       "GPT 5.5",
+		Model:       "gpt-5.5",
 		Provider:    "openai",
 		Description: "GPT preset",
-	},
-	{
-		Label:       "GPT 5.4 Mini",
-		Model:       "gpt-5.4-mini",
-		Provider:    "openai",
-		Description: "GPT mini preset",
 	},
 	{
 		Label:       "GPT 5 Mini",

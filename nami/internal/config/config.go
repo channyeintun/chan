@@ -51,7 +51,7 @@ type GitHubCopilotAuth struct {
 // DefaultConfig returns the configuration with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		Model:                   "github-copilot/gpt-5.4",
+		Model:                   "github-copilot/gpt-5.5",
 		ModelSource:             "default",
 		DefaultMode:             "plan",
 		CostWarningThresholdUSD: 5,
