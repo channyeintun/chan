@@ -119,12 +119,13 @@ const StatusBar: FC<StatusBarProps> = ({
     <Box
       backgroundColor="$bg"
       color="$fg"
+      width="100%"
       paddingX={1}
       paddingY={0}
       userSelect="none"
       flexDirection="column"
     >
-      <Box flexDirection="row" minWidth={0}>
+      <Box flexDirection="row" width="100%" minWidth={0}>
         <Text wrap="truncate-end">
           <Text color={readinessColor}>{readinessLabel.toLowerCase()}</Text>
           <Text color="$muted"> · </Text>

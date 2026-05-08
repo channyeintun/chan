@@ -265,7 +265,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
       flexShrink={1}
       minHeight={0}
       marginTop={1}
-      userSelect="contain"
+      userSelect="text"
     >
       <ListView
         items={displayBlocks}
