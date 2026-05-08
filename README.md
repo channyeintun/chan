@@ -4,7 +4,7 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 
 Nami combines a terminal UI, a Go-based execution engine, first-class artifacts, and bounded child agents so you can inspect code, plan work, edit safely, and verify results without leaving the terminal.
 
-![Nami](./docs/nami.png)
+![Nami](./docs/nami.webp)
 
 ## Why Nami
 
