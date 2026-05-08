@@ -131,15 +131,27 @@ var curatedModelSelectionPresets = []modelSelectionPreset{
 	},
 	{
 		Label:       "Gemini 3 Flash",
-		Model:       "gemini-3.0-flash",
+		Model:       "gemini-3-flash-preview",
 		Provider:    "gemini",
 		Description: "Gemini flash preset",
 	},
 	{
+		Label:       "Gemini 3.1 Flash Lite",
+		Model:       "gemini-3.1-flash-lite",
+		Provider:    "gemini",
+		Description: "Gemini flash-lite preset",
+	},
+	{
 		Label:       "Gemini 3.1 Pro",
-		Model:       "gemini-3.1-pro",
+		Model:       "gemini-3.1-pro-preview",
 		Provider:    "gemini",
 		Description: "Gemini pro preset",
+	},
+	{
+		Label:       "Gemma 4 31B",
+		Model:       "gemma-4-31B",
+		Provider:    "ollama",
+		Description: "Gemma 4 31B preset",
 	},
 	{
 		Label:       "DeepSeek V4 Flash",
