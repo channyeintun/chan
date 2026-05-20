@@ -58,7 +58,6 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	})
 	defer toolpkg.SetBackgroundCommandNotifier(nil)
 	defer toolpkg.SetAskUserQuestionRuntime(nil)
-	defer toolpkg.SetGlobalMCPManager(nil)
 	registry := toolpkg.NewRegistry()
 	startupSelection := resolveStartupProviderSelection(cfg)
 	provider := normalizeProvider(startupSelection.Provider)
@@ -141,7 +140,6 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 		titleGenerated:  false,
 	}
 	mcpManager := mcppkg.NewManager(cwd, cfg.MCP)
-	toolpkg.SetGlobalMCPManager(mcpManager)
 	toolpkg.SetSessionControlRuntime(newSessionControlRuntime(bridge, sessionStore, tracker, loopState))
 	toolpkg.SetToolSearchRuntime(registry)
 	defer toolpkg.SetToolSearchRuntime(nil)
@@ -161,6 +159,8 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 		return launchBackgroundTeam(ctx, runner, req)
 	}))
 	registry.Register(toolpkg.NewAgentTeamStatusTool(lookupBackgroundTeamStatus))
+	registry.Register(toolpkg.NewListMCPResourcesToolWithManager(mcpManager))
+	registry.Register(toolpkg.NewReadMCPResourceToolWithManager(mcpManager))
 	if err := persistSessionState(sessionStore, sessionStateParams{
 		SessionID:     sessionID,
 		CreatedAt:     startedAt,

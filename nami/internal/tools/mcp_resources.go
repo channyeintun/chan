@@ -17,9 +17,13 @@ type mcpManagerRuntime struct {
 
 var globalMCPManagerRuntime mcpManagerRuntime
 
-type ListMCPResourcesTool struct{}
+type ListMCPResourcesTool struct {
+	manager *mcppkg.Manager
+}
 
-type ReadMCPResourceTool struct{}
+type ReadMCPResourceTool struct {
+	manager *mcppkg.Manager
+}
 
 type listMCPResourcesResponse struct {
 	Servers []listMCPResourcesServer `json:"servers"`
@@ -86,8 +90,30 @@ func NewListMCPResourcesTool() *ListMCPResourcesTool {
 	return &ListMCPResourcesTool{}
 }
 
+func NewListMCPResourcesToolWithManager(manager *mcppkg.Manager) *ListMCPResourcesTool {
+	return &ListMCPResourcesTool{manager: manager}
+}
+
 func NewReadMCPResourceTool() *ReadMCPResourceTool {
 	return &ReadMCPResourceTool{}
+}
+
+func NewReadMCPResourceToolWithManager(manager *mcppkg.Manager) *ReadMCPResourceTool {
+	return &ReadMCPResourceTool{manager: manager}
+}
+
+func (t *ListMCPResourcesTool) mcpManager() (*mcppkg.Manager, error) {
+	if t != nil && t.manager != nil {
+		return t.manager, nil
+	}
+	return getGlobalMCPManager()
+}
+
+func (t *ReadMCPResourceTool) mcpManager() (*mcppkg.Manager, error) {
+	if t != nil && t.manager != nil {
+		return t.manager, nil
+	}
+	return getGlobalMCPManager()
 }
 
 func (t *ListMCPResourcesTool) Name() string {
@@ -134,7 +160,7 @@ func (t *ListMCPResourcesTool) Validate(input ToolInput) error {
 }
 
 func (t *ListMCPResourcesTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
-	manager, err := getGlobalMCPManager()
+	manager, err := t.mcpManager()
 	if err != nil {
 		return ToolOutput{}, err
 	}
@@ -256,7 +282,7 @@ func (t *ReadMCPResourceTool) Validate(input ToolInput) error {
 }
 
 func (t *ReadMCPResourceTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
-	manager, err := getGlobalMCPManager()
+	manager, err := t.mcpManager()
 	if err != nil {
 		return ToolOutput{}, err
 	}
