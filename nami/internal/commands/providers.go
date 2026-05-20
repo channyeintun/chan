@@ -283,18 +283,18 @@ func orderedProviderIDs() []string {
 		"glm",
 		"ollama",
 	}
-	ordered := make([]string, 0, len(api.Presets))
-	seen := make(map[string]struct{}, len(api.Presets))
+	ordered := make([]string, 0, len(api.ProviderSpecs))
+	seen := make(map[string]struct{}, len(api.ProviderSpecs))
 	for _, providerID := range preferred {
-		if _, ok := api.Presets[providerID]; !ok {
+		if _, ok := api.ProviderSpecs[providerID]; !ok {
 			continue
 		}
 		ordered = append(ordered, providerID)
 		seen[providerID] = struct{}{}
 	}
 
-	extra := make([]string, 0, len(api.Presets)-len(ordered))
-	for providerID := range api.Presets {
+	extra := make([]string, 0, len(api.ProviderSpecs)-len(ordered))
+	for providerID := range api.ProviderSpecs {
 		if _, ok := seen[providerID]; ok {
 			continue
 		}

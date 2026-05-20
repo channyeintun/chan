@@ -67,17 +67,17 @@ func ParseConnectArgs(args string) (ConnectRequest, error) {
 }
 
 func ConnectProviderCatalog() []ConnectProviderSpec {
-	providers := make([]ConnectProviderSpec, 0, len(api.Presets))
+	providers := make([]ConnectProviderSpec, 0, len(api.ProviderSpecs))
 	for _, providerID := range orderedProviderIDs() {
-		preset, ok := api.Presets[providerID]
+		spec, ok := api.ProviderSpecFor(providerID)
 		if !ok {
 			continue
 		}
 		providers = append(providers, ConnectProviderSpec{
 			ID:           providerID,
-			Label:        providerDisplayLabel(providerID),
-			DefaultModel: preset.DefaultModel,
-			Methods:      connectMethodsForProvider(providerID, preset.EnvKeyVar),
+			Label:        spec.DisplayName,
+			DefaultModel: spec.DefaultModel,
+			Methods:      connectMethodsForProvider(providerID, spec.EnvKeyVar),
 		})
 	}
 	return providers

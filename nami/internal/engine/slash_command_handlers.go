@@ -232,20 +232,6 @@ type connectResult struct {
 
 type connectProviderFunc func(cmd *slashCommandContext, extraArgs string) (*connectResult, error)
 
-var connectProviderRegistry = map[string]connectProviderFunc{
-	"github-copilot": connectGitHubCopilot,
-	"codex":          connectCodex,
-	"anthropic":      makeStaticConnectProviderHandler("anthropic"),
-	"openai":         makeStaticConnectProviderHandler("openai"),
-	"gemini":         makeStaticConnectProviderHandler("gemini"),
-	"deepseek":       makeStaticConnectProviderHandler("deepseek"),
-	"qwen":           makeStaticConnectProviderHandler("qwen"),
-	"glm":            makeStaticConnectProviderHandler("glm"),
-	"mistral":        makeStaticConnectProviderHandler("mistral"),
-	"groq":           makeStaticConnectProviderHandler("groq"),
-	"ollama":         makeStaticConnectProviderHandler("ollama"),
-}
-
 func handleConnectSlashCommand(cmd *slashCommandContext) error {
 	if strings.TrimSpace(cmd.args) == "" {
 		currentCfg := config.LoadForWorkingDir(cmd.state.CWD)
@@ -276,7 +262,7 @@ func handleConnectSlashCommand(cmd *slashCommandContext) error {
 		return emitTextResponse(cmd.bridge, commandspkg.FormatProviderSnapshot(snapshot))
 	}
 
-	handler, ok := connectProviderRegistry[request.Provider]
+	handler, ok := connectProviderHandler(request.Provider)
 	if !ok {
 		return emitTextResponse(cmd.bridge, fmt.Sprintf("unsupported connect provider: %s", request.Provider))
 	}
@@ -315,6 +301,19 @@ func handleConnectSlashCommand(cmd *slashCommandContext) error {
 		return err
 	}
 	return emitTextResponse(cmd.bridge, result.FormatMessage(cmd.state.ActiveModelID))
+}
+
+func connectProviderHandler(providerID string) (connectProviderFunc, bool) {
+	switch normalizeProvider(providerID) {
+	case "github-copilot":
+		return connectGitHubCopilot, true
+	case "codex":
+		return connectCodex, true
+	}
+	if _, ok := commandspkg.LookupConnectProvider(providerID); !ok {
+		return nil, false
+	}
+	return makeStaticConnectProviderHandler(providerID), true
 }
 
 func makeStaticConnectProviderHandler(providerID string) connectProviderFunc {
