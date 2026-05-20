@@ -141,7 +141,8 @@ func (c *OpenAICompatClient) Stream(ctx context.Context, req ModelRequest) (iter
 			toolCalls: make(map[int]*openAICompatToolCallState),
 		}
 
-		err := readSSE(ctx, resp.Body, func(_ string, data string) error {
+		sseBody := sseBodyWithDebug(resp.Body, c.provider)
+		err := readSSE(ctx, sseBody, func(_ string, data string) error {
 			return c.handleEvent(data, &state, yield)
 		})
 		if err != nil && !errors.Is(err, errStopStream) {

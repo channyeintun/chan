@@ -17,6 +17,9 @@ Source plan: `enhancements.md`
 - Bounded turn-context git commands and made key persistence writes atomic.
   - Git context collection commands now use a short timeout instead of waiting indefinitely.
   - Session metadata, transcript rewrites, timelines, artifact content, and artifact metadata now write through temp files and rename.
+- Consolidated provider stream lifecycle debug logging in the shared SSE wrapper.
+  - SSE streams now log opened, first bytes, and closed lifecycle events with elapsed timing.
+  - OpenAI-compatible streaming now uses the shared SSE debug wrapper.
 
 ## In Progress
 
@@ -24,7 +27,7 @@ Source plan: `enhancements.md`
 
 ## Pending
 
-- Consolidate shared provider transport behavior after differences are documented in debug logs.
+- None.
 
 ## Notes
 
