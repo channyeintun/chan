@@ -1,0 +1,376 @@
+package engine
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/channyeintun/nami/internal/agent"
+	"github.com/channyeintun/nami/internal/api"
+	"github.com/channyeintun/nami/internal/clientdebug"
+	commandspkg "github.com/channyeintun/nami/internal/commands"
+	"github.com/channyeintun/nami/internal/config"
+	costpkg "github.com/channyeintun/nami/internal/cost"
+	"github.com/channyeintun/nami/internal/ipc"
+)
+
+func handlePlanSlashCommand(cmd *slashCommandContext) error {
+	cmd.state.Mode = agent.ModePlan
+	if err := cmd.persistState(); err != nil {
+		return err
+	}
+	return cmd.bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(cmd.state.Mode)})
+}
+
+func handleProvidersSlashCommand(cmd *slashCommandContext) error {
+	if strings.TrimSpace(cmd.args) != "" {
+		return emitTextResponse(cmd.bridge, "usage: /providers")
+	}
+
+	statusCfg := config.LoadForWorkingDir(cmd.state.CWD)
+	statusCfg.Model = cmd.state.ActiveModelID
+	snapshot := commandspkg.DiscoverProviderSnapshot(statusCfg)
+	return emitTextResponse(cmd.bridge, commandspkg.FormatProviderSnapshot(snapshot))
+}
+
+func handleFastSlashCommand(cmd *slashCommandContext) error {
+	cmd.state.Mode = agent.ModeFast
+	if err := cmd.persistState(); err != nil {
+		return err
+	}
+	return cmd.bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(cmd.state.Mode)})
+}
+
+func handleModelSlashCommand(cmd *slashCommandContext) error {
+	selected := modelSelectionChoice{Model: strings.TrimSpace(cmd.args)}
+	if selected.Model == "" {
+		var err error
+		selected, err = promptModelSelection(cmd, cmd.state.ActiveModelID)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(selected.Model) == "" {
+			return emitTextResponse(cmd.bridge, "Model selection cancelled.")
+		}
+	}
+
+	if strings.EqualFold(selected.Model, "default") {
+		configuredChoice, err := configuredModelChoice(cmd.cfg.Model)
+		if err != nil {
+			return emitTextResponse(cmd.bridge, err.Error())
+		}
+		selected = configuredChoice
+	}
+	requestedDefault := strings.EqualFold(strings.TrimSpace(cmd.args), "default")
+
+	selectedModel, err := normalizeModelSlashInput(selected.Model)
+	if err != nil {
+		return emitTextResponse(cmd.bridge, err.Error())
+	}
+
+	currentProvider, _ := config.ParseModel(cmd.state.ActiveModelID)
+	currentProvider = normalizeProvider(currentProvider)
+	providerHint := strings.TrimSpace(selected.Provider)
+	provider, model := resolveModelSelection(selectedModel, currentProvider)
+	if currentProvider != "" && isModelCompatibleWithProvider(selectedModel, currentProvider) {
+		provider = currentProvider
+		model = selectedModel
+	} else if providerHint != "" && (!retainSelectionProvider(currentProvider) || requestedDefault) {
+		provider = normalizeProvider(providerHint)
+		model = selectedModel
+	}
+	nextClient, err := newLLMClient(provider, model, cmd.cfg)
+	if err != nil {
+		return cmd.bridge.EmitError(fmt.Sprintf("switch model %q: %v", selectedModel, err), true)
+	}
+
+	nextClient = clientdebug.WrapClient(nextClient)
+	*cmd.client = nextClient
+	previousModelID := cmd.state.ActiveModelID
+	cmd.state.ActiveModelID = modelRef(provider, nextClient.ModelID())
+	rememberSuccessfulModelSelection(cmd.state.ActiveModelID)
+	cmd.state.SubagentModelID = coerceSessionSubagentModel(config.LoadForWorkingDir(cmd.state.CWD), cmd.state.ActiveModelID, cmd.state.SubagentModelID)
+	if err := emitCacheBustNoticeOnModelSwitch(cmd.bridge, cmd.tracker, previousModelID, cmd.state.ActiveModelID); err != nil {
+		return err
+	}
+	if err := emitToolUseCapabilityNotice(cmd.bridge, cmd.state.ActiveModelID, *cmd.client, nil); err != nil {
+		return err
+	}
+	if err := cmd.persistState(); err != nil {
+		return err
+	}
+	if err := emitModelChanged(cmd.bridge, cmd.state.ActiveModelID, *cmd.client); err != nil {
+		return err
+	}
+	if err := emitContextWindowUsage(cmd.bridge, *cmd.client, cmd.state.Messages); err != nil {
+		return err
+	}
+	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set model to %s", cmd.state.ActiveModelID))
+}
+
+func emitCacheBustNoticeOnModelSwitch(bridge *ipc.Bridge, tracker *costpkg.Tracker, previousModelID string, nextModelID string) error {
+	if bridge == nil || tracker == nil {
+		return nil
+	}
+	if strings.EqualFold(strings.TrimSpace(previousModelID), strings.TrimSpace(nextModelID)) {
+		return nil
+	}
+	snapshot := tracker.Snapshot()
+	cacheRead := snapshot.TotalCacheReadTokens
+	cacheWrite := snapshot.TotalCacheCreationTokens
+	if cacheRead == 0 && cacheWrite == 0 {
+		return nil
+	}
+	return bridge.EmitNotice(fmt.Sprintf(
+		"Switching model from %s to %s invalidates the current prompt cache. Cache usage so far: %s read / %s write.",
+		commandspkg.FormatModelSelectionLabel(previousModelID),
+		commandspkg.FormatModelSelectionLabel(nextModelID),
+		formatCacheTokenCount(cacheRead),
+		formatCacheTokenCount(cacheWrite),
+	))
+}
+
+func formatCacheTokenCount(value int) string {
+	switch {
+	case value >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(value)/1_000_000)
+	case value >= 1_000:
+		return fmt.Sprintf("%.1fk", float64(value)/1_000)
+	default:
+		return fmt.Sprintf("%d", value)
+	}
+}
+
+func handleSubagentSlashCommand(cmd *slashCommandContext) error {
+	currentSelection := strings.TrimSpace(cmd.state.SubagentModelID)
+	if currentSelection == "" {
+		currentSelection = defaultSessionSubagentModel(config.Load(), cmd.state.ActiveModelID)
+	}
+
+	selected := modelSelectionChoice{Model: strings.TrimSpace(cmd.args)}
+	if selected.Model == "" {
+		var err error
+		selected, err = promptModelSelection(cmd, currentSelection)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(selected.Model) == "" {
+			return emitTextResponse(cmd.bridge, "Subagent model selection cancelled.")
+		}
+	}
+
+	switch {
+	case strings.EqualFold(selected.Model, "help"), strings.EqualFold(selected.Model, "status"), strings.EqualFold(selected.Model, "current"):
+		return emitTextResponse(cmd.bridge, commandspkg.FormatSubagentHelpText(currentSelection))
+	case strings.EqualFold(selected.Model, "default"):
+		cmd.state.SubagentModelID = defaultSessionSubagentModel(config.Load(), cmd.state.ActiveModelID)
+		if err := cmd.persistState(); err != nil {
+			return err
+		}
+		return emitTextResponse(cmd.bridge, fmt.Sprintf("Reset subagent model to %s", commandspkg.FormatModelSelectionLabel(cmd.state.SubagentModelID)))
+	}
+
+	selectedModel, err := normalizeModelSlashInput(selected.Model)
+	if err != nil {
+		return emitTextResponse(cmd.bridge, err.Error())
+	}
+
+	currentProvider, _ := config.ParseModel(cmd.state.ActiveModelID)
+	currentProvider = normalizeProvider(currentProvider)
+	providerHint := strings.TrimSpace(selected.Provider)
+	provider, model := resolveModelSelection(selectedModel, currentProvider)
+	if currentProvider != "" && isModelCompatibleWithProvider(selectedModel, currentProvider) {
+		provider = currentProvider
+		model = selectedModel
+	} else if providerHint != "" && !retainSelectionProvider(currentProvider) {
+		provider = normalizeProvider(providerHint)
+		model = selectedModel
+	}
+	cmd.state.SubagentModelID = modelRef(provider, model)
+	if err := cmd.persistState(); err != nil {
+		return err
+	}
+	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set subagent model to %s", commandspkg.FormatModelSelectionLabel(cmd.state.SubagentModelID)))
+}
+
+func handleLogoutSlashCommand(cmd *slashCommandContext) error {
+	provider := strings.ToLower(strings.TrimSpace(cmd.args))
+
+	cfg := config.Load()
+
+	switch provider {
+	case "github-copilot", "copilot":
+		cfg.GitHubCopilot = config.GitHubCopilotAuth{}
+		if err := config.Save(cfg); err != nil {
+			return emitTextResponse(cmd.bridge, fmt.Sprintf("Failed to save configuration: %v", err))
+		}
+		return emitTextResponse(cmd.bridge, "Successfully logged out of GitHub Copilot.")
+	case "codex":
+		cfg.Codex = config.CodexAuth{}
+		if err := config.Save(cfg); err != nil {
+			return emitTextResponse(cmd.bridge, fmt.Sprintf("Failed to save configuration: %v", err))
+		}
+		return emitTextResponse(cmd.bridge, "Successfully logged out of Codex.")
+	case "all", "":
+		cfg.GitHubCopilot = config.GitHubCopilotAuth{}
+		cfg.Codex = config.CodexAuth{}
+		if err := config.Save(cfg); err != nil {
+			return emitTextResponse(cmd.bridge, fmt.Sprintf("Failed to save configuration: %v", err))
+		}
+		return emitTextResponse(cmd.bridge, "Successfully logged out of all providers.")
+	default:
+		return emitTextResponse(cmd.bridge, fmt.Sprintf("Unknown provider: %s. Supported: github-copilot, codex, all.", provider))
+	}
+}
+
+func normalizeModelSlashInput(input string) (string, error) {
+	compact := strings.TrimSpace(input)
+	if compact == "" {
+		return "", fmt.Errorf("model cannot be empty")
+	}
+	if strings.Contains(compact, "/") {
+		provider, model := config.ParseModel(compact)
+		provider = normalizeProvider(strings.TrimSpace(provider))
+		model = strings.TrimSpace(model)
+		if provider == "" || model == "" {
+			return "", fmt.Errorf("model must use provider/model format")
+		}
+		return modelRef(provider, model), nil
+	}
+	return compact, nil
+}
+
+func configuredModelChoice(raw string) (modelSelectionChoice, error) {
+	provider, model := config.ParseModel(strings.TrimSpace(raw))
+	provider = normalizeProvider(provider)
+	if strings.TrimSpace(model) == "" {
+		model = strings.TrimSpace(provider)
+		provider = ""
+	}
+	if strings.TrimSpace(model) == "" {
+		return modelSelectionChoice{}, fmt.Errorf("default model is not configured")
+	}
+	return modelSelectionChoice{Model: model, Provider: provider}, nil
+}
+
+func promptModelSelection(cmd *slashCommandContext, currentSelection string) (modelSelectionChoice, error) {
+	activeModelID := strings.TrimSpace(currentSelection)
+	_, activeModel := config.ParseModel(activeModelID)
+	if strings.TrimSpace(activeModel) == "" {
+		activeModel = activeModelID
+	}
+
+	selectionCfg := config.LoadForWorkingDir(cmd.state.CWD)
+	selectionCfg.Model = currentSelection
+	snapshot := commandspkg.DiscoverProviderSnapshot(selectionCfg)
+	options := commandspkg.BuildModelSelectionOptions(snapshot, currentSelection)
+	options = appendCuratedModelSelectionOptions(options, snapshot, currentSelection)
+	options = append(options, ipc.ModelSelectionOptionPayload{
+		Label:       "Custom model",
+		Description: "Enter a model id or provider/model",
+		IsCustom:    true,
+	})
+	return promptSelection(
+		cmd,
+		activeModel,
+		options,
+		"Select Model",
+		"Choose the active model, a curated preset, or a provider default for the session.",
+	)
+}
+
+func promptSelection(
+	cmd *slashCommandContext,
+	currentSelection string,
+	options []ipc.ModelSelectionOptionPayload,
+	title string,
+	description string,
+) (modelSelectionChoice, error) {
+	requestID := fmt.Sprintf("model-%d", time.Now().UnixNano())
+	if err := cmd.bridge.Emit(ipc.EventModelSelectionRequested, ipc.ModelSelectionRequestedPayload{
+		RequestID:    requestID,
+		CurrentModel: strings.TrimSpace(currentSelection),
+		Title:        strings.TrimSpace(title),
+		Description:  strings.TrimSpace(description),
+		Options:      options,
+	}); err != nil {
+		return modelSelectionChoice{}, err
+	}
+
+	deferred := make([]ipc.ClientMessage, 0, 4)
+	defer func() {
+		cmd.router.Requeue(deferred...)
+	}()
+
+	for {
+		msg, err := cmd.router.Next(cmd.ctx)
+		if err != nil {
+			return modelSelectionChoice{}, err
+		}
+
+		switch msg.Type {
+		case ipc.MsgModelSelectionResponse:
+			var payload ipc.ModelSelectionResponsePayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return modelSelectionChoice{}, fmt.Errorf("decode model selection response: %w", err)
+			}
+			if payload.RequestID != requestID {
+				deferred = append(deferred, msg)
+				continue
+			}
+			if payload.Cancel {
+				return modelSelectionChoice{}, nil
+			}
+			selected := strings.TrimSpace(payload.Model)
+			if selected == "" {
+				return modelSelectionChoice{}, nil
+			}
+			return modelSelectionChoice{
+				Model:    selected,
+				Provider: strings.TrimSpace(payload.Provider),
+			}, nil
+		case ipc.MsgShutdown:
+			return modelSelectionChoice{}, context.Canceled
+		default:
+			deferred = append(deferred, msg)
+		}
+	}
+}
+
+func handleReasoningSlashCommand(cmd *slashCommandContext) error {
+	persisted := config.Load()
+	currentModelID := cmd.state.ActiveModelID
+	if cmd.client != nil && *cmd.client != nil {
+		currentModelID = strings.TrimSpace((*cmd.client).ModelID())
+	}
+	current := commandspkg.DescribeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
+	if strings.TrimSpace(cmd.args) == "" {
+		return emitTextResponse(cmd.bridge, fmt.Sprintf("Current reasoning effort: %s", current))
+	}
+
+	nextEffort, clearSetting, err := commandspkg.ParseReasoningArgs(cmd.args)
+	if err != nil {
+		return emitTextResponse(cmd.bridge, err.Error())
+	}
+
+	if clearSetting {
+		persisted.ReasoningEffort = ""
+	} else {
+		persisted.ReasoningEffort = nextEffort
+	}
+	if err := config.Save(persisted); err != nil {
+		return emitTextResponse(cmd.bridge, fmt.Sprintf("save reasoning effort: %v", err))
+	}
+	var activeClient api.LLMClient
+	if cmd.client != nil {
+		activeClient = *cmd.client
+	}
+	if err := emitModelChanged(cmd.bridge, cmd.state.ActiveModelID, activeClient); err != nil {
+		return err
+	}
+
+	updated := commandspkg.DescribeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
+	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set reasoning effort to %s", updated))
+}
