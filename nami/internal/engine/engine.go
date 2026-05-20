@@ -40,24 +40,6 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	var stdoutW io.Writer = debuglog.NewIPCWriter(os.Stdout)
 
 	bridge := ipc.NewBridge(stdinR, stdoutW)
-	toolpkg.SetBackgroundCommandNotifier(func(update toolpkg.BackgroundCommandUpdate) {
-		_ = bridge.Emit(ipc.EventBackgroundCommandUpdated, ipc.BackgroundCommandUpdatedPayload{
-			CommandID:       update.CommandID,
-			Command:         update.Command,
-			Cwd:             update.Cwd,
-			Status:          update.Status,
-			Running:         update.Running,
-			StartedAt:       update.StartedAt,
-			UpdatedAt:       update.UpdatedAt,
-			OutputPreview:   update.OutputPreview,
-			HasUnreadOutput: update.HasUnreadOutput,
-			UnreadBytes:     update.UnreadBytes,
-			ExitCode:        update.ExitCode,
-			Error:           update.Error,
-		})
-	})
-	defer toolpkg.SetBackgroundCommandNotifier(nil)
-	defer toolpkg.SetAskUserQuestionRuntime(nil)
 	registry := toolpkg.NewRegistry()
 	startupSelection := resolveStartupProviderSelection(cfg)
 	provider := normalizeProvider(startupSelection.Provider)
@@ -114,9 +96,6 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	startupMetrics := timing.NewCheckpointRecorder(engineStartedAt)
 	fileHistory := toolpkg.NewFileHistory(toolpkg.DefaultFileHistoryDir(sessionDir))
 	fileReadState := toolpkg.NewFileReadState()
-	toolpkg.SetGlobalFileHistory(fileHistory)
-	toolpkg.SetGlobalFileReadState(fileReadState)
-	toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
 	if client != nil {
 		startClientWarmup(ctx, timingLogger, startupMetrics, sessionID, activeModelID, client)
 	}
@@ -125,7 +104,41 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	toolpkg.SetGlobalSwarmRuntime(sessionID, artifactManager, sessionStore, cwd)
+	sessionRuntime := toolpkg.SessionRuntimeConfig{
+		FileHistory:   fileHistory,
+		FileReadState: fileReadState,
+		SessionArtifacts: toolpkg.SessionArtifactRuntimeConfig{
+			SessionID: sessionID,
+			Manager:   artifactManager,
+		},
+		Swarm: toolpkg.SwarmRuntimeConfig{
+			SessionID: sessionID,
+			Manager:   artifactManager,
+			Store:     sessionStore,
+			CWD:       cwd,
+		},
+	}
+	toolpkg.InstallSessionRuntime(sessionRuntime)
+	defer toolpkg.ClearSessionRuntime()
+	interactionRuntime := toolpkg.InteractionRuntimeConfig{
+		BackgroundCommandNotifier: func(update toolpkg.BackgroundCommandUpdate) {
+			_ = bridge.Emit(ipc.EventBackgroundCommandUpdated, ipc.BackgroundCommandUpdatedPayload{
+				CommandID:       update.CommandID,
+				Command:         update.Command,
+				Cwd:             update.Cwd,
+				Status:          update.Status,
+				Running:         update.Running,
+				StartedAt:       update.StartedAt,
+				UpdatedAt:       update.UpdatedAt,
+				OutputPreview:   update.OutputPreview,
+				HasUnreadOutput: update.HasUnreadOutput,
+				UnreadBytes:     update.UnreadBytes,
+				ExitCode:        update.ExitCode,
+				Error:           update.Error,
+			})
+		},
+	}
+	defer toolpkg.ClearInteractionRuntime()
 	loopState := &engineLoopState{
 		client:          client,
 		sessionID:       sessionID,
@@ -140,10 +153,9 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 		titleGenerated:  false,
 	}
 	mcpManager := mcppkg.NewManager(cwd, cfg.MCP)
-	toolpkg.SetSessionControlRuntime(newSessionControlRuntime(bridge, sessionStore, tracker, loopState))
-	toolpkg.SetToolSearchRuntime(registry)
-	defer toolpkg.SetToolSearchRuntime(nil)
-	defer toolpkg.SetSessionControlRuntime(nil)
+	interactionRuntime.SessionControlRuntime = newSessionControlRuntime(bridge, sessionStore, tracker, loopState)
+	interactionRuntime.ToolSearchRuntime = registry
+	toolpkg.InstallInteractionRuntime(interactionRuntime)
 	defer func() {
 		if err := mcpManager.Close(); err != nil && debuglog.Enabled {
 			fmt.Fprintf(os.Stderr, "mcp: close: %v\n", err)
@@ -200,7 +212,8 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	// Start the message router as soon as the UI is ready so any immediate user
 	// input is buffered while startup capability refresh completes.
 	router := ipc.NewMessageRouter(ctx, bridge)
-	toolpkg.SetAskUserQuestionRuntime(newAskUserQuestionRuntime(bridge, router))
+	interactionRuntime.AskUserQuestionRuntime = newAskUserQuestionRuntime(bridge, router)
+	toolpkg.InstallInteractionRuntime(interactionRuntime)
 	defer toolpkg.ShutdownBackgroundCommandsForSession()
 
 	if startupNotice != "" {
@@ -319,8 +332,10 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 				loopState.timeline = slashState.Timeline
 				modelState.Set(loopState.client, loopState.activeModelID)
 				subagentModelState.Set(loopState.subagentModelID)
-				toolpkg.SetGlobalSessionArtifacts(loopState.sessionID, artifactManager)
-				toolpkg.SetGlobalSwarmRuntime(loopState.sessionID, artifactManager, sessionStore, loopState.cwd)
+				sessionRuntime.SessionArtifacts.SessionID = loopState.sessionID
+				sessionRuntime.Swarm.SessionID = loopState.sessionID
+				sessionRuntime.Swarm.CWD = loopState.cwd
+				toolpkg.InstallSessionRuntime(sessionRuntime)
 				continue
 			}
 
