@@ -10,6 +10,7 @@ import (
 	"github.com/channyeintun/nami/internal/api"
 	"github.com/channyeintun/nami/internal/config"
 	"github.com/channyeintun/nami/internal/ipc"
+	"github.com/channyeintun/nami/internal/modelselection"
 )
 
 const (
@@ -256,39 +257,12 @@ func ResolveModelSelection(selection string) (string, string) {
 }
 
 func ResolveModelSelectionValue(selection string, source string) config.ModelSelection {
-	parsed := config.ParseModelSelection(selection, source)
-	provider := normalizeProviderID(parsed.ProviderID)
-	model := strings.TrimSpace(parsed.ModelID)
-	if provider == "" && model != "" {
-		provider = InferProviderFromModel(model)
-	}
-	return config.NewModelSelection(provider, model, parsed.Source, parsed.ExplicitProvider)
+	resolved := modelselection.Resolve(selection, "", source)
+	return resolved.Resolved
 }
 
 func InferProviderFromModel(model string) string {
-	lower := strings.ToLower(strings.TrimSpace(model))
-	switch {
-	case strings.Contains(lower, "gemini"):
-		return "gemini"
-	case strings.Contains(lower, "gpt"), strings.HasPrefix(lower, "o1"), strings.HasPrefix(lower, "o3"), strings.HasPrefix(lower, "o4"):
-		return "openai"
-	case strings.Contains(lower, "deepseek"):
-		return "deepseek"
-	case strings.Contains(lower, "qwen"):
-		return "qwen"
-	case strings.Contains(lower, "glm"):
-		return "glm"
-	case strings.Contains(lower, "mistral"):
-		return "mistral"
-	case strings.Contains(lower, "llama"), strings.Contains(lower, "maverick"):
-		return "groq"
-	case strings.Contains(lower, "gemma"), strings.Contains(lower, "ollama"):
-		return "ollama"
-	case strings.Contains(lower, "claude"), strings.Contains(lower, "sonnet"), strings.Contains(lower, "opus"), strings.Contains(lower, "haiku"):
-		return "anthropic"
-	default:
-		return ""
-	}
+	return modelselection.InferProviderFromModel(model)
 }
 
 func orderedProviderIDs() []string {
@@ -492,7 +466,7 @@ func providerSetupHint(providerID string, envKey string) string {
 }
 
 func normalizeProviderID(provider string) string {
-	return strings.ToLower(strings.TrimSpace(provider))
+	return modelselection.NormalizeProvider(provider)
 }
 
 func ProviderStateLabel(status ProviderStatus) string {
