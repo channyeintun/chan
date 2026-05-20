@@ -1,5 +1,7 @@
 package api
 
+import "strings"
+
 // ProviderPreset keeps backward-compatible provider defaults for existing callers.
 type ProviderPreset struct {
 	Name         string
@@ -289,6 +291,59 @@ func ProviderSpecFor(providerID string) (ProviderSpec, bool) {
 func ModelSpecFor(modelID string) (ModelSpec, bool) {
 	spec, ok := ModelCatalog[modelID]
 	return spec, ok
+}
+
+func ResolveModelCapabilities(providerID, modelID string) ModelCapabilities {
+	if spec, ok := ModelSpecFor(modelID); ok {
+		return spec.Capabilities
+	}
+	if capabilities, ok := familyCapabilities(modelID); ok {
+		return capabilities
+	}
+	if provider, ok := ProviderSpecFor(providerID); ok {
+		if spec, ok := ModelSpecFor(provider.DefaultModel); ok {
+			return spec.Capabilities
+		}
+	}
+	return ModelCapabilities{
+		SupportsToolUse:  true,
+		MaxContextWindow: 32000,
+		MaxOutputTokens:  4096,
+	}
+}
+
+func familyCapabilities(modelID string) (ModelCapabilities, bool) {
+	family := ""
+	lower := strings.ToLower(modelID)
+	switch {
+	case strings.Contains(lower, "gpt"), strings.HasPrefix(lower, "o1"), strings.HasPrefix(lower, "o3"), strings.HasPrefix(lower, "o4"):
+		family = "gpt"
+	case strings.Contains(lower, "claude"), strings.Contains(lower, "sonnet"), strings.Contains(lower, "opus"), strings.Contains(lower, "haiku"):
+		family = "claude"
+	case strings.Contains(lower, "gemini"):
+		family = "gemini"
+	case strings.Contains(lower, "deepseek"):
+		family = "deepseek"
+	case strings.Contains(lower, "qwen"):
+		family = "qwen"
+	case strings.Contains(lower, "glm"):
+		family = "glm"
+	case strings.Contains(lower, "mistral"):
+		family = "mistral"
+	case strings.Contains(lower, "llama"), strings.Contains(lower, "maverick"):
+		family = "llama"
+	case strings.Contains(lower, "gemma"), strings.Contains(lower, "ollama"):
+		family = "gemma"
+	}
+	if family == "" {
+		return ModelCapabilities{}, false
+	}
+	for _, spec := range ModelCatalog {
+		if spec.Family == family {
+			return spec.Capabilities, true
+		}
+	}
+	return ModelCapabilities{}, false
 }
 
 func ProviderSupportsModel(providerID, modelID string) bool {

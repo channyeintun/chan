@@ -89,7 +89,7 @@ func NewOpenAICompatClient(provider, model, apiKey, baseURL string) (*OpenAIComp
 		baseURL:      strings.TrimRight(baseURL, "/"),
 		apiKey:       apiKey,
 		httpClient:   newHTTPClient(),
-		capabilities: preset.Capabilities,
+		capabilities: ResolveModelCapabilities(provider, model),
 	}, nil
 }
 

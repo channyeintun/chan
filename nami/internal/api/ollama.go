@@ -42,7 +42,7 @@ func NewOllamaClient(model, apiKey, baseURL string) (*OllamaClient, error) {
 		baseURL:      strings.TrimRight(baseURL, "/"),
 		apiKey:       apiKey,
 		httpClient:   newHTTPClient(),
-		capabilities: preset.Capabilities,
+		capabilities: ResolveModelCapabilities("ollama", model),
 	}, nil
 }
 
