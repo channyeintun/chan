@@ -14,6 +14,9 @@ Source plan: `enhancements.md`
 - Integrated streaming execution for approved tool calls.
   - Approved tools now run through `StreamingExecutor` so ordered results can be emitted as soon as contiguous results are ready.
   - Streaming parallel execution now respects `NAMI_MAX_TOOL_CONCURRENCY`.
+- Bounded turn-context git commands and made key persistence writes atomic.
+  - Git context collection commands now use a short timeout instead of waiting indefinitely.
+  - Session metadata, transcript rewrites, timelines, artifact content, and artifact metadata now write through temp files and rename.
 
 ## In Progress
 
@@ -21,7 +24,6 @@ Source plan: `enhancements.md`
 
 ## Pending
 
-- Add bounded/cached turn-context collection and atomic persistence improvements.
 - Consolidate shared provider transport behavior after differences are documented in debug logs.
 
 ## Notes

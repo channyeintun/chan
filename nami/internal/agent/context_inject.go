@@ -1,12 +1,16 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
+
+const gitCommandTimeout = 750 * time.Millisecond
 
 // SystemContext holds session-stable context (cached once per session).
 type SystemContext struct {
@@ -101,7 +105,9 @@ func firstNonEmptyContext(value string, fallback string) string {
 }
 
 func gitCommand(args ...string) string {
-	cmd := exec.Command("git", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""

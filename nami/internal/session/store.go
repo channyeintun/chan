@@ -59,7 +59,7 @@ func (s *Store) SaveMetadata(meta Metadata) error {
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
-	return os.WriteFile(filepath.Join(dir, "metadata.json"), data, 0o644)
+	return writeFileAtomic(filepath.Join(dir, "metadata.json"), data, 0o644)
 }
 
 // LoadMetadata reads session metadata.
@@ -101,19 +101,25 @@ func (s *Store) SaveTranscript(sessionID string, messages []api.Message) error {
 		return err
 	}
 
-	f, err := os.Create(filepath.Join(dir, "transcript.ndjson"))
+	path := filepath.Join(dir, "transcript.ndjson")
+	tmp, err := os.CreateTemp(dir, ".transcript.ndjson-*.tmp")
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
 
-	encoder := json.NewEncoder(f)
+	encoder := json.NewEncoder(tmp)
 	for _, msg := range messages {
 		if err := encoder.Encode(msg); err != nil {
+			_ = tmp.Close()
 			return err
 		}
 	}
-	return nil
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // SaveConversationTimeline persists the hydrated conversation timeline for a session.
@@ -126,7 +132,29 @@ func (s *Store) SaveConversationTimeline(sessionID string, payload ipc.Conversat
 	if err != nil {
 		return fmt.Errorf("marshal conversation timeline: %w", err)
 	}
-	return os.WriteFile(filepath.Join(dir, "timeline.json"), data, 0o644)
+	return writeFileAtomic(filepath.Join(dir, "timeline.json"), data, 0o644)
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 // LoadConversationTimeline reads the hydrated conversation timeline for a session.
