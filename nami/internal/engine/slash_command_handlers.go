@@ -74,15 +74,8 @@ func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayloa
 
 	currentProvider, currentModel := commandspkg.ResolveModelSelection(currentSelection)
 	currentRef := modelSelectionOptionRef(currentProvider, currentModel)
-	merged := append([]ipc.ModelSelectionOptionPayload(nil), options...)
-	seen := make(map[string]struct{}, len(merged)+len(api.CuratedModelCatalog))
-	for _, option := range merged {
-		ref := modelSelectionOptionRef(option.Provider, option.Model)
-		if ref == "" {
-			continue
-		}
-		seen[ref] = struct{}{}
-	}
+	merged := make([]ipc.ModelSelectionOptionPayload, 0, len(options)+len(api.CuratedModelCatalog))
+	seen := make(map[string]struct{}, len(options)+len(api.CuratedModelCatalog))
 
 	appendMatchingPresets := func(match func(commandspkg.ProviderStatus) bool) {
 		for _, preset := range api.CuratedModelCatalog {
@@ -98,7 +91,7 @@ func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayloa
 			}
 
 			merged = append(merged, ipc.ModelSelectionOptionPayload{
-				Label:       preset.Label,
+				Label:       fmt.Sprintf("%s via %s · %s", preset.Label, status.Label, commandspkg.ProviderStateLabel(status)),
 				Model:       strings.TrimSpace(preset.ModelID),
 				Provider:    providerID,
 				Description: formatCuratedModelSelectionDescription(preset.Description, status),
@@ -110,6 +103,17 @@ func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayloa
 
 	appendMatchingPresets(func(status commandspkg.ProviderStatus) bool { return status.Usable })
 	appendMatchingPresets(func(status commandspkg.ProviderStatus) bool { return !status.Usable })
+	for _, option := range options {
+		ref := modelSelectionOptionRef(option.Provider, option.Model)
+		if ref == "" {
+			continue
+		}
+		if _, exists := seen[ref]; exists {
+			continue
+		}
+		merged = append(merged, option)
+		seen[ref] = struct{}{}
+	}
 	return merged
 }
 

@@ -12,7 +12,7 @@ Constraint: Do not add tests.
 - [x] 4. Make capabilities model-specific
 - [x] 5. Make provider overrides provider-scoped
 - [x] 6. Move curated models into a model catalog
-- [ ] 7. Refactor the model picker around models first
+- [x] 7. Refactor the model picker around models first
 - [ ] 8. Decouple `/connect` from static provider presets
 - [ ] 9. Fix subagent provider resolution consistency
 - [ ] 10. Store recent model selection as structured data
@@ -29,3 +29,4 @@ Constraint: Do not add tests.
 - 2026-05-21: Added `api.ResolveModelCapabilities` with catalog, family, provider-default, and conservative fallback resolution; updated API clients to bind capabilities from the selected model instead of directly copying provider presets.
 - 2026-05-21: Added provider-scoped config overrides for base URL, API key environment variable, and default model; migrated legacy top-level `base_url` into the active provider override at load time and applied overrides to provider status/client creation.
 - 2026-05-21: Moved curated slash-command model entries into `api.CuratedModelCatalog` with model/provider IDs, family, cost warning, and alias metadata; updated the model picker to read curated entries from the catalog.
+- 2026-05-21: Changed curated model picker construction to emit catalog model entries before provider-default routes, labeling each model with its provider route and provider usability while preserving fallback provider default options.
