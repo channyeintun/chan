@@ -148,6 +148,12 @@ var curatedModelSelectionPresets = []modelSelectionPreset{
 		Description: "Gemini pro preset",
 	},
 	{
+		Label:       "Gemini 3.5 Flash",
+		Model:       "gemini-3.5-flash",
+		Provider:    "gemini",
+		Description: "Gemini 3.5 flash preset",
+	},
+	{
 		Label:       "Gemma 4 31B",
 		Model:       "gemma-4-31B",
 		Provider:    "ollama",
