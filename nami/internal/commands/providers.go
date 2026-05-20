@@ -33,7 +33,16 @@ type ProviderStatus struct {
 type ProviderSnapshot struct {
 	ActiveProvider string
 	ActiveModel    string
+	Selection      SelectionStatus
 	Providers      []ProviderStatus
+}
+
+type SelectionStatus struct {
+	Requested      config.ModelSelection
+	Resolved       config.ModelSelection
+	ProviderUsable bool
+	ModelSupported bool
+	Reason         string
 }
 
 func FormatProviderSnapshot(snapshot ProviderSnapshot) string {
@@ -42,6 +51,9 @@ func FormatProviderSnapshot(snapshot ProviderSnapshot) string {
 		lines = append(lines, fmt.Sprintf("Active selection: %s/%s", colorProviderName(snapshot.ActiveProvider), snapshot.ActiveModel))
 	} else if snapshot.ActiveModel != "" {
 		lines = append(lines, fmt.Sprintf("Active selection: %s", snapshot.ActiveModel))
+	}
+	if snapshot.Selection.Reason != "" {
+		lines = append(lines, fmt.Sprintf("Selection status: provider usable %t · model supported %t · %s", snapshot.Selection.ProviderUsable, snapshot.Selection.ModelSupported, snapshot.Selection.Reason))
 	}
 
 	if firstUsable, ok := snapshot.FirstUsable(); ok {
@@ -207,7 +219,12 @@ func DiscoverProviderSnapshot(cfg config.Config) ProviderSnapshot {
 	snapshot := ProviderSnapshot{
 		ActiveProvider: activeProvider,
 		ActiveModel:    activeModel,
-		Providers:      make([]ProviderStatus, 0, len(api.Presets)),
+		Selection: SelectionStatus{
+			Requested: config.NewModelSelection(activeProvider, activeModel, cfg.ModelSource, activeProvider != ""),
+			Resolved:  config.NewModelSelection(activeProvider, activeModel, cfg.ModelSource, activeProvider != ""),
+			Reason:    "active selection",
+		},
+		Providers: make([]ProviderStatus, 0, len(api.Presets)),
 	}
 
 	for _, providerID := range orderedProviderIDs() {
@@ -225,6 +242,10 @@ func DiscoverProviderSnapshot(cfg config.Config) ProviderSnapshot {
 		preset.EnvKeyVar = envKey
 		preset.DefaultModel = defaultModel
 		populateProviderStatus(&status, cfg, activeProvider, preset)
+		if providerID == activeProvider {
+			snapshot.Selection.ProviderUsable = status.Usable
+			snapshot.Selection.ModelSupported = activeModel == "" || modelselection.IsModelCompatibleWithProvider(activeModel, activeProvider) || strings.EqualFold(activeModel, status.DefaultModel)
+		}
 		snapshot.Providers = append(snapshot.Providers, status)
 	}
 
