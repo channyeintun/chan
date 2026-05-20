@@ -22,8 +22,9 @@ type Config struct {
 	ModelSource      string    `json:"-"`
 
 	// Provider-level overrides
-	BaseURL string `json:"base_url,omitempty"`
-	APIKey  string `json:"-"` // never serialized
+	BaseURL   string                      `json:"base_url,omitempty"`
+	APIKey    string                      `json:"-"` // never serialized
+	Providers map[string]ProviderOverride `json:"providers,omitempty"`
 
 	// Session
 	DefaultMode             string  `json:"default_mode,omitempty"` // "plan" or "fast"
@@ -56,6 +57,12 @@ type CodexAuth struct {
 	RefreshToken    string `json:"refresh_token,omitempty"`
 	ExpiresAtUnixMS int64  `json:"expires_at_unix_ms,omitempty"`
 	AccountID       string `json:"account_id,omitempty"`
+}
+
+type ProviderOverride struct {
+	BaseURL      string `json:"base_url,omitempty"`
+	APIKeyEnv    string `json:"api_key_env,omitempty"`
+	DefaultModel string `json:"default_model,omitempty"`
 }
 
 // DefaultConfig returns the configuration with sensible defaults.
@@ -130,8 +137,24 @@ func loadUserConfig() Config {
 			cfg.SubagentModel = mod
 		}
 	}
+	migrateProviderOverrides(&cfg)
 
 	return cfg
+}
+
+func migrateProviderOverrides(cfg *Config) {
+	if cfg == nil || strings.TrimSpace(cfg.BaseURL) == "" || strings.TrimSpace(cfg.Provider) == "" {
+		return
+	}
+	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
+	if cfg.Providers == nil {
+		cfg.Providers = make(map[string]ProviderOverride)
+	}
+	override := cfg.Providers[provider]
+	if strings.TrimSpace(override.BaseURL) == "" {
+		override.BaseURL = strings.TrimSpace(cfg.BaseURL)
+		cfg.Providers[provider] = override
+	}
 }
 
 func applyEnvOverrides(cfg *Config) {
@@ -212,6 +235,44 @@ func applyEnvOverrides(cfg *Config) {
 			fmt.Fprintf(os.Stderr, "warning: invalid NAMI_ENABLE_MICROCOMPACT %q: %v\n", v, err)
 		}
 	}
+}
+
+func (cfg Config) ApplyProviderOverride(providerID string) Config {
+	providerID = strings.ToLower(strings.TrimSpace(providerID))
+	if providerID == "" || cfg.Providers == nil {
+		return cfg
+	}
+	override := cfg.Providers[providerID]
+	if strings.TrimSpace(override.BaseURL) != "" {
+		cfg.BaseURL = strings.TrimSpace(override.BaseURL)
+	}
+	if strings.TrimSpace(override.APIKeyEnv) != "" && strings.TrimSpace(cfg.APIKey) == "" {
+		cfg.APIKey = strings.TrimSpace(os.Getenv(strings.TrimSpace(override.APIKeyEnv)))
+	}
+	if strings.TrimSpace(override.DefaultModel) != "" && strings.TrimSpace(cfg.Model) == "" {
+		cfg.Model = strings.TrimSpace(override.DefaultModel)
+	}
+	return cfg
+}
+
+func (cfg Config) ProviderAPIKeyEnv(providerID string, fallback string) string {
+	providerID = strings.ToLower(strings.TrimSpace(providerID))
+	if providerID != "" && cfg.Providers != nil {
+		if override := strings.TrimSpace(cfg.Providers[providerID].APIKeyEnv); override != "" {
+			return override
+		}
+	}
+	return fallback
+}
+
+func (cfg Config) ProviderDefaultModel(providerID string, fallback string) string {
+	providerID = strings.ToLower(strings.TrimSpace(providerID))
+	if providerID != "" && cfg.Providers != nil {
+		if override := strings.TrimSpace(cfg.Providers[providerID].DefaultModel); override != "" {
+			return override
+		}
+	}
+	return fallback
 }
 
 // ParseModel splits "provider/model" into (provider, model).

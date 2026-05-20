@@ -175,7 +175,7 @@ func ResolveActiveModelSelection(cfg config.Config) config.ModelSelection {
 	if p != "" {
 		if m == "" {
 			if preset, ok := api.Presets[normalizeProviderID(p)]; ok {
-				m = preset.DefaultModel
+				m = cfg.ProviderDefaultModel(normalizeProviderID(p), preset.DefaultModel)
 			}
 		}
 		return config.NewModelSelection(normalizeProviderID(p), m, cfg.ModelSource, true)
@@ -194,7 +194,7 @@ func ResolveSubagentModelSelection(cfg config.Config) config.ModelSelection {
 	if p != "" {
 		if m == "" {
 			if preset, ok := api.Presets[normalizeProviderID(p)]; ok {
-				m = preset.DefaultModel
+				m = cfg.ProviderDefaultModel(normalizeProviderID(p), preset.DefaultModel)
 			}
 		}
 		return config.NewModelSelection(normalizeProviderID(p), m, "subagent", true)
@@ -212,14 +212,18 @@ func DiscoverProviderSnapshot(cfg config.Config) ProviderSnapshot {
 
 	for _, providerID := range orderedProviderIDs() {
 		preset := api.Presets[providerID]
+		defaultModel := cfg.ProviderDefaultModel(providerID, preset.DefaultModel)
+		envKey := cfg.ProviderAPIKeyEnv(providerID, preset.EnvKeyVar)
 		status := ProviderStatus{
 			ID:           providerID,
 			Label:        providerDisplayLabel(providerID),
-			DefaultModel: preset.DefaultModel,
+			DefaultModel: defaultModel,
 			AuthSource:   "none",
-			SetupHint:    providerSetupHint(providerID, preset.EnvKeyVar),
+			SetupHint:    providerSetupHint(providerID, envKey),
 			Current:      providerID == activeProvider,
 		}
+		preset.EnvKeyVar = envKey
+		preset.DefaultModel = defaultModel
 		populateProviderStatus(&status, cfg, activeProvider, preset)
 		snapshot.Providers = append(snapshot.Providers, status)
 	}

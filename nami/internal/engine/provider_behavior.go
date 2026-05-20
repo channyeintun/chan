@@ -38,6 +38,7 @@ func providerBehaviorFor(provider string) providerBehavior {
 }
 
 func (standardProviderBehavior) NewClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
+	cfg = cfg.ApplyProviderOverride(provider)
 	return api.NewClientForProvider(provider, model, cfg.APIKey, cfg.BaseURL)
 }
 
@@ -65,6 +66,7 @@ func (standardProviderBehavior) RetainsSelectionProvider() bool {
 }
 
 func (gitHubCopilotProviderBehavior) NewClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
+	cfg = cfg.ApplyProviderOverride(provider)
 	resolved, err := resolveGitHubCopilotConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -127,6 +129,7 @@ func (gitHubCopilotProviderBehavior) RetainsSelectionProvider() bool {
 }
 
 func (codexProviderBehavior) NewClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
+	cfg = cfg.ApplyProviderOverride(provider)
 	resolved, err := resolveCodexConfig(cfg)
 	if err != nil {
 		return nil, err
