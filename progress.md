@@ -7,7 +7,7 @@ Constraint: Do not add tests.
 ## Tasks
 
 - [x] 1. Add a canonical model selection type
-- [ ] 2. Split provider registry from model catalog
+- [x] 2. Split provider registry from model catalog
 - [ ] 3. Centralize selection resolution
 - [ ] 4. Make capabilities model-specific
 - [ ] 5. Make provider overrides provider-scoped
@@ -24,3 +24,4 @@ Constraint: Do not add tests.
 
 - 2026-05-21: Created progress tracker from `enhancements.md`.
 - 2026-05-21: Added `config.ModelSelection` and `config.ResolvedModelSelection`; routed existing active, subagent, and engine model reference parsing through the canonical selection value while preserving current string boundaries.
+- 2026-05-21: Split API provider configuration into `ProviderSpec`, `ModelSpec`, and `ProviderModelSupport` registries; generated legacy `api.Presets` from the split metadata and moved client factory lookup to provider specs.

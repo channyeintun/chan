@@ -31,14 +31,14 @@ func NewClientForProvider(provider, model, apiKey, baseURL string) (LLMClient, e
 		return nil, fmt.Errorf("provider is required")
 	}
 
-	preset, ok := Presets[provider]
+	spec, ok := ProviderSpecFor(provider)
 	if !ok {
 		return nil, fmt.Errorf("unsupported provider %q", provider)
 	}
 
-	factory, ok := clientFactories[preset.ClientType]
+	factory, ok := clientFactories[spec.Protocol]
 	if !ok {
-		return nil, fmt.Errorf("unsupported client type %d for provider %q", preset.ClientType, provider)
+		return nil, fmt.Errorf("unsupported client type %d for provider %q", spec.Protocol, provider)
 	}
 
 	return factory(provider, model, apiKey, baseURL)
