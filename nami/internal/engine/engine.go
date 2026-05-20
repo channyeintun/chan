@@ -146,15 +146,11 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	toolpkg.SetToolSearchRuntime(registry)
 	defer toolpkg.SetToolSearchRuntime(nil)
 	defer toolpkg.SetSessionControlRuntime(nil)
-	mcpManager.Start(ctx)
 	defer func() {
 		if err := mcpManager.Close(); err != nil && debuglog.Enabled {
 			fmt.Fprintf(os.Stderr, "mcp: close: %v\n", err)
 		}
 	}()
-	for _, discovered := range mcpManager.Tools() {
-		registry.Register(toolpkg.NewMCPTool(mcpManager, discovered))
-	}
 	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, hookRunner, modelState, subagentModelState, loopState, cwd)))
 	registry.Register(toolpkg.NewAgentStatusTool(lookupBackgroundAgentStatus))
 	registry.Register(toolpkg.NewAgentStopTool(func(ctx context.Context, req toolpkg.AgentStopRequest) (toolpkg.AgentRunResult, error) {
@@ -199,6 +195,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 			return err
 		}
 	}
+	startMCPDiscovery(ctx, bridge, registry, mcpManager)
 
 	// Start the message router as soon as the UI is ready so any immediate user
 	// input is buffered while startup capability refresh completes.
@@ -538,6 +535,48 @@ func ensureClientForSelection(modelSelection string, cfg config.Config, current 
 		return nil, modelRef(provider, model), err
 	}
 	return client, modelRef(provider, client.ModelID()), nil
+}
+
+func startMCPDiscovery(ctx context.Context, bridge *ipc.Bridge, registry *toolpkg.Registry, manager *mcppkg.Manager) {
+	if manager == nil {
+		return
+	}
+	statuses := manager.Statuses()
+	enabledCount := 0
+	for _, status := range statuses {
+		if status.Enabled {
+			enabledCount++
+		}
+	}
+	if enabledCount == 0 {
+		return
+	}
+
+	_ = bridge.EmitNotice(fmt.Sprintf("MCP discovery started for %d server(s).", enabledCount))
+	go func() {
+		manager.StartWithCallback(ctx, func(status mcppkg.ServerStatus) {
+			if status.Connected {
+				registered := registerMCPToolsForServer(registry, manager, status.Name)
+				_ = bridge.EmitNotice(fmt.Sprintf("MCP server %q connected with %d tool(s).", status.Name, registered))
+				return
+			}
+			if strings.TrimSpace(status.Error) != "" {
+				_ = bridge.EmitNotice(fmt.Sprintf("MCP server %q failed: %s", status.Name, status.Error))
+			}
+		})
+	}()
+}
+
+func registerMCPToolsForServer(registry *toolpkg.Registry, manager *mcppkg.Manager, serverName string) int {
+	registered := 0
+	for _, discovered := range manager.Tools() {
+		if discovered.ServerName != serverName {
+			continue
+		}
+		registry.Register(toolpkg.NewMCPTool(manager, discovered))
+		registered++
+	}
+	return registered
 }
 
 func normalizeProvider(provider string) string {

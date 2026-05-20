@@ -60,6 +60,8 @@ type ResourceReadResult struct {
 	Contents   []ResourceContent
 }
 
+type StatusCallback func(ServerStatus)
+
 type Manager struct {
 	mu          sync.RWMutex
 	definitions map[string]ServerDefinition
@@ -113,6 +115,10 @@ func NewManager(cwd string, cfg configpkg.MCPConfig) *Manager {
 }
 
 func (m *Manager) Start(ctx context.Context) {
+	m.StartWithCallback(ctx, nil)
+}
+
+func (m *Manager) StartWithCallback(ctx context.Context, callback StatusCallback) {
 	if m == nil {
 		return
 	}
@@ -134,7 +140,10 @@ func (m *Manager) Start(ctx context.Context) {
 		wg.Add(1)
 		go func(def ServerDefinition) {
 			defer wg.Done()
-			m.startServer(ctx, def)
+			status := m.startServer(ctx, def)
+			if callback != nil {
+				callback(status)
+			}
 		}(definition)
 	}
 	wg.Wait()
@@ -314,7 +323,7 @@ func (m *Manager) ReadResource(ctx context.Context, serverName, uri string) (Res
 	}
 	return ResourceReadResult{ServerName: serverName, URI: uri, Contents: contents}, nil
 }
-func (m *Manager) startServer(ctx context.Context, definition ServerDefinition) {
+func (m *Manager) startServer(ctx context.Context, definition ServerDefinition) ServerStatus {
 	connectCtx, cancel := context.WithTimeout(ctx, definition.ConnectTimeout)
 	defer cancel()
 
@@ -323,7 +332,7 @@ func (m *Manager) startServer(ctx context.Context, definition ServerDefinition) 
 		m.updateStatus(definition.Name, func(status *ServerStatus) {
 			status.Error = err.Error()
 		})
-		return
+		return m.status(definition.Name)
 	}
 
 	tools, err := session.ListTools(connectCtx)
@@ -332,7 +341,7 @@ func (m *Manager) startServer(ctx context.Context, definition ServerDefinition) 
 		m.updateStatus(definition.Name, func(status *ServerStatus) {
 			status.Error = fmt.Sprintf("list tools: %v", err)
 		})
-		return
+		return m.status(definition.Name)
 	}
 
 	filteredTools := filterTools(definition, tools)
@@ -387,6 +396,16 @@ func (m *Manager) startServer(ctx context.Context, definition ServerDefinition) 
 	status.Error = ""
 	m.statuses[definition.Name] = status
 	m.mu.Unlock()
+	return status
+}
+
+func (m *Manager) status(name string) ServerStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	status := m.statuses[name]
+	status.ToolNames = append([]string(nil), status.ToolNames...)
+	status.Warnings = append([]string(nil), status.Warnings...)
+	return status
 }
 
 func (m *Manager) updateStatus(name string, update func(*ServerStatus)) {
