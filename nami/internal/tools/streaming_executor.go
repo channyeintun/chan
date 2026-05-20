@@ -20,6 +20,7 @@ type StreamingExecutor struct {
 	activeParallel int
 	activeSerial   bool
 	activeCount    int
+	maxParallel    int
 }
 
 type streamingCall struct {
@@ -48,6 +49,7 @@ func NewStreamingExecutor(ctx context.Context) *StreamingExecutor {
 		ctx:          childCtx,
 		cancel:       cancel,
 		completionCh: make(chan int, MaxConcurrency()),
+		maxParallel:  MaxConcurrency(),
 	}
 }
 
@@ -195,7 +197,7 @@ func (e *StreamingExecutor) canStartLocked(parallel bool) bool {
 	if !parallel {
 		return false
 	}
-	return !e.activeSerial
+	return !e.activeSerial && e.activeParallel < e.maxParallel
 }
 
 func (e *StreamingExecutor) startLocked(call *streamingCall) {

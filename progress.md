@@ -11,6 +11,9 @@ Source plan: `enhancements.md`
 - Moved MCP resource tools to prefer session-scoped manager injection.
   - Stdio engine now registers MCP resource tools with the active session manager.
   - Package-global MCP manager fallback remains for compatibility outside the stdio engine.
+- Integrated streaming execution for approved tool calls.
+  - Approved tools now run through `StreamingExecutor` so ordered results can be emitted as soon as contiguous results are ready.
+  - Streaming parallel execution now respects `NAMI_MAX_TOOL_CONCURRENCY`.
 
 ## In Progress
 
@@ -18,7 +21,6 @@ Source plan: `enhancements.md`
 
 ## Pending
 
-- Integrate streaming tool execution for early result delivery.
 - Add bounded/cached turn-context collection and atomic persistence improvements.
 - Consolidate shared provider transport behavior after differences are documented in debug logs.
 

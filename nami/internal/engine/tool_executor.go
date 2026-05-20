@@ -255,16 +255,33 @@ func executeApprovedToolBatches(
 	calls []api.ToolCall,
 	state *toolExecutionState,
 ) error {
-	for _, batch := range toolpkg.PartitionBatches(state.approved) {
-		batchStart := time.Now()
-		batchResults := toolpkg.ExecuteBatch(ctx, batch)
-		tracker.RecordToolDuration(time.Since(batchStart))
-		for _, result := range batchResults {
+	if len(state.approved) == 0 {
+		return nil
+	}
+
+	executor := toolpkg.NewStreamingExecutor(ctx)
+	defer executor.Cancel()
+	startedAt := time.Now()
+	for _, call := range state.approved {
+		if err := executor.Add(call); err != nil {
+			return err
+		}
+	}
+	executor.Close()
+
+	for !executor.Done() {
+		ready, err := executor.Wait(ctx)
+		if err != nil {
+			return err
+		}
+		for _, result := range ready {
 			if err := handleToolBatchResult(ctx, bridge, artifactManager, hookRunner, sessionID, turnMetrics, turnStats, calls[result.Index], result, state); err != nil {
+				executor.Cancel()
 				return err
 			}
 		}
 	}
+	tracker.RecordToolDuration(time.Since(startedAt))
 	return nil
 }
 
