@@ -164,6 +164,11 @@ func BuildModelSelectionOptions(snapshot ProviderSnapshot, currentSelection stri
 }
 
 func ResolveActiveSelection(cfg config.Config) (provider, model string) {
+	selection := ResolveActiveModelSelection(cfg)
+	return selection.ProviderID, selection.ModelID
+}
+
+func ResolveActiveModelSelection(cfg config.Config) config.ModelSelection {
 	p := strings.TrimSpace(cfg.Provider)
 	m := strings.TrimSpace(cfg.Model)
 	if p != "" {
@@ -172,12 +177,17 @@ func ResolveActiveSelection(cfg config.Config) (provider, model string) {
 				m = preset.DefaultModel
 			}
 		}
-		return normalizeProviderID(p), m
+		return config.NewModelSelection(normalizeProviderID(p), m, cfg.ModelSource, true)
 	}
-	return ResolveModelSelection(m)
+	return ResolveModelSelectionValue(m, cfg.ModelSource)
 }
 
 func ResolveSubagentSelection(cfg config.Config) (provider, model string) {
+	selection := ResolveSubagentModelSelection(cfg)
+	return selection.ProviderID, selection.ModelID
+}
+
+func ResolveSubagentModelSelection(cfg config.Config) config.ModelSelection {
 	p := strings.TrimSpace(cfg.SubagentProvider)
 	m := strings.TrimSpace(cfg.SubagentModel)
 	if p != "" {
@@ -186,9 +196,9 @@ func ResolveSubagentSelection(cfg config.Config) (provider, model string) {
 				m = preset.DefaultModel
 			}
 		}
-		return normalizeProviderID(p), m
+		return config.NewModelSelection(normalizeProviderID(p), m, "subagent", true)
 	}
-	return ResolveModelSelection(m)
+	return ResolveModelSelectionValue(m, "subagent")
 }
 
 func DiscoverProviderSnapshot(cfg config.Config) ProviderSnapshot {
@@ -241,17 +251,18 @@ func (snapshot ProviderSnapshot) LookupProvider(providerID string) (ProviderStat
 }
 
 func ResolveModelSelection(selection string) (string, string) {
-	provider, model := config.ParseModel(strings.TrimSpace(selection))
-	provider = normalizeProviderID(provider)
-	model = strings.TrimSpace(model)
-	if model == "" && provider != "" {
-		model = provider
-		provider = ""
-	}
+	resolved := ResolveModelSelectionValue(selection, "")
+	return resolved.ProviderID, resolved.ModelID
+}
+
+func ResolveModelSelectionValue(selection string, source string) config.ModelSelection {
+	parsed := config.ParseModelSelection(selection, source)
+	provider := normalizeProviderID(parsed.ProviderID)
+	model := strings.TrimSpace(parsed.ModelID)
 	if provider == "" && model != "" {
 		provider = InferProviderFromModel(model)
 	}
-	return provider, model
+	return config.NewModelSelection(provider, model, parsed.Source, parsed.ExplicitProvider)
 }
 
 func InferProviderFromModel(model string) string {

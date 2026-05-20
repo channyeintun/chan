@@ -6,7 +6,7 @@ Constraint: Do not add tests.
 
 ## Tasks
 
-- [ ] 1. Add a canonical model selection type
+- [x] 1. Add a canonical model selection type
 - [ ] 2. Split provider registry from model catalog
 - [ ] 3. Centralize selection resolution
 - [ ] 4. Make capabilities model-specific
@@ -23,3 +23,4 @@ Constraint: Do not add tests.
 ## Log
 
 - 2026-05-21: Created progress tracker from `enhancements.md`.
+- 2026-05-21: Added `config.ModelSelection` and `config.ResolvedModelSelection`; routed existing active, subagent, and engine model reference parsing through the canonical selection value while preserving current string boundaries.

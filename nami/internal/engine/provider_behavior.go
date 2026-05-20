@@ -41,15 +41,11 @@ func (standardProviderBehavior) NewClient(provider, model string, cfg config.Con
 }
 
 func (standardProviderBehavior) ResolveSelection(input, fallbackProvider string) (string, string) {
-	provider, model := config.ParseModel(strings.TrimSpace(input))
-	if model == "" && provider != "" {
-		model = provider
-		provider = ""
+	selection := config.ParseModelSelection(input, "")
+	if selection.ProviderID != "" {
+		return normalizeProvider(selection.ProviderID), selection.ModelID
 	}
-	if provider != "" {
-		return normalizeProvider(provider), model
-	}
-	return inferProviderFromModel(model, fallbackProvider), model
+	return inferProviderFromModel(selection.ModelID, fallbackProvider), selection.ModelID
 }
 
 func (standardProviderBehavior) DefaultSubagentModel(cfg config.Config, activeModelID string) string {
@@ -86,16 +82,12 @@ func (gitHubCopilotProviderBehavior) NewClient(provider, model string, cfg confi
 }
 
 func (gitHubCopilotProviderBehavior) ResolveSelection(input, fallbackProvider string) (string, string) {
-	provider, model := config.ParseModel(strings.TrimSpace(input))
-	if model == "" && provider != "" {
-		model = provider
-		provider = ""
-	}
-	if provider != "" {
-		return normalizeProvider(provider), model
+	selection := config.ParseModelSelection(input, "")
+	if selection.ProviderID != "" {
+		return normalizeProvider(selection.ProviderID), selection.ModelID
 	}
 	if normalizeProvider(fallbackProvider) == "github-copilot" {
-		return "github-copilot", model
+		return "github-copilot", selection.ModelID
 	}
 	return standardProviderBehavior{}.ResolveSelection(input, fallbackProvider)
 }
@@ -209,13 +201,9 @@ func normalizeUsableSubagentSelection(cfg config.Config, activeModelID string, s
 		return "", false
 	}
 
-	provider, model := config.ParseModel(selection)
-	provider = normalizeProvider(provider)
-	if strings.TrimSpace(model) == "" && provider != "" {
-		model = provider
-		provider = ""
-	}
-	model = strings.TrimSpace(model)
+	parsed := config.ParseModelSelection(selection, "subagent")
+	provider := normalizeProvider(parsed.ProviderID)
+	model := strings.TrimSpace(parsed.ModelID)
 	if model == "" {
 		return "", false
 	}

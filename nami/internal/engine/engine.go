@@ -531,8 +531,8 @@ func ensureClientForSelection(modelSelection string, cfg config.Config, current 
 		return current, modelSelection, nil
 	}
 
-	provider, model := config.ParseModel(strings.TrimSpace(modelSelection))
-	provider, model = resolveModelSelection(modelSelection, provider)
+	provider, _ := config.ParseModel(strings.TrimSpace(modelSelection))
+	provider, model := resolveModelSelection(modelSelection, provider)
 	client, err := newLLMClient(provider, model, cfg)
 	if err != nil {
 		return nil, modelRef(provider, model), err
@@ -548,15 +548,7 @@ func normalizeProvider(provider string) string {
 }
 
 func modelRef(provider, model string) string {
-	provider = normalizeProvider(provider)
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return provider
-	}
-	if provider == "" {
-		return model
-	}
-	return provider + "/" + model
+	return config.NewModelSelection(normalizeProvider(provider), model, "", provider != "").Ref()
 }
 
 func resolveModelSelection(input string, fallbackProvider string) (string, string) {
