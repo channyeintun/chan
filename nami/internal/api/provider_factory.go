@@ -7,6 +7,15 @@ import (
 
 type ClientFactory func(provider, model, apiKey, baseURL string) (LLMClient, error)
 
+type ProviderRoute struct {
+	ProviderID   string
+	ModelID      string
+	Protocol     ClientType
+	BaseURL      string
+	APIKey       string
+	Capabilities ModelCapabilities
+}
+
 var clientFactories = map[ClientType]ClientFactory{
 	AnthropicAPI: func(provider, model, apiKey, baseURL string) (LLMClient, error) {
 		return NewAnthropicClientForProvider(provider, model, apiKey, baseURL)
@@ -35,11 +44,38 @@ func NewClientForProvider(provider, model, apiKey, baseURL string) (LLMClient, e
 	if !ok {
 		return nil, fmt.Errorf("unsupported provider %q", provider)
 	}
+	if strings.TrimSpace(model) == "" {
+		model = spec.DefaultModel
+	}
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = spec.BaseURL
+	}
+	return NewClientForRoute(ProviderRoute{
+		ProviderID:   provider,
+		ModelID:      model,
+		Protocol:     spec.Protocol,
+		BaseURL:      baseURL,
+		APIKey:       apiKey,
+		Capabilities: ResolveModelCapabilities(provider, model),
+	})
+}
 
-	factory, ok := clientFactories[spec.Protocol]
+func NewClientForRoute(route ProviderRoute) (LLMClient, error) {
+	provider := strings.TrimSpace(route.ProviderID)
+	if provider == "" {
+		return nil, fmt.Errorf("provider is required")
+	}
+	factory, ok := clientFactories[route.Protocol]
 	if !ok {
-		return nil, fmt.Errorf("unsupported client type %d for provider %q", spec.Protocol, provider)
+		return nil, fmt.Errorf("unsupported client type %d for provider %q", route.Protocol, provider)
 	}
 
-	return factory(provider, model, apiKey, baseURL)
+	client, err := factory(provider, route.ModelID, route.APIKey, route.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	if route.Capabilities != (ModelCapabilities{}) {
+		client = WithCapabilities(client, route.Capabilities)
+	}
+	return client, nil
 }

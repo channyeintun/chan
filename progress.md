@@ -17,7 +17,7 @@ Constraint: Do not add tests.
 - [x] 9. Fix subagent provider resolution consistency
 - [x] 10. Store recent model selection as structured data
 - [x] 11. Split provider status from selection status
-- [ ] 12. Make client factories protocol-based
+- [x] 12. Make client factories protocol-based
 - [ ] 13. Add provider/model architecture tests (skipped: user constraint forbids adding tests)
 
 ## Log
@@ -34,3 +34,4 @@ Constraint: Do not add tests.
 - 2026-05-21: Updated subagent fallback/configured model resolution to use `ResolveActiveSelection` and `ResolveSubagentSelection`, preserving explicit `SubagentProvider` and validating the resolved subagent route independently.
 - 2026-05-21: Changed `recent-model.json` persistence to structured provider/model/explicit-provider fields with backward-compatible loading of legacy combined model strings; startup now restores recent selections from structured fields.
 - 2026-05-21: Added `SelectionStatus` to provider snapshots, including requested/resolved selections plus separate provider usability and model support diagnostics; formatted provider output now shows selection status independently from provider setup state.
+- 2026-05-21: Added `api.ProviderRoute` and `api.NewClientForRoute`; `NewClientForProvider` now resolves provider specs into a concrete route and dispatches client construction by protocol with route-level capabilities.
