@@ -62,126 +62,20 @@ func (fn slashCommandHandlerFunc) Handle(cmd *slashCommandContext) error {
 	return fn(cmd)
 }
 
-type modelSelectionPreset struct {
-	Label       string
-	Model       string
-	Provider    string
-	Description string
-}
-
 type modelSelectionChoice struct {
 	Model    string
 	Provider string
 }
 
-var curatedModelSelectionPresets = []modelSelectionPreset{
-	{
-		Label:       "Claude Sonnet 4.6",
-		Model:       "claude-sonnet-4-6",
-		Provider:    "anthropic",
-		Description: "Sonnet preset",
-	},
-	{
-		Label:       "Claude Opus 4.7 (Expensive)",
-		Model:       "claude-opus-4-7",
-		Provider:    "anthropic",
-		Description: "Expensive latest Opus preset",
-	},
-	{
-		Label:       "Claude Opus 4.6 (Expensive)",
-		Model:       "claude-opus-4-6",
-		Provider:    "anthropic",
-		Description: "Expensive previous Opus preset",
-	},
-	{
-		Label:       "Claude Haiku 4.5",
-		Model:       "claude-haiku-4-5",
-		Provider:    "anthropic",
-		Description: "Haiku preset",
-	},
-	{
-		Label:       "GPT 5.4",
-		Model:       "gpt-5.4",
-		Provider:    "openai",
-		Description: "Default GPT preset",
-	},
-	{
-		Label:       "GPT 5.5 (Expensive)",
-		Model:       "gpt-5.5",
-		Provider:    "openai",
-		Description: "Expensive latest GPT preset",
-	},
-	{
-		Label:       "GPT 5 Mini",
-		Model:       "gpt-5-mini",
-		Provider:    "openai",
-		Description: "OpenAI GPT 5 mini",
-	},
-	{
-		Label:       "GPT 4.1",
-		Model:       "gpt-4.1",
-		Provider:    "openai",
-		Description: "OpenAI GPT 4.1",
-	},
-	{
-		Label:       "GPT 4o",
-		Model:       "gpt-4o",
-		Provider:    "openai",
-		Description: "OpenAI GPT 4o",
-	},
-	{
-		Label:       "Gemini 3 Flash",
-		Model:       "gemini-3-flash-preview",
-		Provider:    "gemini",
-		Description: "Gemini flash preset",
-	},
-	{
-		Label:       "Gemini 3.1 Flash Lite",
-		Model:       "gemini-3.1-flash-lite",
-		Provider:    "gemini",
-		Description: "Gemini flash-lite preset",
-	},
-	{
-		Label:       "Gemini 3.1 Pro",
-		Model:       "gemini-3.1-pro-preview",
-		Provider:    "gemini",
-		Description: "Gemini pro preset",
-	},
-	{
-		Label:       "Gemini 3.5 Flash",
-		Model:       "gemini-3.5-flash",
-		Provider:    "gemini",
-		Description: "Gemini 3.5 flash preset",
-	},
-	{
-		Label:       "Gemma 4 31B",
-		Model:       "gemma-4-31B",
-		Provider:    "ollama",
-		Description: "Gemma 4 31B preset",
-	},
-	{
-		Label:       "DeepSeek V4 Flash",
-		Model:       "deepseek-v4-flash",
-		Provider:    "deepseek",
-		Description: "DeepSeek fast v4 preset",
-	},
-	{
-		Label:       "DeepSeek V4 Pro",
-		Model:       "deepseek-v4-pro",
-		Provider:    "deepseek",
-		Description: "DeepSeek pro v4 preset",
-	},
-}
-
 func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayload, snapshot commandspkg.ProviderSnapshot, currentSelection string) []ipc.ModelSelectionOptionPayload {
-	if len(curatedModelSelectionPresets) == 0 {
+	if len(api.CuratedModelCatalog) == 0 {
 		return options
 	}
 
 	currentProvider, currentModel := commandspkg.ResolveModelSelection(currentSelection)
 	currentRef := modelSelectionOptionRef(currentProvider, currentModel)
 	merged := append([]ipc.ModelSelectionOptionPayload(nil), options...)
-	seen := make(map[string]struct{}, len(merged)+len(curatedModelSelectionPresets))
+	seen := make(map[string]struct{}, len(merged)+len(api.CuratedModelCatalog))
 	for _, option := range merged {
 		ref := modelSelectionOptionRef(option.Provider, option.Model)
 		if ref == "" {
@@ -191,21 +85,21 @@ func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayloa
 	}
 
 	appendMatchingPresets := func(match func(commandspkg.ProviderStatus) bool) {
-		for _, preset := range curatedModelSelectionPresets {
-			providerID := normalizeProvider(strings.TrimSpace(preset.Provider))
+		for _, preset := range api.CuratedModelCatalog {
+			providerID := normalizeProvider(strings.TrimSpace(preset.ProviderID))
 			status, ok := snapshot.LookupProvider(providerID)
 			if !ok || !match(status) {
 				continue
 			}
 
-			ref := modelSelectionOptionRef(providerID, preset.Model)
+			ref := modelSelectionOptionRef(providerID, preset.ModelID)
 			if _, exists := seen[ref]; exists {
 				continue
 			}
 
 			merged = append(merged, ipc.ModelSelectionOptionPayload{
 				Label:       preset.Label,
-				Model:       strings.TrimSpace(preset.Model),
+				Model:       strings.TrimSpace(preset.ModelID),
 				Provider:    providerID,
 				Description: formatCuratedModelSelectionDescription(preset.Description, status),
 				Active:      strings.EqualFold(ref, currentRef),
