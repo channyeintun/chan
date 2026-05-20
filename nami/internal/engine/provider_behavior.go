@@ -168,7 +168,7 @@ func defaultSubagentFallback(cfg config.Config, activeModelID string) string {
 		return strings.TrimSpace(activeModelID)
 	}
 
-	provider, model := config.ParseModel(strings.TrimSpace(cfg.Model))
+	provider, model := commandspkg.ResolveActiveSelection(cfg)
 	if strings.TrimSpace(model) != "" {
 		if strings.TrimSpace(provider) != "" {
 			return modelRef(provider, model)
@@ -184,7 +184,18 @@ func defaultSubagentFallback(cfg config.Config, activeModelID string) string {
 }
 
 func configuredSubagentModel(cfg config.Config, activeModelID string, defaultProvider string) (string, bool) {
-	return normalizeUsableSubagentSelection(cfg, activeModelID, cfg.SubagentModel, defaultProvider)
+	provider, model := commandspkg.ResolveSubagentSelection(cfg)
+	if strings.TrimSpace(model) == "" {
+		return "", false
+	}
+	if strings.TrimSpace(provider) != "" && strings.TrimSpace(defaultProvider) == "" {
+		defaultProvider = provider
+	}
+	selection := model
+	if strings.TrimSpace(provider) != "" {
+		selection = modelRef(provider, model)
+	}
+	return normalizeUsableSubagentSelection(cfg, activeModelID, selection, defaultProvider)
 }
 
 func coerceSessionSubagentModel(cfg config.Config, activeModelID string, selection string) string {
