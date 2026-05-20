@@ -125,7 +125,7 @@ func BuildModelSelectionOptions(snapshot ProviderSnapshot, currentSelection stri
 		label := "Current selection"
 		description := "Current session model"
 		if status, ok := snapshot.LookupProvider(currentProvider); ok {
-			label = fmt.Sprintf("Current · %s · %s", status.Label, ProviderStateLabel(status))
+			label = fmt.Sprintf("Current: %s (%s) · %s", currentModel, status.Label, ProviderStateLabel(status))
 			description = formatModelSelectionDescription(status)
 		}
 		options = append(options, ipc.ModelSelectionOptionPayload{
@@ -148,7 +148,7 @@ func BuildModelSelectionOptions(snapshot ProviderSnapshot, currentSelection stri
 				continue
 			}
 			options = append(options, ipc.ModelSelectionOptionPayload{
-				Label:       fmt.Sprintf("%s · %s", status.Label, ProviderStateLabel(status)),
+				Label:       fmt.Sprintf("%s (%s Default) · %s", status.DefaultModel, status.Label, ProviderStateLabel(status)),
 				Model:       status.DefaultModel,
 				Provider:    status.ID,
 				Description: formatModelSelectionDescription(status),
@@ -163,8 +163,36 @@ func BuildModelSelectionOptions(snapshot ProviderSnapshot, currentSelection stri
 	return options
 }
 
+func ResolveActiveSelection(cfg config.Config) (provider, model string) {
+	p := strings.TrimSpace(cfg.Provider)
+	m := strings.TrimSpace(cfg.Model)
+	if p != "" {
+		if m == "" {
+			if preset, ok := api.Presets[normalizeProviderID(p)]; ok {
+				m = preset.DefaultModel
+			}
+		}
+		return normalizeProviderID(p), m
+	}
+	return ResolveModelSelection(m)
+}
+
+func ResolveSubagentSelection(cfg config.Config) (provider, model string) {
+	p := strings.TrimSpace(cfg.SubagentProvider)
+	m := strings.TrimSpace(cfg.SubagentModel)
+	if p != "" {
+		if m == "" {
+			if preset, ok := api.Presets[normalizeProviderID(p)]; ok {
+				m = preset.DefaultModel
+			}
+		}
+		return normalizeProviderID(p), m
+	}
+	return ResolveModelSelection(m)
+}
+
 func DiscoverProviderSnapshot(cfg config.Config) ProviderSnapshot {
-	activeProvider, activeModel := ResolveModelSelection(cfg.Model)
+	activeProvider, activeModel := ResolveActiveSelection(cfg)
 	snapshot := ProviderSnapshot{
 		ActiveProvider: activeProvider,
 		ActiveModel:    activeModel,

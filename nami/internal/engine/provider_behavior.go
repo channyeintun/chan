@@ -255,7 +255,58 @@ func isSubagentProviderUsable(cfg config.Config, activeModelID string, providerI
 	return status.Usable
 }
 
+func isModelCompatibleWithProvider(model, provider string) bool {
+	lowerModel := strings.ToLower(strings.TrimSpace(model))
+	lowerProvider := strings.ToLower(strings.TrimSpace(provider))
+	switch lowerProvider {
+	case "github-copilot":
+		return strings.Contains(lowerModel, "gpt") ||
+			strings.HasPrefix(lowerModel, "o1") ||
+			strings.HasPrefix(lowerModel, "o3") ||
+			strings.HasPrefix(lowerModel, "o4") ||
+			strings.Contains(lowerModel, "claude") ||
+			strings.Contains(lowerModel, "sonnet") ||
+			strings.Contains(lowerModel, "opus") ||
+			strings.Contains(lowerModel, "haiku")
+	case "codex":
+		return strings.Contains(lowerModel, "gpt") ||
+			strings.HasPrefix(lowerModel, "o1") ||
+			strings.HasPrefix(lowerModel, "o3") ||
+			strings.HasPrefix(lowerModel, "o4")
+	case "openai":
+		return strings.Contains(lowerModel, "gpt") ||
+			strings.HasPrefix(lowerModel, "o1") ||
+			strings.HasPrefix(lowerModel, "o3") ||
+			strings.HasPrefix(lowerModel, "o4")
+	case "anthropic":
+		return strings.Contains(lowerModel, "claude") ||
+			strings.Contains(lowerModel, "sonnet") ||
+			strings.Contains(lowerModel, "opus") ||
+			strings.Contains(lowerModel, "haiku")
+	case "gemini":
+		return strings.Contains(lowerModel, "gemini")
+	case "deepseek":
+		return strings.Contains(lowerModel, "deepseek")
+	case "qwen":
+		return strings.Contains(lowerModel, "qwen")
+	case "glm":
+		return strings.Contains(lowerModel, "glm")
+	case "mistral":
+		return strings.Contains(lowerModel, "mistral")
+	case "groq":
+		return strings.Contains(lowerModel, "llama") || strings.Contains(lowerModel, "maverick")
+	case "ollama":
+		return strings.Contains(lowerModel, "gemma") || strings.Contains(lowerModel, "ollama")
+	default:
+		return false
+	}
+}
+
 func inferProviderFromModel(model, fallbackProvider string) string {
+	fallbackProvider = normalizeProvider(fallbackProvider)
+	if fallbackProvider != "" && isModelCompatibleWithProvider(model, fallbackProvider) {
+		return fallbackProvider
+	}
 	lower := strings.ToLower(strings.TrimSpace(model))
 	switch {
 	case strings.Contains(lower, "gemini"):
@@ -277,7 +328,7 @@ func inferProviderFromModel(model, fallbackProvider string) string {
 	case strings.Contains(lower, "claude"), strings.Contains(lower, "sonnet"), strings.Contains(lower, "opus"), strings.Contains(lower, "haiku"):
 		return "anthropic"
 	default:
-		return normalizeProvider(fallbackProvider)
+		return fallbackProvider
 	}
 }
 

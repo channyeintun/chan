@@ -198,7 +198,7 @@ func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayloa
 			}
 
 			merged = append(merged, ipc.ModelSelectionOptionPayload{
-				Label:       fmt.Sprintf("%s · %s · %s", preset.Label, status.Label, commandspkg.ProviderStateLabel(status)),
+				Label:       preset.Label,
 				Model:       strings.TrimSpace(preset.Model),
 				Provider:    providerID,
 				Description: formatCuratedModelSelectionDescription(preset.Description, status),
@@ -214,10 +214,15 @@ func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayloa
 }
 
 func formatCuratedModelSelectionDescription(summary string, status commandspkg.ProviderStatus) string {
-	parts := make([]string, 0, 3)
+	parts := make([]string, 0, 4)
 	if trimmed := strings.TrimSpace(summary); trimmed != "" {
 		parts = append(parts, trimmed)
 	}
+	providerInfo := status.Label
+	if state := commandspkg.ProviderStateLabel(status); state != "" {
+		providerInfo += " (" + state + ")"
+	}
+	parts = append(parts, providerInfo)
 	if status.AuthSource != "" && status.AuthSource != "none" {
 		parts = append(parts, status.AuthSource)
 	}
@@ -660,7 +665,10 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 	currentProvider = normalizeProvider(currentProvider)
 	providerHint := strings.TrimSpace(selected.Provider)
 	provider, model := resolveModelSelection(selectedModel, currentProvider)
-	if providerHint != "" && (!retainSelectionProvider(currentProvider) || requestedDefault) {
+	if currentProvider != "" && isModelCompatibleWithProvider(selectedModel, currentProvider) {
+		provider = currentProvider
+		model = selectedModel
+	} else if providerHint != "" && (!retainSelectionProvider(currentProvider) || requestedDefault) {
 		provider = normalizeProvider(providerHint)
 		model = selectedModel
 	}
@@ -764,7 +772,10 @@ func handleSubagentSlashCommand(cmd *slashCommandContext) error {
 	currentProvider = normalizeProvider(currentProvider)
 	providerHint := strings.TrimSpace(selected.Provider)
 	provider, model := resolveModelSelection(selectedModel, currentProvider)
-	if providerHint != "" && !retainSelectionProvider(currentProvider) {
+	if currentProvider != "" && isModelCompatibleWithProvider(selectedModel, currentProvider) {
+		provider = currentProvider
+		model = selectedModel
+	} else if providerHint != "" && !retainSelectionProvider(currentProvider) {
 		provider = normalizeProvider(providerHint)
 		model = selectedModel
 	}
@@ -773,6 +784,36 @@ func handleSubagentSlashCommand(cmd *slashCommandContext) error {
 		return err
 	}
 	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set subagent model to %s", commandspkg.FormatModelSelectionLabel(cmd.state.SubagentModelID)))
+}
+
+func handleLogoutSlashCommand(cmd *slashCommandContext) error {
+	provider := strings.ToLower(strings.TrimSpace(cmd.args))
+
+	cfg := config.Load()
+
+	switch provider {
+	case "github-copilot", "copilot":
+		cfg.GitHubCopilot = config.GitHubCopilotAuth{}
+		if err := config.Save(cfg); err != nil {
+			return emitTextResponse(cmd.bridge, fmt.Sprintf("Failed to save configuration: %v", err))
+		}
+		return emitTextResponse(cmd.bridge, "Successfully logged out of GitHub Copilot.")
+	case "codex":
+		cfg.Codex = config.CodexAuth{}
+		if err := config.Save(cfg); err != nil {
+			return emitTextResponse(cmd.bridge, fmt.Sprintf("Failed to save configuration: %v", err))
+		}
+		return emitTextResponse(cmd.bridge, "Successfully logged out of Codex.")
+	case "all", "":
+		cfg.GitHubCopilot = config.GitHubCopilotAuth{}
+		cfg.Codex = config.CodexAuth{}
+		if err := config.Save(cfg); err != nil {
+			return emitTextResponse(cmd.bridge, fmt.Sprintf("Failed to save configuration: %v", err))
+		}
+		return emitTextResponse(cmd.bridge, "Successfully logged out of all providers.")
+	default:
+		return emitTextResponse(cmd.bridge, fmt.Sprintf("Unknown provider: %s. Supported: github-copilot, codex, all.", provider))
+	}
 }
 
 func normalizeModelSlashInput(input string) (string, error) {

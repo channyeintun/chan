@@ -17,18 +17,23 @@ type startupProviderSelection struct {
 
 func resolveStartupProviderSelection(cfg config.Config) startupProviderSelection {
 	effectiveCfg := cfg
-	originalSelection := strings.TrimSpace(cfg.Model)
+	originalProvider, originalModel := commandspkg.ResolveActiveSelection(cfg)
+	originalSelection := originalModel
+	if originalProvider != "" {
+		originalSelection = originalProvider + "/" + originalModel
+	}
 	startupNotice := ""
 	if shouldPreferRecentModel(cfg.ModelSource) {
 		if recent, err := config.LoadRecentModelSelection(); err == nil {
 			recentModel := strings.TrimSpace(recent.Model)
 			if recentModel != "" && !strings.EqualFold(recentModel, originalSelection) {
 				recentCfg := cfg
-				recentCfg.Model = recentModel
+				recentCfg.Provider, recentCfg.Model = commandspkg.ResolveModelSelection(recentModel)
 				recentSnapshot := commandspkg.DiscoverProviderSnapshot(recentCfg)
-				recentProvider, _ := commandspkg.ResolveModelSelection(recentModel)
+				recentProvider, _ := commandspkg.ResolveActiveSelection(recentCfg)
 				if status, ok := recentSnapshot.LookupProvider(recentProvider); ok && status.Usable {
-					effectiveCfg.Model = recentModel
+					effectiveCfg.Provider = recentCfg.Provider
+					effectiveCfg.Model = recentCfg.Model
 					startupNotice = fmt.Sprintf("Using recent successful model %s instead of %s.", recentModel, originalSelection)
 				}
 			}
@@ -36,7 +41,7 @@ func resolveStartupProviderSelection(cfg config.Config) startupProviderSelection
 	}
 
 	snapshot := commandspkg.DiscoverProviderSnapshot(effectiveCfg)
-	provider, model := commandspkg.ResolveModelSelection(effectiveCfg.Model)
+	provider, model := commandspkg.ResolveActiveSelection(effectiveCfg)
 
 	if provider != "" {
 		if status, ok := snapshot.LookupProvider(provider); ok && status.Usable {

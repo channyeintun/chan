@@ -82,6 +82,15 @@ func slashCommandSpecs() []slashCommandSpec {
 		},
 		{
 			Descriptor: commandspkg.Descriptor{
+				Name:           "logout",
+				Description:    "Log out of model providers (clears stored credentials)",
+				Usage:          "/logout [github-copilot|codex|all]",
+				TakesArguments: true,
+			},
+			Handler: slashCommandHandlerFunc(handleLogoutSlashCommand),
+		},
+		{
+			Descriptor: commandspkg.Descriptor{
 				Name:           "plan",
 				Description:    "Switch to plan mode (Ultrathink)",
 				Usage:          "/plan",

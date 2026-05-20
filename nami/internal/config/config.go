@@ -12,12 +12,14 @@ import (
 
 // Config holds all CLI configuration.
 type Config struct {
-	// Model selection: provider/model-name format
-	Model           string    `json:"model,omitempty"`
-	SubagentModel   string    `json:"subagent_model,omitempty"`
-	ReasoningEffort string    `json:"reasoning_effort,omitempty"`
-	MCP             MCPConfig `json:"mcp,omitempty"`
-	ModelSource     string    `json:"-"`
+	// Model selection: decoupled provider and model format
+	Provider         string    `json:"provider,omitempty"`
+	Model            string    `json:"model,omitempty"`
+	SubagentProvider string    `json:"subagent_provider,omitempty"`
+	SubagentModel    string    `json:"subagent_model,omitempty"`
+	ReasoningEffort  string    `json:"reasoning_effort,omitempty"`
+	MCP              MCPConfig `json:"mcp,omitempty"`
+	ModelSource      string    `json:"-"`
 
 	// Provider-level overrides
 	BaseURL string `json:"base_url,omitempty"`
@@ -59,7 +61,8 @@ type CodexAuth struct {
 // DefaultConfig returns the configuration with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		Model:                   "github-copilot/gpt-5.4",
+		Provider:                "github-copilot",
+		Model:                   "gpt-5.4",
 		ModelSource:             "default",
 		DefaultMode:             "plan",
 		CostWarningThresholdUSD: 5,
@@ -114,6 +117,20 @@ func loadUserConfig() Config {
 		}
 	}
 
+	// Migrate backward-compatible format: provider/model strings
+	if cfg.Provider == "" && cfg.Model != "" {
+		if prov, mod := ParseModel(cfg.Model); prov != "" {
+			cfg.Provider = prov
+			cfg.Model = mod
+		}
+	}
+	if cfg.SubagentProvider == "" && cfg.SubagentModel != "" {
+		if prov, mod := ParseModel(cfg.SubagentModel); prov != "" {
+			cfg.SubagentProvider = prov
+			cfg.SubagentModel = mod
+		}
+	}
+
 	return cfg
 }
 
@@ -123,9 +140,28 @@ func applyEnvOverrides(cfg *Config) {
 	}
 
 	// Environment overrides
+	if v := os.Getenv("NAMI_PROVIDER"); v != "" {
+		cfg.Provider = v
+	}
 	if v := os.Getenv("NAMI_MODEL"); v != "" {
-		cfg.Model = v
+		if prov, mod := ParseModel(v); prov != "" {
+			cfg.Provider = prov
+			cfg.Model = mod
+		} else {
+			cfg.Model = v
+		}
 		cfg.ModelSource = "env"
+	}
+	if v := os.Getenv("NAMI_SUBAGENT_PROVIDER"); v != "" {
+		cfg.SubagentProvider = v
+	}
+	if v := os.Getenv("NAMI_SUBAGENT_MODEL"); v != "" {
+		if prov, mod := ParseModel(v); prov != "" {
+			cfg.SubagentProvider = prov
+			cfg.SubagentModel = mod
+		} else {
+			cfg.SubagentModel = v
+		}
 	}
 	if v := os.Getenv("NAMI_BASE_URL"); v != "" {
 		cfg.BaseURL = v
