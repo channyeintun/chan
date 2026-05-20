@@ -15,7 +15,7 @@ Constraint: Do not add tests.
 - [x] 7. Refactor the model picker around models first
 - [x] 8. Decouple `/connect` from static provider presets
 - [x] 9. Fix subagent provider resolution consistency
-- [ ] 10. Store recent model selection as structured data
+- [x] 10. Store recent model selection as structured data
 - [ ] 11. Split provider status from selection status
 - [ ] 12. Make client factories protocol-based
 - [ ] 13. Add provider/model architecture tests (skipped: user constraint forbids adding tests)
@@ -32,3 +32,4 @@ Constraint: Do not add tests.
 - 2026-05-21: Changed curated model picker construction to emit catalog model entries before provider-default routes, labeling each model with its provider route and provider usability while preserving fallback provider default options.
 - 2026-05-21: Moved `/connect` provider catalog discovery to `api.ProviderSpecs`, changed provider ordering to use provider specs, and replaced the static engine connect registry with special-case handlers plus provider-spec-backed static handlers.
 - 2026-05-21: Updated subagent fallback/configured model resolution to use `ResolveActiveSelection` and `ResolveSubagentSelection`, preserving explicit `SubagentProvider` and validating the resolved subagent route independently.
+- 2026-05-21: Changed `recent-model.json` persistence to structured provider/model/explicit-provider fields with backward-compatible loading of legacy combined model strings; startup now restores recent selections from structured fields.

@@ -25,10 +25,14 @@ func resolveStartupProviderSelection(cfg config.Config) startupProviderSelection
 	startupNotice := ""
 	if shouldPreferRecentModel(cfg.ModelSource) {
 		if recent, err := config.LoadRecentModelSelection(); err == nil {
-			recentModel := strings.TrimSpace(recent.Model)
-			if recentModel != "" && !strings.EqualFold(recentModel, originalSelection) {
+			recentModel := config.NewModelSelection(recent.Provider, recent.Model, "recent", recent.ExplicitProvider).Ref()
+			if strings.TrimSpace(recent.Model) != "" && !strings.EqualFold(recentModel, originalSelection) {
 				recentCfg := cfg
-				recentCfg.Provider, recentCfg.Model = commandspkg.ResolveModelSelection(recentModel)
+				recentCfg.Provider = recent.Provider
+				recentCfg.Model = recent.Model
+				if recentCfg.Provider == "" {
+					recentCfg.Provider, recentCfg.Model = commandspkg.ResolveModelSelection(recent.Model)
+				}
 				recentSnapshot := commandspkg.DiscoverProviderSnapshot(recentCfg)
 				recentProvider, _ := commandspkg.ResolveActiveSelection(recentCfg)
 				if status, ok := recentSnapshot.LookupProvider(recentProvider); ok && status.Usable {
