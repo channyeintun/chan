@@ -15,8 +15,8 @@ Constraints:
 | 3 | Split `tool_executor.go` into executor, authorization, batching, rendering, and normalization files. | Completed | Split the implementation across focused files; `gofmt` and `go build ./...` passed. |
 | 4 | Split the largest standalone tools: `web_fetch.go`, `lsp.go`, and `background_commands.go`. | In progress | Split into tracked substeps below; overall step remains open until all three files are addressed. |
 | 4a | Split `background_commands.go` into lifecycle, output-buffer, and inspection/status files. | Completed | Extracted focused files for command lifecycle, output buffering, and inspect/stop/render helpers; `gofmt` and `go build ./...` passed. |
-| 4b | Split `web_fetch.go` into service-focused files behind the tool adapter. | Pending | Not started. |
-| 4c | Split `lsp.go` into transport/client-focused files behind the tool adapter. | Pending | Not started. |
+| 4b | Split `web_fetch.go` into service-focused files behind the tool adapter. | Completed | Separated the tool adapter from HTTP/URL policy, report building, readability extraction, and cache helpers; `gofmt` and `go build ./...` passed. |
+| 4c | Split `lsp.go` into transport/client-focused files behind the tool adapter. | In progress | Final remaining substep for overall Step 4. |
 | 5 | Split slash command handlers by domain and narrow `slashCommandContext`. | Pending | Not started. |
 | 6 | Split provider implementations by request, stream, types, errors, and policy. | Pending | Not started. |
 | 7 | Split retrieval graph and agent loop helpers after tests are in place. | Blocked | Depends on the skipped test step from the original plan. |
