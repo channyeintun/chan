@@ -1137,12 +1137,13 @@ function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
   return (
     <Box
       position="absolute"
-      width="100%"
-      height="100%"
+      left={1}
+      right={1}
+      top={1}
+      bottom={1}
       justifyContent="center"
       alignItems="center"
-      paddingX={1}
-      paddingY={1}
+      overflow="hidden"
       userSelect="none"
     >
       <Box
@@ -1154,6 +1155,7 @@ function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
         flexShrink={1}
         minWidth={0}
         minHeight={0}
+        overflow="hidden"
         userSelect="contain"
       >
         {children}

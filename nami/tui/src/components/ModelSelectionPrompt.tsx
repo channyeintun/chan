@@ -466,9 +466,8 @@ const ModelSelectionList: FC<ModelSelectionListProps> = ({
   onCursor,
   onSelectIndex,
 }) => {
-  const { height: rectHeight, width: rectWidth } = useBoxRect();
+  const { height: rectHeight } = useBoxRect();
   const viewportHeight = Math.max(1, rectHeight);
-  const viewportWidth = Math.max(1, rectWidth);
 
   return (
     <Box
@@ -483,7 +482,6 @@ const ModelSelectionList: FC<ModelSelectionListProps> = ({
       <ListView
         items={options}
         height={viewportHeight}
-        width={viewportWidth}
         nav
         cursorKey={selectedIndex}
         onCursor={(index) => onCursor(index)}
@@ -506,20 +504,14 @@ const ModelSelectionList: FC<ModelSelectionListProps> = ({
               backgroundColor={isSelected ? "$selectionbg" : undefined}
               paddingX={1}
               marginBottom={0}
-              width="100%"
-              overflow="hidden"
               minWidth={0}
             >
               {showSection ? (
-                <Text color="$primary" bold wrap="truncate-end">
+                <Text color="$primary" bold>
                   {section}
                 </Text>
               ) : null}
-              <Text
-                color={isSelected ? "$selection" : "$fg"}
-                bold={isSelected}
-                wrap="truncate-end"
-              >
+              <Text color={isSelected ? "$selection" : "$fg"} bold={isSelected}>
                 {formatSelectionLine(option, isSelected, kind)}
               </Text>
             </Box>
