@@ -16,7 +16,7 @@ const (
 	planStatusFinal                = "final"
 	saveImplementationPlanToolName = "save_implementation_plan"
 	saveWalkthroughToolName        = "save_walkthrough"
-	planModePromptHint             = "Plan mode: Ultrathink. Not read-only — create/modify if user asks. Non-trivial work: save/update plan via save_implementation_plan as primary review artifact. Choreograph child agents: focused objective, let finish, synthesize. read_project_structure = directory layout. project_overview = semantic summary."
+	planModePromptHint             = "Plan mode: be careful, not slow. Do not use extended thinking unless the user explicitly asks. You may create or modify files when the user asks. Non-trivial or risky work: save/update plan via save_implementation_plan as the primary review artifact. Use child agents only for broad or parallel research. read_project_structure = directory layout. project_overview = semantic summary."
 )
 
 // ArtifactUpdate describes an artifact mutation that should be emitted to the UI.

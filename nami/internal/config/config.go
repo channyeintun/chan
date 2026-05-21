@@ -71,7 +71,7 @@ func DefaultConfig() Config {
 		Provider:                "github-copilot",
 		Model:                   "gpt-5.4",
 		ModelSource:             "default",
-		DefaultMode:             "plan",
+		DefaultMode:             "fast",
 		CostWarningThresholdUSD: 5,
 		EnableSessionMemory:     true,
 		EnableMicrocompact:      true,

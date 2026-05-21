@@ -92,7 +92,7 @@ func slashCommandSpecs() []slashCommandSpec {
 		{
 			Descriptor: commandspkg.Descriptor{
 				Name:           "plan",
-				Description:    "Switch to plan mode (Ultrathink)",
+				Description:    "Switch to careful planning mode",
 				Usage:          "/plan",
 				TakesArguments: false,
 			},
