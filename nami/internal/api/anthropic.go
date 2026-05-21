@@ -355,7 +355,11 @@ func handleAnthropicBlockStart(evt anthropicContentBlockStartEvent, state *anthr
 			return errStopStream
 		}
 	case "tool_use":
-		state.toolBlocks[evt.Index] = &anthropicToolUseState{ID: evt.ContentBlock.ID, Name: evt.ContentBlock.Name, Initial: evt.ContentBlock.Input}
+		state.toolBlocks[evt.Index] = &anthropicToolUseState{
+			ID:      evt.ContentBlock.ID,
+			Name:    evt.ContentBlock.Name,
+			Initial: evt.ContentBlock.Input,
+		}
 	}
 	return nil
 }

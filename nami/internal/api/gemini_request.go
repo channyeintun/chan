@@ -74,7 +74,13 @@ func buildGeminiContents(modelID, systemPrompt string, messages []Message) ([]ge
 			if name == "" {
 				name = pc.id
 			}
-			part := geminiPart{FunctionResponse: &geminiFunctionResponse{ID: pc.id, Name: name, Response: map[string]any{"error": "No result provided"}}}
+			part := geminiPart{
+				FunctionResponse: &geminiFunctionResponse{
+					ID:       pc.id,
+					Name:     name,
+					Response: map[string]any{"error": "No result provided"},
+				},
+			}
 			if len(contents) > 0 {
 				last := &contents[len(contents)-1]
 				if last.Role == "user" && geminiContentIsOnlyFunctionResponses(*last) {
@@ -227,7 +233,14 @@ func convertGeminiMessage(msg Message, toolNames map[string]string) ([]geminiCon
 			if err != nil {
 				return nil, err
 			}
-			parts = append(parts, geminiPart{ThoughtSignature: toolCall.ThoughtSignature, FunctionCall: &geminiFunctionCall{ID: toolCall.ID, Name: toolCall.Name, Args: args}})
+			parts = append(parts, geminiPart{
+				ThoughtSignature: toolCall.ThoughtSignature,
+				FunctionCall: &geminiFunctionCall{
+					ID:   toolCall.ID,
+					Name: toolCall.Name,
+					Args: args,
+				},
+			})
 		}
 		if len(parts) == 0 {
 			return nil, nil
@@ -264,7 +277,13 @@ func geminiFunctionResponsePart(result ToolResult, toolNames map[string]string) 
 	if name == "" {
 		name = result.ToolCallID
 	}
-	return geminiPart{FunctionResponse: &geminiFunctionResponse{ID: result.ToolCallID, Name: name, Response: response}}, nil
+	return geminiPart{
+		FunctionResponse: &geminiFunctionResponse{
+			ID:       result.ToolCallID,
+			Name:     name,
+			Response: response,
+		},
+	}, nil
 }
 
 func buildGeminiTools(tools []ToolDefinition) []geminiTool {
@@ -274,7 +293,11 @@ func buildGeminiTools(tools []ToolDefinition) []geminiTool {
 
 	decls := make([]geminiFunctionDeclaration, 0, len(tools))
 	for _, tool := range tools {
-		decls = append(decls, geminiFunctionDeclaration{Name: tool.Name, Description: tool.Description, ParametersJsonSchema: sanitizeGeminiSchema(tool.InputSchema)})
+		decls = append(decls, geminiFunctionDeclaration{
+			Name:                 tool.Name,
+			Description:          tool.Description,
+			ParametersJsonSchema: sanitizeGeminiSchema(tool.InputSchema),
+		})
 	}
 
 	return []geminiTool{{FunctionDeclarations: decls}}

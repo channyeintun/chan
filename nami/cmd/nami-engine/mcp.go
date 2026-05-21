@@ -114,6 +114,9 @@ func newMCPGetCommand() *cobra.Command {
 			}
 			result, err := commandspkg.RunMCPGet(cwd, args[0], scope)
 			if err != nil {
+				if renderErr := renderMCPResult(cmd, result); renderErr != nil {
+					return renderErr
+				}
 				return err
 			}
 			return renderMCPResult(cmd, result)

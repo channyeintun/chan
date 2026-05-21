@@ -109,13 +109,13 @@ func RunMCPGet(cwd, rawName, scopeRaw string) (MCPCommandResult, error) {
 	if err != nil {
 		return MCPCommandResult{}, err
 	}
-	status, closeErr, err := loadSingleMCPStatus(cwd, name, server)
-	if err != nil {
-		return MCPCommandResult{}, err
-	}
 	result := MCPCommandResult{}
+	status, closeErr, err := loadSingleMCPStatus(cwd, name, server)
 	if closeErr != nil {
 		result.WarningLines = append(result.WarningLines, fmt.Sprintf("warning: close MCP manager: %v", closeErr))
+	}
+	if err != nil {
+		return result, err
 	}
 
 	result.OutputLines = append(result.OutputLines,

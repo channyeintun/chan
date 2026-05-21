@@ -44,7 +44,13 @@ func NewGeminiClient(model, apiKey, baseURL string) (*GeminiClient, error) {
 		return nil, &APIError{Type: ErrAuth, Message: "missing Gemini API key"}
 	}
 
-	return &GeminiClient{model: model, baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, httpClient: newHTTPClient(), capabilities: ResolveModelCapabilities("gemini", model)}, nil
+	return &GeminiClient{
+		model:        model,
+		baseURL:      strings.TrimRight(baseURL, "/"),
+		apiKey:       apiKey,
+		httpClient:   newHTTPClient(),
+		capabilities: ResolveModelCapabilities("gemini", model),
+	}, nil
 }
 
 // ModelID returns the active model identifier.
@@ -238,7 +244,15 @@ func (c *GeminiClient) handleEvent(data string, state *geminiStreamState, yield 
 				if err != nil {
 					return fmt.Errorf("encode Gemini function call args: %w", err)
 				}
-				if !yield(ModelEvent{Type: ModelEventToolCall, ToolCall: &ToolCall{ID: firstNonEmpty(part.FunctionCall.ID, part.FunctionCall.Name), Name: part.FunctionCall.Name, Input: string(input), ThoughtSignature: part.ThoughtSignature}}, nil) {
+				if !yield(ModelEvent{
+					Type: ModelEventToolCall,
+					ToolCall: &ToolCall{
+						ID:               firstNonEmpty(part.FunctionCall.ID, part.FunctionCall.Name),
+						Name:             part.FunctionCall.Name,
+						Input:            string(input),
+						ThoughtSignature: part.ThoughtSignature,
+					},
+				}, nil) {
 					return errStopStream
 				}
 			case part.Text != "" && part.Thought:
