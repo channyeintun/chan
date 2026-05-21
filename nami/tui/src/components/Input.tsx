@@ -497,9 +497,18 @@ const Input: FC<InputProps> = ({
     () => formatPromptStatusLabel(statusLabel),
     [statusLabel],
   );
+  const handleWheel = useCallback((event: { preventDefault(): void; stopPropagation(): void }) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
 
   return (
-    <Box flexDirection="column" marginTop={1} userSelect="none">
+    <Box
+      flexDirection="column"
+      marginTop={1}
+      userSelect="none"
+      onWheel={handleWheel}
+    >
       {isLoading ? (
         <Box paddingLeft={1} marginBottom={1}>
           <Box flexDirection="row" minWidth={0}>
