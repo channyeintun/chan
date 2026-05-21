@@ -156,6 +156,9 @@ func BuildModelSelectionOptions(snapshot ProviderSnapshot, currentSelection stri
 			if !match(status) {
 				continue
 			}
+			if !providerOwnsDefaultModel(status.ID, status.DefaultModel) {
+				continue
+			}
 			ref := providerModelRef(status.ID, status.DefaultModel)
 			if _, exists := seen[ref]; exists {
 				continue
@@ -174,6 +177,11 @@ func BuildModelSelectionOptions(snapshot ProviderSnapshot, currentSelection stri
 	appendProviderOptions(func(status ProviderStatus) bool { return !status.Usable })
 
 	return options
+}
+
+func providerOwnsDefaultModel(providerID string, model string) bool {
+	owner := InferProviderFromModel(model)
+	return owner == "" || owner == normalizeProviderID(providerID)
 }
 
 func ResolveActiveSelection(cfg config.Config) (provider, model string) {

@@ -1134,23 +1134,6 @@ function escapeTaskNotificationText(value: string): string {
 }
 
 function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
-  const [terminalColumns, setTerminalColumns] = useState(
-    process.stdout.columns ?? 80,
-  );
-
-  useEffect(() => {
-    const handleResize = () => {
-      setTerminalColumns(process.stdout.columns ?? 80);
-    };
-
-    process.stdout.on("resize", handleResize);
-    return () => {
-      process.stdout.off("resize", handleResize);
-    };
-  }, []);
-
-  const overlayWidth = Math.max(20, Math.min(96, terminalColumns - 2));
-
   return (
     <Box
       position="absolute"
@@ -1164,7 +1147,8 @@ function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
     >
       <Box
         flexDirection="column"
-        width={overlayWidth}
+        width="100%"
+        maxWidth={96}
         height="100%"
         maxHeight="85%"
         flexShrink={1}

@@ -63,8 +63,6 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 		}
 		selected = configuredChoice
 	}
-	requestedDefault := strings.EqualFold(strings.TrimSpace(cmd.args), "default")
-
 	selectedModel, err := normalizeModelSlashInput(selected.Model)
 	if err != nil {
 		return emitTextResponse(cmd.bridge, err.Error())
@@ -72,15 +70,7 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 
 	currentProvider, _ := config.ParseModel(cmd.state.ActiveModelID)
 	currentProvider = normalizeProvider(currentProvider)
-	providerHint := strings.TrimSpace(selected.Provider)
-	provider, model := resolveModelSelection(selectedModel, currentProvider)
-	if currentProvider != "" && isModelCompatibleWithProvider(selectedModel, currentProvider) {
-		provider = currentProvider
-		model = selectedModel
-	} else if providerHint != "" && (!retainSelectionProvider(currentProvider) || requestedDefault) {
-		provider = normalizeProvider(providerHint)
-		model = selectedModel
-	}
+	provider, model := resolveSelectedModelChoice(selectedModel, selected.Provider, currentProvider)
 	nextClient, err := newLLMClient(provider, model, cmd.cfg)
 	if err != nil {
 		return cmd.bridge.EmitError(fmt.Sprintf("switch model %q: %v", selectedModel, err), true)
@@ -179,15 +169,7 @@ func handleSubagentSlashCommand(cmd *slashCommandContext) error {
 
 	currentProvider, _ := config.ParseModel(cmd.state.ActiveModelID)
 	currentProvider = normalizeProvider(currentProvider)
-	providerHint := strings.TrimSpace(selected.Provider)
-	provider, model := resolveModelSelection(selectedModel, currentProvider)
-	if currentProvider != "" && isModelCompatibleWithProvider(selectedModel, currentProvider) {
-		provider = currentProvider
-		model = selectedModel
-	} else if providerHint != "" && !retainSelectionProvider(currentProvider) {
-		provider = normalizeProvider(providerHint)
-		model = selectedModel
-	}
+	provider, model := resolveSelectedModelChoice(selectedModel, selected.Provider, currentProvider)
 	cmd.state.SubagentModelID = modelRef(provider, model)
 	if err := cmd.persistState(); err != nil {
 		return err
@@ -253,6 +235,16 @@ func configuredModelChoice(raw string) (modelSelectionChoice, error) {
 		return modelSelectionChoice{}, fmt.Errorf("default model is not configured")
 	}
 	return modelSelectionChoice{Model: model, Provider: provider}, nil
+}
+
+func resolveSelectedModelChoice(selectedModel string, providerHint string, currentProvider string) (string, string) {
+	if provider, model := config.ParseModel(strings.TrimSpace(selectedModel)); strings.TrimSpace(provider) != "" {
+		return normalizeProvider(provider), strings.TrimSpace(model)
+	}
+	if provider := normalizeProvider(strings.TrimSpace(providerHint)); provider != "" {
+		return provider, strings.TrimSpace(selectedModel)
+	}
+	return resolveModelSelection(selectedModel, currentProvider)
 }
 
 func promptModelSelection(cmd *slashCommandContext, currentSelection string) (modelSelectionChoice, error) {

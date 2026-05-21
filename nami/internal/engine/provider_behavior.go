@@ -85,13 +85,6 @@ func (gitHubCopilotProviderBehavior) NewClient(provider, model string, cfg confi
 }
 
 func (gitHubCopilotProviderBehavior) ResolveSelection(input, fallbackProvider string) (string, string) {
-	selection := config.ParseModelSelection(input, "")
-	if selection.ProviderID != "" {
-		return normalizeProvider(selection.ProviderID), selection.ModelID
-	}
-	if normalizeProvider(fallbackProvider) == "github-copilot" {
-		return "github-copilot", selection.ModelID
-	}
 	return standardProviderBehavior{}.ResolveSelection(input, fallbackProvider)
 }
 
