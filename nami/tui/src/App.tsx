@@ -7,12 +7,14 @@ import React, {
 } from "react";
 import {
   Box,
+  ModalDialog,
   Screen,
   Spinner,
   Text,
   disableBracketedPaste,
   enableBracketedPaste,
   type ToastData,
+  useBoxRect,
   useFocusManager,
   useToast,
 } from "silvery";
@@ -1122,29 +1124,34 @@ function escapeTaskNotificationText(value: string): string {
 }
 
 function ModalDialogHost({ children }: { children: React.ReactNode }) {
+  const { width: hostWidth, height: hostHeight } = useBoxRect();
+  const fallbackWidth = process.stdout.columns ?? 80;
+  const fallbackHeight = process.stdout.rows ?? 24;
+  const availableWidth = hostWidth > 0 ? hostWidth : fallbackWidth;
+  const availableHeight = hostHeight > 0 ? hostHeight : fallbackHeight;
+  const modalWidth = Math.max(20, Math.min(96, availableWidth - 4));
+  const modalHeight = Math.max(8, Math.min(availableHeight - 2, availableHeight));
+
   return (
     <Box
       flexDirection="column"
       alignItems="center"
+      justifyContent="center"
       height="85%"
       flexShrink={1}
       minHeight={0}
       marginTop={1}
       userSelect="none"
     >
-      <Box
-        flexDirection="column"
-        width="100%"
-        maxWidth={96}
-        height="100%"
-        flexShrink={1}
-        minWidth={0}
-        minHeight={0}
-        overflow="hidden"
-        userSelect="contain"
+      <ModalDialog
+        width={modalWidth}
+        height={modalHeight}
+        paddingX={0}
+        paddingY={0}
+        borderColor="$inputborder"
       >
         {children}
-      </Box>
+      </ModalDialog>
     </Box>
   );
 }

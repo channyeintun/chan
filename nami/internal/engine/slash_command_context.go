@@ -133,14 +133,10 @@ func curatedModelAccessProvider(
 		candidates = append(candidates, providerID)
 	}
 
+	addCandidate(currentProvider)
 	addCandidate(displayProvider)
-	if isModelCompatibleWithProvider(model, currentProvider) {
-		addCandidate(currentProvider)
-	}
 	for _, status := range snapshot.Providers {
-		if isModelCompatibleWithProvider(model, status.ID) {
-			addCandidate(status.ID)
-		}
+		addCandidate(status.ID)
 	}
 
 	for _, providerID := range candidates {
@@ -148,9 +144,7 @@ func curatedModelAccessProvider(
 		if !ok || !match(status) {
 			continue
 		}
-		if providerID == displayProvider || isModelCompatibleWithProvider(model, providerID) {
-			return providerID, status, true
-		}
+		return providerID, status, true
 	}
 	return "", commandspkg.ProviderStatus{}, false
 }
