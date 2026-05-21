@@ -1,5 +1,5 @@
 import React, { type FC, useEffect, useMemo, useState } from "react";
-import { Box, ListView, Text, useBoxRect, useInput } from "silvery";
+import { Box, ListView, ModalDialog, Text, useBoxRect, useInput } from "silvery";
 import type {
   UIBackgroundAgent,
   UIBackgroundCommand,
@@ -44,6 +44,10 @@ const BackgroundTasksDialog: FC<BackgroundTasksDialogProps> = ({
   onInspectTask,
   onStopTask,
 }) => {
+  const [terminalRows, setTerminalRows] = useState(process.stdout.rows ?? 24);
+  const [terminalColumns, setTerminalColumns] = useState(
+    process.stdout.columns ?? 80,
+  );
   const items = useMemo(() => buildTaskItems(commands, agents), [commands, agents]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [view, setView] = useState<"list" | "detail">("list");
@@ -91,6 +95,20 @@ const BackgroundTasksDialog: FC<BackgroundTasksDialogProps> = ({
 
     return () => clearInterval(timer);
   }, [detail?.status, onInspectTask, selectedItem, view]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setTerminalRows(process.stdout.rows ?? 24);
+      setTerminalColumns(process.stdout.columns ?? 80);
+    };
+
+    handleResize();
+    process.stdout.on("resize", handleResize);
+
+    return () => {
+      process.stdout.off("resize", handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     if (view !== "detail" || selectedItem) {
@@ -146,51 +164,63 @@ const BackgroundTasksDialog: FC<BackgroundTasksDialogProps> = ({
     }
   });
 
+  const dialogWidth =
+    terminalColumns > 60
+      ? Math.min(110, terminalColumns - 4)
+      : Math.max(28, terminalColumns - 2);
+  const dialogHeight =
+    terminalRows > 16
+      ? Math.min(30, terminalRows - 4)
+      : Math.max(10, terminalRows - 2);
+
   return (
-    <Box
-      flexDirection="column"
-      flexGrow={1}
-      flexShrink={1}
-      minWidth={0}
-      minHeight={0}
-      backgroundColor="$popover-bg"
+    <ModalDialog
+      title="Background Tasks"
+      width={dialogWidth}
+      height={dialogHeight}
       borderStyle="single"
       borderColor="$inputborder"
-      overflow="hidden"
-      paddingX={2}
-      paddingY={1}
+      footer={
+        <FooterHint
+          view={view}
+          selectedItem={selectedItem}
+          canStop={selectedItem ? canStopTask(detailStatus(selectedItem, detail)) : false}
+        />
+      }
     >
-      <Header items={items} />
+      <Box
+        flexDirection="column"
+        flexGrow={1}
+        flexShrink={1}
+        minWidth={0}
+        minHeight={0}
+      >
+        <Header items={items} />
 
-      <SwarmOverview agents={agents} swarmDashboard={swarmDashboard} />
+        <SwarmOverview agents={agents} swarmDashboard={swarmDashboard} />
 
-      {view === "list" ? (
-        <TaskList
-          items={items}
-          selectedIndex={selectedIndex}
-          onCursor={setSelectedIndex}
-          onSelectIndex={(index) => {
-            if (!items[index]) {
-              return;
-            }
-            setSelectedIndex(index);
-            setView("detail");
-          }}
-        />
-      ) : (
-        <TaskDetailView
-          item={selectedItem}
-          detail={detail}
-          pendingRefresh={Boolean(selectedItem) && !liveDetail}
-        />
-      )}
-
-      <FooterHint
-        view={view}
-        selectedItem={selectedItem}
-        canStop={selectedItem ? canStopTask(detailStatus(selectedItem, detail)) : false}
-      />
-    </Box>
+        {view === "list" ? (
+          <TaskList
+            items={items}
+            selectedIndex={selectedIndex}
+            onCursor={setSelectedIndex}
+            onSelectIndex={(index) => {
+              if (!items[index]) {
+                return;
+              }
+              setSelectedIndex(index);
+              setView("detail");
+            }}
+          />
+        ) : (
+          <TaskDetailView
+            item={selectedItem}
+            detail={detail}
+            pendingRefresh={Boolean(selectedItem) && !liveDetail}
+          />
+        )}
+      </Box>
+    </ModalDialog>
   );
 };
 
@@ -201,10 +231,7 @@ const Header: FC<{ items: TaskListItem[] }> = ({ items }) => {
 
   return (
     <Box flexDirection="column" flexShrink={0} minWidth={0}>
-      <Text bold color="$primary">
-        Background Tasks
-      </Text>
-      <Box marginTop={1} flexDirection="column" minWidth={0}>
+      <Box flexDirection="column" minWidth={0}>
         <Text>Inspect and manage retained background commands and child agents.</Text>
         <Text color="$muted">
           {items.length} task{items.length === 1 ? "" : "s"}

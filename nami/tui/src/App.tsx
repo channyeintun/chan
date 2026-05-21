@@ -741,15 +741,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     [engine],
   );
 
-  const pickerDialogContent = uiState.pendingModelSelection ? (
-    <ModelSelectionPrompt
-      selection={uiState.pendingModelSelection}
-      onSelect={handleModelSelection}
-      onCancel={() => handleModelSelection()}
-    />
-  ) : null;
-
-  const modalContent = uiState.pendingResumeSelection ? (
+  const overlayDialogContent = uiState.pendingResumeSelection ? (
     <ResumeSelectionPrompt
       selection={uiState.pendingResumeSelection}
       onSelect={handleResumeSelection}
@@ -993,7 +985,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
           </Box>
         ) : null}
 
-        {pickerDialogContent || modalContent ? (
+        {overlayDialogContent ? (
           <Box
             position="absolute"
             width="100%"
@@ -1006,8 +998,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
             overflow="hidden"
             userSelect="none"
           >
-            {pickerDialogContent ?? (
-              <ModalDialogHost>{modalContent}</ModalDialogHost>
+            {uiState.pendingAskUserQuestion || uiState.pendingRewindSelection ? (
+              <ModalDialogHost>{overlayDialogContent}</ModalDialogHost>
+            ) : (
+              overlayDialogContent
             )}
           </Box>
         ) : null}
