@@ -337,28 +337,17 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
       minWidth={0}
       minHeight={0}
       backgroundColor="$popover-bg"
-      borderStyle="single"
-      borderColor="$inputborder"
       overflow="hidden"
       paddingX={2}
       paddingY={compactLayout ? 0 : 1}
     >
-      <Box flexDirection="column" flexShrink={0} minWidth={0}>
+      <Box flexDirection="row" flexShrink={0} minWidth={0} justifyContent="space-between">
         <Text bold color="$primary">
-          {selection.title ?? "Select Model"}
+          {formatPickerTitle(selection.title)}
         </Text>
-        <Box marginTop={compactLayout ? 0 : 1} flexDirection="column" minWidth={0}>
-          {!compactLayout && (selection.description ?? DEFAULT_MODEL_SELECTION_DESCRIPTION) ? (
-            <Text>
-              {selection.description ?? DEFAULT_MODEL_SELECTION_DESCRIPTION}
-            </Text>
-          ) : null}
-          {selection.currentModel ? (
-            <Text color="$muted">
-              Current: {formatCurrentModel(selection.currentModel)}
-            </Text>
-          ) : null}
-        </Box>
+        <Text color="$muted">
+          esc
+        </Text>
       </Box>
 
       <Box
@@ -381,6 +370,7 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
           selectedIndex={selectedIndex}
           active={!customMode}
           compact={compactLayout && !customMode}
+          kind={selection.title?.trim().toLowerCase() === "connect provider" ? "provider" : "model"}
           onCursor={updateSelectedIndex}
           onSelectIndex={handleListSelect}
         />
@@ -457,14 +447,12 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
 
 export default ModelSelectionPrompt;
 
-const DEFAULT_MODEL_SELECTION_DESCRIPTION =
-  "Choose the active model, a curated preset, or a provider default for the session.";
-
 interface ModelSelectionListProps {
   options: UIModelSelectionOption[];
   selectedIndex: number;
   active: boolean;
   compact: boolean;
+  kind: PickerKind;
   onCursor: (index: number | ((current: number) => number)) => void;
   onSelectIndex: (index: number) => void;
 }
@@ -474,6 +462,7 @@ const ModelSelectionList: FC<ModelSelectionListProps> = ({
   selectedIndex,
   active,
   compact,
+  kind,
   onCursor,
   onSelectIndex,
 }) => {
@@ -498,11 +487,15 @@ const ModelSelectionList: FC<ModelSelectionListProps> = ({
         onCursor={(index) => onCursor(index)}
         onSelect={onSelectIndex}
         active={active}
-        estimateHeight={compact ? 1 : 2}
+        estimateHeight={1}
         overflowIndicator
         getKey={(option, index) => `${option.label}-${index}`}
         renderItem={(option, index, meta) => {
           const isSelected = meta.isCursor;
+          const section = sectionForOption(option, kind);
+          const previousSection =
+            index > 0 ? sectionForOption(options[index - 1], kind) : null;
+          const showSection = section !== null && section !== previousSection;
 
           return (
             <Box
@@ -510,20 +503,17 @@ const ModelSelectionList: FC<ModelSelectionListProps> = ({
               flexDirection="column"
               backgroundColor={isSelected ? "$selectionbg" : undefined}
               paddingX={1}
-              marginBottom={compact ? 0 : 1}
+              marginBottom={0}
               minWidth={0}
             >
-              <Text color={isSelected ? "$selection" : "$fg"} bold={isSelected}>
-                {compact
-                  ? formatCompactModelLine(option, isSelected)
-                  : `${isSelected ? "›" : " "} ${option.label}`}
-              </Text>
-              {!compact ? (
-                <Text color={isSelected ? "$selection" : "$muted"}>
-                  {formatModelLine(option)}
-                  {option.description ? `  ·  ${option.description}` : ""}
+              {showSection ? (
+                <Text color="$primary" bold>
+                  {section}
                 </Text>
               ) : null}
+              <Text color={isSelected ? "$selection" : "$fg"} bold={isSelected}>
+                {formatSelectionLine(option, isSelected, kind)}
+              </Text>
             </Box>
           );
         }}
@@ -532,24 +522,105 @@ const ModelSelectionList: FC<ModelSelectionListProps> = ({
   );
 };
 
-function formatModelLine(option: UIModelSelectionOption): string {
-  if (option.isCustom) {
-    return "Press Enter to type your own model";
-  }
-  return stripProviderPrefix(option.model) ?? "Unknown model";
-}
+type PickerKind = "provider" | "model";
 
-function formatCompactModelLine(
+function formatSelectionLine(
   option: UIModelSelectionOption,
   isSelected: boolean,
+  kind: PickerKind,
 ): string {
-  const prefix = isSelected ? ">" : " ";
-  const label = option.isCustom ? "Custom model" : option.label;
-  return `${prefix} ${label}${option.active ? " current" : ""}`;
+  const prefix = option.active ? "✓" : isSelected ? "›" : " ";
+  if (option.isCustom) {
+    return `${prefix} Custom model`;
+  }
+  if (kind === "provider") {
+    return `${prefix} ${providerDisplayName(option.provider ?? option.label)}`;
+  }
+
+  const model = displayModelName(option.model ?? option.label);
+  const provider = option.provider ? ` ${providerDisplayName(option.provider)}` : "";
+  return `${prefix} ${model}${provider}`;
 }
 
-function formatCurrentModel(model: string | null): string {
-  return stripProviderPrefix(model) ?? "unknown model";
+function formatPickerTitle(title: string | undefined): string {
+  const normalized = title?.trim().toLowerCase();
+  if (normalized === "connect provider") {
+    return "Connect a provider";
+  }
+  if (normalized === "select model") {
+    return "Select model";
+  }
+  return title?.trim() || "Select model";
+}
+
+function sectionForOption(
+  option: UIModelSelectionOption,
+  kind: PickerKind,
+): string | null {
+  if (option.isCustom) {
+    return "Custom";
+  }
+  if (kind === "provider") {
+    return isPopularProvider(option.provider) ? "Popular" : "Providers";
+  }
+  if (option.active) {
+    return "Recent";
+  }
+  return option.provider ? providerDisplayName(option.provider) : "Models";
+}
+
+function isPopularProvider(provider: string | null): boolean {
+  switch ((provider ?? "").toLowerCase()) {
+    case "github-copilot":
+    case "codex":
+    case "openai":
+    case "anthropic":
+    case "gemini":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function providerDisplayName(provider: string): string {
+  switch (provider.toLowerCase()) {
+    case "github-copilot":
+      return "GitHub Copilot";
+    case "openai":
+      return "OpenAI";
+    case "anthropic":
+      return "Anthropic";
+    case "gemini":
+      return "Google";
+    case "deepseek":
+      return "DeepSeek";
+    case "ollama":
+      return "Ollama";
+    case "codex":
+      return "OpenCode Zen";
+    default:
+      return provider
+        .split("-")
+        .filter(Boolean)
+        .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+        .join(" ");
+  }
+}
+
+function displayModelName(model: string): string {
+  const withoutProvider = stripProviderPrefix(model) ?? model;
+  return withoutProvider
+    .split("-")
+    .map((part) => {
+      if (/^gpt$/i.test(part)) {
+        return "GPT";
+      }
+      if (/^\d/.test(part)) {
+        return part;
+      }
+      return part.slice(0, 1).toUpperCase() + part.slice(1);
+    })
+    .join("-");
 }
 
 function filterModelSelectionOptions(

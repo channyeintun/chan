@@ -2179,29 +2179,46 @@ function normalizeModelSelectionOptions(
     return [];
   }
 
+  const seen = new Set<string>();
+
   return payload
     .filter(
       (option) =>
         typeof option?.label === "string" && option.label.trim().length > 0,
     )
-    .map((option) => ({
-      label: option.label.trim(),
-      model:
+    .map((option) => {
+      const model =
         typeof option.model === "string" && option.model.trim().length > 0
           ? option.model.trim()
-          : null,
-      provider:
+          : null;
+      const provider =
         typeof option.provider === "string" && option.provider.trim().length > 0
           ? option.provider.trim()
-          : null,
-      description:
-        typeof option.description === "string" &&
-        option.description.trim().length > 0
-          ? option.description.trim()
-          : null,
-      isCustom: option.is_custom === true,
-      active: option.active === true,
-    }));
+          : null;
+
+      return {
+        label: option.label.trim(),
+        model,
+        provider,
+        description:
+          typeof option.description === "string" &&
+          option.description.trim().length > 0
+            ? option.description.trim()
+            : null,
+        isCustom: option.is_custom === true,
+        active: option.active === true,
+      };
+    })
+    .filter((option) => {
+      const key = option.isCustom
+        ? "custom"
+        : `${option.provider ?? ""}/${option.model ?? option.label}`.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
 }
 
 function normalizeResumeSelectionSessions(
