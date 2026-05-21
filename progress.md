@@ -18,6 +18,6 @@ Constraints:
 | 4b | Split `web_fetch.go` into service-focused files behind the tool adapter. | Completed | Separated the tool adapter from HTTP/URL policy, report building, readability extraction, and cache helpers; `gofmt` and `go build ./...` passed. |
 | 4c | Split `lsp.go` into transport/client-focused files behind the tool adapter. | Completed | Split the tool adapter, client lifecycle, JSON-RPC transport, server resolution, and result shaping helpers; `gofmt` and `go build ./...` passed. |
 | 5 | Split slash command handlers by domain and narrow `slashCommandContext`. | Completed | Split the monolithic handler file into focused command-domain files while preserving the shared context and dispatch flow; `gofmt` and `go build ./...` passed. |
-| 6 | Split provider implementations by request, stream, types, errors, and policy. | In progress | Starting with the largest provider files and keeping behavior unchanged. |
+| 6 | Split provider implementations by request, stream, types, errors, and policy. | Completed | Split Anthropic, Gemini, OpenAI Responses, and OpenAI-compatible providers across focused files for request building, streaming, policy, schema, and wire types; `gofmt` and `go build ./...` passed. |
 | 7 | Split retrieval graph and agent loop helpers after tests are in place. | Blocked | Depends on the skipped test step from the original plan. |
-| 8 | Move MCP CLI business logic out of `cmd`. | Pending | Not started. |
+| 8 | Move MCP CLI business logic out of `cmd`. | In progress | Final non-test plan step remaining. |
