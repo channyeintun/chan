@@ -59,7 +59,7 @@ func ClampReasoningEffort(model, effort string) string {
 
 func DefaultReasoningEffort(model string) string {
 	if SupportsOpenAIReasoningEffort(model) {
-		return ReasoningEffortLow
+		return ReasoningEffortMedium
 	}
 	return ""
 }
