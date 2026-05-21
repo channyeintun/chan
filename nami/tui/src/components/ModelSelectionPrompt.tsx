@@ -192,6 +192,7 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
         title="Custom model"
         width={Math.min(dialogWidth, 72)}
         footer="Enter apply · Esc return to list"
+        borderStyle="single"
         borderColor="$inputborder"
       >
         <Box flexDirection="column" minWidth={0}>
