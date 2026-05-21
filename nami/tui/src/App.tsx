@@ -1130,7 +1130,11 @@ function ModalDialogHost({ children }: { children: React.ReactNode }) {
   const availableWidth = hostWidth > 0 ? hostWidth : fallbackWidth;
   const availableHeight = hostHeight > 0 ? hostHeight : fallbackHeight;
   const modalWidth = Math.max(20, Math.min(96, availableWidth - 4));
-  const modalHeight = Math.max(8, Math.min(availableHeight - 2, availableHeight));
+  const modalHostHeight = Math.max(8, Math.floor(availableHeight * 0.85));
+  const modalHeight = Math.max(
+    6,
+    Math.min(modalHostHeight - 2, availableHeight - 2),
+  );
 
   return (
     <Box
@@ -1149,8 +1153,18 @@ function ModalDialogHost({ children }: { children: React.ReactNode }) {
         paddingX={0}
         paddingY={0}
         borderColor="$inputborder"
+        overflow="hidden"
       >
-        {children}
+        <Box
+          flexDirection="column"
+          flexGrow={1}
+          flexShrink={1}
+          minWidth={0}
+          minHeight={0}
+          overflow="hidden"
+        >
+          {children}
+        </Box>
       </ModalDialog>
     </Box>
   );
