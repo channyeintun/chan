@@ -2,6 +2,7 @@ import React, { type FC, useMemo } from "react";
 import { Spinner } from "silvery";
 import { Box, Text } from "silvery";
 import ShimmerText from "../ShimmerText.js";
+import PreservedText from "../PreservedText.js";
 
 interface AssistantThinkingMessageProps {
   text: string;
@@ -12,19 +13,18 @@ interface AssistantThinkingMessageProps {
 function truncateThinking(
   text: string,
   maxLines: number,
-  maxChars: number,
 ): string {
   const trimmed = text.trimEnd();
   if (!trimmed) {
     return "";
   }
 
-  const tail =
-    trimmed.length > maxChars
-      ? trimmed.slice(trimmed.length - maxChars)
-      : trimmed;
-  const lines = tail.split("\n");
-  return lines.slice(-maxLines).join("\n").trimStart();
+  const lines = trimmed.split("\n");
+  if (lines.length <= maxLines) {
+    return trimmed;
+  }
+
+  return lines.slice(-maxLines).join("\n");
 }
 
 const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
@@ -33,7 +33,7 @@ const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
   toggleHint,
 }) => {
   const content = useMemo(
-    () => (streaming ? truncateThinking(text, 6, 800) : text.trimEnd()),
+    () => (streaming ? truncateThinking(text, 6) : text.trimEnd()),
     [streaming, text],
   );
   if (!content) {
@@ -59,9 +59,7 @@ const AssistantThinkingMessage: FC<AssistantThinkingMessageProps> = ({
           </Text>
         ) : null}
       </Box>
-      <Text color="$muted" wrap="wrap">
-        {content}
-      </Text>
+      <PreservedText text={content} color="$muted" />
     </Box>
   );
 };
