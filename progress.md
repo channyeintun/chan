@@ -19,5 +19,5 @@ Constraints:
 | 4c | Split `lsp.go` into transport/client-focused files behind the tool adapter. | Completed | Split the tool adapter, client lifecycle, JSON-RPC transport, server resolution, and result shaping helpers; `gofmt` and `go build ./...` passed. |
 | 5 | Split slash command handlers by domain and narrow `slashCommandContext`. | Completed | Split the monolithic handler file into focused command-domain files while preserving the shared context and dispatch flow; `gofmt` and `go build ./...` passed. |
 | 6 | Split provider implementations by request, stream, types, errors, and policy. | Completed | Split Anthropic, Gemini, OpenAI Responses, and OpenAI-compatible providers across focused files for request building, streaming, policy, schema, and wire types; `gofmt` and `go build ./...` passed. |
-| 7 | Split retrieval graph and agent loop helpers after tests are in place. | Blocked | Depends on the skipped test step from the original plan. |
-| 8 | Move MCP CLI business logic out of `cmd`. | In progress | Final non-test plan step remaining. |
+| 7 | Split retrieval graph and agent loop helpers after tests are in place. | Skipped | Deferred because the original plan explicitly gates it on pre-refactor tests, which remain skipped under the `Never add tests` constraint. |
+| 8 | Move MCP CLI business logic out of `cmd`. | Completed | Moved MCP add/list/get/remove business logic and rendering into `internal/commands`; `cmd` now stays focused on Cobra wiring plus output plumbing. `gofmt` and `go build ./...` passed. |
