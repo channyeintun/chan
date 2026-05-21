@@ -1152,6 +1152,7 @@ function ModalDialogHost({ children }: { children: React.ReactNode }) {
         height={modalHeight}
         paddingX={0}
         paddingY={0}
+        borderStyle="single"
         borderColor="$inputborder"
         overflow="hidden"
       >
