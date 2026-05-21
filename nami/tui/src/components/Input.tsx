@@ -222,6 +222,7 @@ const Input: FC<InputProps> = ({
     () => getPromptTextColumns(terminalColumns),
     [terminalColumns],
   );
+  const hasPromptDraft = prompt.value.length > 0;
   const slashPreview = useSlashCommandPreview({
     value: prompt.value,
     cursorOffset: prompt.cursorOffset,
@@ -370,6 +371,10 @@ const Input: FC<InputProps> = ({
           return;
         }
 
+        if (!hasPromptDraft) {
+          return;
+        }
+
         if (!prompt.moveVisualUp(promptTextColumns)) {
           prompt.navigateUp();
         }
@@ -380,6 +385,10 @@ const Input: FC<InputProps> = ({
         flushPendingSubmit();
         if (slashPreview.visible) {
           slashPreview.selectNext();
+          return;
+        }
+
+        if (!hasPromptDraft) {
           return;
         }
 
@@ -455,13 +464,17 @@ const Input: FC<InputProps> = ({
             prompt.backspace();
             return;
           case "n":
-            prompt.navigateDown();
+            if (hasPromptDraft) {
+              prompt.navigateDown();
+            }
             return;
           case "o":
             prompt.insertNewline();
             return;
           case "p":
-            prompt.navigateUp();
+            if (hasPromptDraft) {
+              prompt.navigateUp();
+            }
             return;
           case "u":
             prompt.clear();
