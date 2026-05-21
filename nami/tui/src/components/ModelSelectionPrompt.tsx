@@ -1,17 +1,16 @@
 import React, { type FC, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Box,
-  ListView,
-  Text,
-  useBoxRect,
-  useFocusManager,
-  useInput,
-} from "silvery";
+import { Box, ModalDialog, PickerDialog, Text, useInput } from "silvery";
 import type {
   UIModelSelection,
   UIModelSelectionOption,
 } from "../hooks/useEvents.js";
 import { stripProviderPrefix } from "../utils/formatModel.js";
+
+interface PickerOptionItem {
+  key: string;
+  option: UIModelSelectionOption;
+  section: string | null;
+}
 
 interface ModelSelectionPromptProps {
   selection: UIModelSelection;
@@ -25,59 +24,26 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
   onCancel,
 }) => {
   const [terminalRows, setTerminalRows] = useState(process.stdout.rows ?? 24);
-  const focusManager = useFocusManager();
   const [searchValue, setSearchValue] = useState("");
-  const [searchCursorOffset, setSearchCursorOffset] = useState(0);
-  const [searchCursorVisible, setSearchCursorVisible] = useState(true);
-  const filteredOptions = useMemo(
-    () => filterModelSelectionOptions(selection.options, searchValue),
-    [searchValue, selection.options],
-  );
-  const initialIndex = useMemo(() => {
-    const activeIndex = filteredOptions.findIndex((option) => option.active);
-    return activeIndex >= 0 ? activeIndex : 0;
-  }, [filteredOptions]);
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
   const [customMode, setCustomMode] = useState(false);
   const [customValue, setCustomValue] = useState("");
   const [cursorOffset, setCursorOffset] = useState(0);
-  const selectedIndexRef = useRef(initialIndex);
-  const customModeRef = useRef(false);
   const customValueRef = useRef("");
   const cursorOffsetRef = useRef(0);
-  const searchValueRef = useRef("");
-  const searchCursorOffsetRef = useRef(0);
+  const [cursorVisible, setCursorVisible] = useState(true);
 
-  selectedIndexRef.current = selectedIndex;
-  customModeRef.current = customMode;
   customValueRef.current = customValue;
   cursorOffsetRef.current = cursorOffset;
-  searchValueRef.current = searchValue;
-  searchCursorOffsetRef.current = searchCursorOffset;
 
   useEffect(() => {
-    selectedIndexRef.current = initialIndex;
-    setSelectedIndex(initialIndex);
-  }, [initialIndex]);
-
-  useEffect(() => {
-    setCustomMode(false);
-    setCustomValue("");
-    setCursorOffset(0);
     setSearchValue("");
-    setSearchCursorOffset(0);
-    customModeRef.current = false;
+    setCustomMode(false);
     customValueRef.current = "";
     cursorOffsetRef.current = 0;
-    searchValueRef.current = "";
-    searchCursorOffsetRef.current = 0;
+    setCustomValue("");
+    setCursorOffset(0);
+    setCursorVisible(true);
   }, [selection.requestId]);
-
-  useEffect(() => {
-    if (customMode) {
-      focusManager.blur();
-    }
-  }, [customMode, focusManager]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -93,80 +59,60 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
   }, []);
 
   useEffect(() => {
+    if (!customMode) {
+      setCursorVisible(true);
+      return;
+    }
+
     const timer = setInterval(() => {
-      setSearchCursorVisible((current) => !current);
+      setCursorVisible((current) => !current);
     }, 530);
 
     return () => {
       clearInterval(timer);
     };
-  }, []);
+  }, [customMode]);
 
-  const compactLayout = terminalRows < 22;
+  const kind: PickerKind =
+    selection.title?.trim().toLowerCase() === "connect provider"
+      ? "provider"
+      : "model";
+  const filteredOptions = useMemo(
+    () => filterModelSelectionOptions(selection.options, searchValue),
+    [searchValue, selection.options],
+  );
+  const pickerItems = useMemo<PickerOptionItem[]>(() => {
+    let previousSection: string | null = null;
 
-  const updateSelectedIndex = (
-    updater: number | ((current: number) => number),
-  ) => {
-    const next =
-      typeof updater === "function"
-        ? updater(selectedIndexRef.current)
-        : updater;
-    selectedIndexRef.current = next;
-    setSelectedIndex(next);
-  };
+    return filteredOptions.map((option, index) => {
+      const section = sectionForOption(option, kind);
+      const showSection = section !== null && section !== previousSection;
+      previousSection = section;
 
-  const updateCustomMode = (next: boolean) => {
-    customModeRef.current = next;
-    setCustomMode(next);
-  };
+      return {
+        key: `${option.label}-${index}`,
+        option,
+        section: showSection ? section : null,
+      };
+    });
+  }, [filteredOptions, kind]);
+  const dialogWidth = Math.max(
+    44,
+    Math.min(80, (process.stdout.columns ?? 80) - 4),
+  );
+  const maxVisible = Math.max(6, Math.min(18, terminalRows - 10));
 
-  const updateCustomValue = (
-    updater: string | ((current: string) => string),
-  ) => {
-    const next =
-      typeof updater === "function" ? updater(customValueRef.current) : updater;
-    customValueRef.current = next;
-    setCustomValue(next);
-  };
+  useInput(
+    (input, key) => {
+      if (!customMode) {
+        return;
+      }
 
-  const updateCursorOffset = (
-    updater: number | ((current: number) => number),
-  ) => {
-    const next =
-      typeof updater === "function"
-        ? updater(cursorOffsetRef.current)
-        : updater;
-    cursorOffsetRef.current = next;
-    setCursorOffset(next);
-  };
+      const text = key.text ?? input;
+      const isEscape = key.escape || input === "\u001b" || text === "\u001b";
 
-  const updateSearchValue = (
-    updater: string | ((current: string) => string),
-  ) => {
-    const next =
-      typeof updater === "function" ? updater(searchValueRef.current) : updater;
-    searchValueRef.current = next;
-    setSearchValue(next);
-  };
-
-  const updateSearchCursorOffset = (
-    updater: number | ((current: number) => number),
-  ) => {
-    const next =
-      typeof updater === "function"
-        ? updater(searchCursorOffsetRef.current)
-        : updater;
-    searchCursorOffsetRef.current = next;
-    setSearchCursorOffset(next);
-  };
-
-  useInput((input, key) => {
-    const text = key.text ?? input;
-    const isEscape = key.escape || input === "\u001b" || text === "\u001b";
-
-    if (customModeRef.current) {
       if (isEscape) {
-        updateCustomMode(false);
+        setCustomMode(false);
         return;
       }
       if (key.return) {
@@ -177,28 +123,28 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
         return;
       }
       if (key.leftArrow || (key.ctrl && input === "b")) {
-        updateCursorOffset((current) => Math.max(0, current - 1));
+        setCursorOffset((current) => Math.max(0, current - 1));
         return;
       }
       if (key.rightArrow || (key.ctrl && input === "f")) {
-        updateCursorOffset((current) =>
+        setCursorOffset((current) =>
           Math.min(customValueRef.current.length, current + 1),
         );
         return;
       }
       if (key.home || (key.ctrl && input === "a")) {
-        updateCursorOffset(0);
+        setCursorOffset(0);
         return;
       }
       if (key.end || (key.ctrl && input === "e")) {
-        updateCursorOffset(customValueRef.current.length);
+        setCursorOffset(customValueRef.current.length);
         return;
       }
       if (key.backspace || (key.ctrl && input === "h")) {
         if (cursorOffsetRef.current === 0) {
           return;
         }
-        updateCustomValue((current) =>
+        setCustomValue((current) =>
           replaceRange(
             current,
             cursorOffsetRef.current - 1,
@@ -206,11 +152,11 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
             "",
           ),
         );
-        updateCursorOffset((current) => Math.max(0, current - 1));
+        setCursorOffset((current) => Math.max(0, current - 1));
         return;
       }
       if (key.delete) {
-        updateCustomValue((current) =>
+        setCustomValue((current) =>
           replaceRange(
             current,
             cursorOffsetRef.current,
@@ -221,12 +167,12 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
         return;
       }
       if (key.ctrl && input === "u") {
-        updateCustomValue("");
-        updateCursorOffset(0);
+        setCustomValue("");
+        setCursorOffset(0);
         return;
       }
       if (text && !key.ctrl && !key.meta) {
-        updateCustomValue((current) =>
+        setCustomValue((current) =>
           replaceRange(
             current,
             cursorOffsetRef.current,
@@ -234,293 +180,78 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
             text,
           ),
         );
-        updateCursorOffset((current) => current + text.length);
+        setCursorOffset((current) => current + text.length);
       }
-      return;
-    }
+    },
+    { isActive: customMode },
+  );
 
-    if (isEscape) {
-      onCancel();
-      return;
-    }
-
-    if (key.leftArrow || (key.ctrl && input === "b")) {
-      updateSearchCursorOffset((current) => Math.max(0, current - 1));
-      return;
-    }
-    if (key.rightArrow || (key.ctrl && input === "f")) {
-      updateSearchCursorOffset((current) =>
-        Math.min(searchValueRef.current.length, current + 1),
-      );
-      return;
-    }
-    if (key.home || (key.ctrl && input === "a")) {
-      updateSearchCursorOffset(0);
-      return;
-    }
-    if (key.end || (key.ctrl && input === "e")) {
-      updateSearchCursorOffset(searchValueRef.current.length);
-      return;
-    }
-    if (key.backspace || (key.ctrl && input === "h")) {
-      if (searchCursorOffsetRef.current === 0) {
-        return;
-      }
-      updateSearchValue((current) =>
-        replaceRange(
-          current,
-          searchCursorOffsetRef.current - 1,
-          searchCursorOffsetRef.current,
-          "",
-        ),
-      );
-      updateSearchCursorOffset((current) => Math.max(0, current - 1));
-      return;
-    }
-    if (key.delete) {
-      updateSearchValue((current) =>
-        replaceRange(
-          current,
-          searchCursorOffsetRef.current,
-          searchCursorOffsetRef.current + 1,
-          "",
-        ),
-      );
-      return;
-    }
-    if (key.ctrl && input === "u") {
-      updateSearchValue("");
-      updateSearchCursorOffset(0);
-      return;
-    }
-    if (
-      text &&
-      !key.ctrl &&
-      !key.meta &&
-      !key.return &&
-      !key.upArrow &&
-      !key.downArrow
-    ) {
-      updateSearchValue((current) =>
-        replaceRange(
-          current,
-          searchCursorOffsetRef.current,
-          searchCursorOffsetRef.current,
-          text,
-        ),
-      );
-      updateSearchCursorOffset((current) => current + text.length);
-    }
-  });
-
-  const handleListSelect = (index: number) => {
-    const selectedOption = filteredOptions[index];
-    if (!selectedOption) {
-      return;
-    }
-    if (selectedOption.isCustom) {
-      focusManager.blur();
-      updateCustomMode(true);
-      updateCursorOffset(customValueRef.current.length);
-      return;
-    }
-    if (selectedOption.model) {
-      onSelect(selectedOption.model, selectedOption.provider ?? undefined);
-    }
-  };
+  if (customMode) {
+    return (
+      <ModalDialog
+        title="Custom model"
+        width={Math.min(dialogWidth, 72)}
+        footer="Enter apply · Esc return to list"
+        borderColor="$inputborder"
+      >
+        <Box flexDirection="column" minWidth={0}>
+          <Text color="$muted">
+            Enter a model id or provider/model to pick a specific provider.
+          </Text>
+          <Box marginTop={1}>
+            <Text>{renderEditableValue(customValue, cursorOffset, cursorVisible)}</Text>
+          </Box>
+        </Box>
+      </ModalDialog>
+    );
+  }
 
   return (
-    <Box
-      flexDirection="column"
-      flexGrow={1}
-      flexShrink={1}
-      minWidth={0}
-      minHeight={0}
-      backgroundColor="$popover-bg"
-      overflow="hidden"
-      paddingX={2}
-      paddingY={compactLayout ? 0 : 1}
-    >
-      <Box flexDirection="row" flexShrink={0} minWidth={0} justifyContent="space-between">
-        <Text bold color="$primary">
-          {formatPickerTitle(selection.title)}
-        </Text>
-        <Text color="$muted">
-          esc
-        </Text>
-      </Box>
-
-      <Box
-        marginTop={compactLayout ? 0 : 1}
-        flexDirection="column"
-        flexShrink={0}
-      >
-        <Text color={searchValue.length > 0 ? "$fg" : "$muted"}>
-          {renderSearchValue(
-            searchValue,
-            searchCursorOffset,
-            searchCursorVisible,
-          )}
-        </Text>
-      </Box>
-
-      {filteredOptions.length > 0 ? (
-        <ModelSelectionList
-          options={filteredOptions}
-          selectedIndex={selectedIndex}
-          active={!customMode}
-          compact={compactLayout && !customMode}
-          kind={selection.title?.trim().toLowerCase() === "connect provider" ? "provider" : "model"}
-          onCursor={updateSelectedIndex}
-          onSelectIndex={handleListSelect}
-        />
-      ) : (
+    <PickerDialog
+      key={selection.requestId}
+      title={formatPickerTitle(selection.title)}
+      items={pickerItems}
+      renderItem={(item, selected) => (
         <Box
-          marginTop={1}
           flexDirection="column"
-          flexGrow={1}
-          flexShrink={1}
-          justifyContent="center"
-          minHeight={0}
+          minWidth={0}
+          paddingX={1}
+          backgroundColor={selected ? "$selectionbg" : undefined}
         >
-          <Text color="$muted">No options match the current filter.</Text>
+          {item.section ? (
+            <Text color="$primary" bold>
+              {item.section}
+            </Text>
+          ) : null}
+          <Text color={selected ? "$selection" : "$fg"} bold={selected}>
+            {formatSelectionLine(item.option, selected, kind)}
+          </Text>
         </Box>
       )}
-      {customMode ? (
-        <Box
-          marginTop={compactLayout ? 0 : 1}
-          paddingX={1}
-          paddingY={1}
-          backgroundColor="$surface-bg"
-          borderStyle="round"
-          borderColor="$focusborder"
-          flexDirection="column"
-          flexShrink={0}
-        >
-          <Text color="$primary">Custom model</Text>
-          <Text color="$muted">
-            {compactLayout
-              ? "Model id or provider/model."
-              : "Enter a model id or provider/model to pick a specific provider."}
-          </Text>
-          <Text>{renderEditableValue(customValue, cursorOffset)}</Text>
-        </Box>
-      ) : null}
-      <Box marginTop={compactLayout ? 0 : 1} flexDirection="column" flexShrink={0}>
-        <Text color="$fg">
-          {customMode ? (
-            <>
-              <Text color="$primary" bold>
-                Enter
-              </Text>{" "}
-              apply ·{" "}
-              <Text color="$primary" bold>
-                Esc
-              </Text>{" "}
-              return to list
-            </>
-          ) : (
-            <>
-              <Text color="$primary" bold>
-                Enter
-              </Text>{" "}
-              choose ·{" "}
-              {compactLayout ? null : (
-                <>
-                  <Text color="$primary" bold>
-                    Up/Down
-                  </Text>{" "}
-                  change selection ·{" "}
-                </>
-              )}
-              <Text color="$primary" bold>
-                Esc
-              </Text>{" "}
-              cancel
-            </>
-          )}
-        </Text>
-      </Box>
-    </Box>
+      getKey={(item) => item.key}
+      onSelect={(item) => {
+        if (item.option.isCustom) {
+          setCustomMode(true);
+          setCursorOffset(customValueRef.current.length);
+          return;
+        }
+
+        if (item.option.model) {
+          onSelect(item.option.model, item.option.provider ?? undefined);
+        }
+      }}
+      onCancel={onCancel}
+      onChange={setSearchValue}
+      placeholder="Search"
+      emptyMessage="No options match the current filter."
+      maxVisible={maxVisible}
+      width={dialogWidth}
+      footer="Enter choose · Esc cancel"
+    />
   );
 };
 
 export default ModelSelectionPrompt;
-
-interface ModelSelectionListProps {
-  options: UIModelSelectionOption[];
-  selectedIndex: number;
-  active: boolean;
-  compact: boolean;
-  kind: PickerKind;
-  onCursor: (index: number | ((current: number) => number)) => void;
-  onSelectIndex: (index: number) => void;
-}
-
-const ModelSelectionList: FC<ModelSelectionListProps> = ({
-  options,
-  selectedIndex,
-  active,
-  compact,
-  kind,
-  onCursor,
-  onSelectIndex,
-}) => {
-  const { height: rectHeight } = useBoxRect();
-  const viewportHeight = Math.max(1, rectHeight);
-
-  return (
-    <Box
-      marginTop={1}
-      flexDirection="column"
-      flexGrow={1}
-      flexShrink={1}
-      minHeight={0}
-      minWidth={0}
-      overflow="hidden"
-    >
-      <ListView
-        items={options}
-        height={viewportHeight}
-        nav
-        cursorKey={selectedIndex}
-        onCursor={(index) => onCursor(index)}
-        onSelect={onSelectIndex}
-        active={active}
-        estimateHeight={1}
-        overflowIndicator
-        getKey={(option, index) => `${option.label}-${index}`}
-        renderItem={(option, index, meta) => {
-          const isSelected = meta.isCursor;
-          const section = sectionForOption(option, kind);
-          const previousSection =
-            index > 0 ? sectionForOption(options[index - 1], kind) : null;
-          const showSection = section !== null && section !== previousSection;
-
-          return (
-            <Box
-              key={`${option.label}-${index}`}
-              flexDirection="column"
-              backgroundColor={isSelected ? "$selectionbg" : undefined}
-              paddingX={1}
-              marginBottom={0}
-              minWidth={0}
-            >
-              {showSection ? (
-                <Text color="$primary" bold>
-                  {section}
-                </Text>
-              ) : null}
-              <Text color={isSelected ? "$selection" : "$fg"} bold={isSelected}>
-                {formatSelectionLine(option, isSelected, kind)}
-              </Text>
-            </Box>
-          );
-        }}
-      />
-    </Box>
-  );
-};
 
 type PickerKind = "provider" | "model";
 
@@ -660,17 +391,6 @@ function renderEditableValue(
   const clampedOffset = Math.max(0, Math.min(value.length, cursorOffset));
   const cursor = cursorVisible ? "█" : " ";
   return value.slice(0, clampedOffset) + cursor + value.slice(clampedOffset);
-}
-
-function renderSearchValue(
-  value: string,
-  cursorOffset: number,
-  cursorVisible: boolean,
-): string {
-  if (value.length === 0) {
-    return `Search${cursorVisible ? "█" : " "}`;
-  }
-  return renderEditableValue(value, cursorOffset, cursorVisible);
 }
 
 function replaceRange(

@@ -14,7 +14,6 @@ import {
   disableBracketedPaste,
   enableBracketedPaste,
   type ToastData,
-  useBoxRect,
   useFocusManager,
   useToast,
 } from "silvery";
@@ -742,6 +741,14 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     [engine],
   );
 
+  const pickerDialogContent = uiState.pendingModelSelection ? (
+    <ModelSelectionPrompt
+      selection={uiState.pendingModelSelection}
+      onSelect={handleModelSelection}
+      onCancel={() => handleModelSelection()}
+    />
+  ) : null;
+
   const modalContent = uiState.pendingResumeSelection ? (
     <ResumeSelectionPrompt
       selection={uiState.pendingResumeSelection}
@@ -758,12 +765,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
       selection={uiState.pendingRewindSelection}
       onSelect={handleRewindSelection}
       onCancel={() => handleRewindSelection()}
-    />
-  ) : uiState.pendingModelSelection ? (
-    <ModelSelectionPrompt
-      selection={uiState.pendingModelSelection}
-      onSelect={handleModelSelection}
-      onCancel={() => handleModelSelection()}
     />
   ) : showBackgroundTasks ? (
     <BackgroundTasksDialog
@@ -784,6 +785,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
         width="100%"
         height="100%"
         flexDirection="column"
+        position="relative"
       >
         <Box flexShrink={0}>
           <StatusBar
@@ -931,8 +933,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
               onRespond={handleArtifactReviewResponse}
             />
           </Box>
-        ) : modalContent ? (
-          <ModalDialogHost>{modalContent}</ModalDialogHost>
         ) : showPromptArea ? (
           <Box
             flexDirection="column"
@@ -990,6 +990,25 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
               backgroundTasksShortcutLabel={TASKS_TOGGLE_SHORTCUT_LABEL}
               reasoningShortcutLabel={REASONING_TOGGLE_SHORTCUT_LABEL}
             />
+          </Box>
+        ) : null}
+
+        {pickerDialogContent || modalContent ? (
+          <Box
+            position="absolute"
+            width="100%"
+            height="100%"
+            minWidth={0}
+            minHeight={0}
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            overflow="hidden"
+            userSelect="none"
+          >
+            {pickerDialogContent ?? (
+              <ModalDialogHost>{modalContent}</ModalDialogHost>
+            )}
           </Box>
         ) : null}
 
@@ -1124,50 +1143,35 @@ function escapeTaskNotificationText(value: string): string {
 }
 
 function ModalDialogHost({ children }: { children: React.ReactNode }) {
-  const { width: hostWidth, height: hostHeight } = useBoxRect();
-  const fallbackWidth = process.stdout.columns ?? 80;
-  const fallbackHeight = process.stdout.rows ?? 24;
-  const availableWidth = hostWidth > 0 ? hostWidth : fallbackWidth;
-  const availableHeight = hostHeight > 0 ? hostHeight : fallbackHeight;
+  const availableWidth = process.stdout.columns ?? 80;
+  const availableHeight = process.stdout.rows ?? 24;
   const modalWidth = Math.max(20, Math.min(96, availableWidth - 4));
-  const modalHostHeight = Math.max(8, Math.floor(availableHeight * 0.85));
   const modalHeight = Math.max(
     6,
-    Math.min(modalHostHeight - 2, availableHeight - 2),
+    Math.min(availableHeight - 4, Math.floor(availableHeight * 0.85)),
   );
 
   return (
-    <Box
-      flexDirection="column"
-      alignItems="center"
-      justifyContent="center"
-      height="85%"
-      flexShrink={1}
-      minHeight={0}
-      marginTop={1}
-      userSelect="none"
+    <ModalDialog
+      width={modalWidth}
+      height={modalHeight}
+      paddingX={0}
+      paddingY={0}
+      borderStyle="single"
+      borderColor="$inputborder"
+      overflow="hidden"
     >
-      <ModalDialog
-        width={modalWidth}
-        height={modalHeight}
-        paddingX={0}
-        paddingY={0}
-        borderStyle="single"
-        borderColor="$inputborder"
+      <Box
+        flexDirection="column"
+        flexGrow={1}
+        flexShrink={1}
+        minWidth={0}
+        minHeight={0}
         overflow="hidden"
       >
-        <Box
-          flexDirection="column"
-          flexGrow={1}
-          flexShrink={1}
-          minWidth={0}
-          minHeight={0}
-          overflow="hidden"
-        >
-          {children}
-        </Box>
-      </ModalDialog>
-    </Box>
+        {children}
+      </Box>
+    </ModalDialog>
   );
 }
 
