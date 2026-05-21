@@ -1,5 +1,5 @@
-import React, { type FC, useState } from "react";
-import { Box, ListView, Text, useBoxRect, useInput } from "silvery";
+import React, { type FC, useEffect, useState } from "react";
+import { Box, ListView, ModalDialog, Text, useBoxRect, useInput } from "silvery";
 import type { UIRewindSelection } from "../hooks/useEvents.js";
 
 interface RewindSelectionPromptProps {
@@ -16,6 +16,28 @@ const RewindSelectionPrompt: FC<RewindSelectionPromptProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(
     Math.max(selection.turns.length - 1, 0),
   );
+  const [terminalRows, setTerminalRows] = useState(process.stdout.rows ?? 24);
+  const [terminalColumns, setTerminalColumns] = useState(
+    process.stdout.columns ?? 80,
+  );
+
+  useEffect(() => {
+    setSelectedIndex(Math.max(selection.turns.length - 1, 0));
+  }, [selection.requestId, selection.turns.length]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setTerminalRows(process.stdout.rows ?? 24);
+      setTerminalColumns(process.stdout.columns ?? 80);
+    };
+
+    handleResize();
+    process.stdout.on("resize", handleResize);
+
+    return () => {
+      process.stdout.off("resize", handleResize);
+    };
+  }, []);
 
   useInput((input, key) => {
     if (key.escape) {
@@ -40,25 +62,32 @@ const RewindSelectionPrompt: FC<RewindSelectionPromptProps> = ({
     }
   };
 
+  const dialogWidth =
+    terminalColumns > 52
+      ? Math.min(96, terminalColumns - 4)
+      : Math.max(24, terminalColumns - 2);
+  const dialogHeight =
+    terminalRows > 16
+      ? Math.min(24, terminalRows - 4)
+      : Math.max(10, terminalRows - 2);
+
   return (
-    <Box
-      flexDirection="column"
-      flexGrow={1}
-      flexShrink={1}
-      minWidth={0}
-      minHeight={0}
-      backgroundColor="$popover-bg"
+    <ModalDialog
+      title="Rewind Conversation"
+      width={dialogWidth}
+      height={dialogHeight}
       borderStyle="single"
       borderColor="$inputborder"
-      overflow="hidden"
-      paddingX={2}
-      paddingY={1}
+      footer="Enter rewind · Up/Down change selection · Esc or Q cancel"
     >
-      <Box flexDirection="column" flexShrink={0} minWidth={0}>
-        <Text bold color="$warning">
-          Rewind Conversation
-        </Text>
-        <Box marginTop={1} flexDirection="column" minWidth={0}>
+      <Box
+        flexDirection="column"
+        flexGrow={1}
+        flexShrink={1}
+        minWidth={0}
+        minHeight={0}
+      >
+        <Box flexDirection="column" flexShrink={0} minWidth={0}>
           <Text>
             Choose the user turn to keep. Later messages will be dropped.
           </Text>
@@ -67,35 +96,14 @@ const RewindSelectionPrompt: FC<RewindSelectionPromptProps> = ({
             {selection.turns.length === 1 ? "" : "s"}
           </Text>
         </Box>
+        <RewindTurnList
+          turns={selection.turns}
+          selectedIndex={selectedIndex}
+          onCursor={setSelectedIndex}
+          onSelectIndex={handleListSelect}
+        />
       </Box>
-
-      <RewindTurnList
-        turns={selection.turns}
-        selectedIndex={selectedIndex}
-        onCursor={setSelectedIndex}
-        onSelectIndex={handleListSelect}
-      />
-      <Box marginTop={1} flexDirection="column" flexShrink={0}>
-        <Text color="$fg">
-          <Text color="$primary" bold>
-            Enter
-          </Text>{" "}
-          rewind ·{" "}
-          <Text color="$primary" bold>
-            Up/Down
-          </Text>{" "}
-          change selection ·{" "}
-          <Text color="$primary" bold>
-            Esc
-          </Text>{" "}
-          or{" "}
-          <Text color="$primary" bold>
-            Q
-          </Text>{" "}
-          cancel
-        </Text>
-      </Box>
-    </Box>
+    </ModalDialog>
   );
 };
 

@@ -7,7 +7,6 @@ import React, {
 } from "react";
 import {
   Box,
-  ModalDialog,
   Screen,
   Spinner,
   Text,
@@ -998,11 +997,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
             overflow="hidden"
             userSelect="none"
           >
-            {uiState.pendingAskUserQuestion || uiState.pendingRewindSelection ? (
-              <ModalDialogHost>{overlayDialogContent}</ModalDialogHost>
-            ) : (
-              overlayDialogContent
-            )}
+            {overlayDialogContent}
           </Box>
         ) : null}
 
@@ -1134,39 +1129,6 @@ function escapeTaskNotificationText(value: string): string {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
-}
-
-function ModalDialogHost({ children }: { children: React.ReactNode }) {
-  const availableWidth = process.stdout.columns ?? 80;
-  const availableHeight = process.stdout.rows ?? 24;
-  const modalWidth = Math.max(20, Math.min(96, availableWidth - 4));
-  const modalHeight = Math.max(
-    6,
-    Math.min(availableHeight - 4, Math.floor(availableHeight * 0.85)),
-  );
-
-  return (
-    <ModalDialog
-      width={modalWidth}
-      height={modalHeight}
-      paddingX={0}
-      paddingY={0}
-      borderStyle="single"
-      borderColor="$inputborder"
-      overflow="hidden"
-    >
-      <Box
-        flexDirection="column"
-        flexGrow={1}
-        flexShrink={1}
-        minWidth={0}
-        minHeight={0}
-        overflow="hidden"
-      >
-        {children}
-      </Box>
-    </ModalDialog>
-  );
 }
 
 function SafeToastItem({ toast }: { toast: ToastData }) {

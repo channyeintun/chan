@@ -1,5 +1,5 @@
-import React, { type FC, useMemo, useState } from "react";
-import { Box, Text, useInput } from "silvery";
+import React, { type FC, useEffect, useMemo, useState } from "react";
+import { Box, ModalDialog, Text, useInput } from "silvery";
 import type {
   UIAskUserQuestionAnswer,
   UIAskUserQuestionRequest,
@@ -38,6 +38,31 @@ const AskUserQuestionPrompt: FC<AskUserQuestionPromptProps> = ({
     useState<UIAskUserQuestionAnswer[]>(initialAnswers);
   const [optionIndex, setOptionIndex] = useState(0);
   const [freeformDraft, setFreeformDraft] = useState("");
+  const [terminalRows, setTerminalRows] = useState(process.stdout.rows ?? 24);
+  const [terminalColumns, setTerminalColumns] = useState(
+    process.stdout.columns ?? 80,
+  );
+
+  useEffect(() => {
+    setQuestionIndex(0);
+    setAnswers(initialAnswers);
+    setOptionIndex(0);
+    setFreeformDraft(initialAnswers[0]?.freeformText ?? "");
+  }, [initialAnswers, request.requestId]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setTerminalRows(process.stdout.rows ?? 24);
+      setTerminalColumns(process.stdout.columns ?? 80);
+    };
+
+    handleResize();
+    process.stdout.on("resize", handleResize);
+
+    return () => {
+      process.stdout.off("resize", handleResize);
+    };
+  }, []);
 
   const currentQuestion = request.questions[questionIndex];
   const currentAnswer = answers[questionIndex] ?? initialAnswers[questionIndex];
@@ -45,6 +70,15 @@ const AskUserQuestionPrompt: FC<AskUserQuestionPromptProps> = ({
   if (!currentQuestion || !currentAnswer) {
     return null;
   }
+
+  const dialogWidth =
+    terminalColumns > 52
+      ? Math.min(96, terminalColumns - 4)
+      : Math.max(24, terminalColumns - 2);
+  const dialogHeight =
+    terminalRows > 16
+      ? Math.min(24, terminalRows - 4)
+      : Math.max(10, terminalRows - 2);
 
   const persistCurrentAnswer = () => {
     const freeformText = currentQuestion.allowFreeform
@@ -203,64 +237,65 @@ const AskUserQuestionPrompt: FC<AskUserQuestionPromptProps> = ({
   });
 
   return (
-    <Box
-      flexDirection="column"
-      flexGrow={1}
-      flexShrink={1}
-      minWidth={0}
-      minHeight={0}
-      backgroundColor="$popover-bg"
+    <ModalDialog
+      title="Clarification Required"
+      width={dialogWidth}
+      height={dialogHeight}
       borderStyle="single"
       borderColor="$inputborder"
-      overflow="hidden"
-      paddingX={2}
-      paddingY={1}
+      footer="Enter next/submit · Up/Down move · Space toggle · Ctrl+D decline · Esc cancel"
     >
-      <Text bold color="$primary">
-        Clarification Required
-      </Text>
-      <Box marginTop={1} flexDirection="column" minWidth={0}>
-        <Text>{`Question ${questionIndex + 1} of ${request.questions.length}`}</Text>
-        <Text bold>{currentQuestion.question}</Text>
-        <Text color="$muted">Header: {currentQuestion.header}</Text>
-      </Box>
-
-      {currentQuestion.options.length > 0 ? (
-        <Box marginTop={1} flexDirection="column" minWidth={0}>
-          {currentQuestion.options.map((option, index) => {
-            const selected = currentAnswer.selectedValues.includes(
-              option.value,
-            );
-            const cursor = index === optionIndex;
-            return (
-              <Box key={option.value} flexDirection="column" marginBottom={1}>
-                <Text color={cursor ? "$primary" : "$fg"} bold={cursor}>
-                  {cursor ? "›" : " "} {selected ? "[x]" : "[ ]"} {index + 1}.{" "}
-                  {option.label}
-                </Text>
-                {option.description ? (
-                  <Text color="$muted"> {option.description}</Text>
-                ) : null}
-              </Box>
-            );
-          })}
+      <Box
+        flexDirection="column"
+        flexGrow={1}
+        flexShrink={1}
+        minWidth={0}
+        minHeight={0}
+      >
+        <Box flexDirection="column" flexShrink={0} minWidth={0}>
+          <Text>{`Question ${questionIndex + 1} of ${request.questions.length}`}</Text>
+          <Text bold>{currentQuestion.question}</Text>
+          <Text color="$muted">Header: {currentQuestion.header}</Text>
         </Box>
-      ) : null}
 
-      {currentQuestion.allowFreeform ? (
-        <Box marginTop={1} flexDirection="column" minWidth={0}>
-          <Text color="$muted">Optional note</Text>
-          <Text>{freeformDraft || "Type to add freeform context..."}</Text>
-        </Box>
-      ) : null}
+        {currentQuestion.options.length > 0 ? (
+          <Box
+            marginTop={1}
+            flexDirection="column"
+            minWidth={0}
+            flexGrow={1}
+            flexShrink={1}
+            minHeight={0}
+            overflow="scroll"
+          >
+            {currentQuestion.options.map((option, index) => {
+              const selected = currentAnswer.selectedValues.includes(
+                option.value,
+              );
+              const cursor = index === optionIndex;
+              return (
+                <Box key={option.value} flexDirection="column" marginBottom={1}>
+                  <Text color={cursor ? "$primary" : "$fg"} bold={cursor}>
+                    {cursor ? "›" : " "} {selected ? "[x]" : "[ ]"} {index + 1}.{" "}
+                    {option.label}
+                  </Text>
+                  {option.description ? (
+                    <Text color="$muted"> {option.description}</Text>
+                  ) : null}
+                </Box>
+              );
+            })}
+          </Box>
+        ) : null}
 
-      <Box marginTop={1} flexDirection="column" flexShrink={0}>
-        <Text dimColor>
-          Enter next/submit · Up/Down move · Space toggle · Ctrl+D decline · Esc
-          cancel
-        </Text>
+        {currentQuestion.allowFreeform ? (
+          <Box marginTop={1} flexDirection="column" minWidth={0} flexShrink={0}>
+            <Text color="$muted">Optional note</Text>
+            <Text>{freeformDraft || "Type to add freeform context..."}</Text>
+          </Box>
+        ) : null}
       </Box>
-    </Box>
+    </ModalDialog>
   );
 };
 
