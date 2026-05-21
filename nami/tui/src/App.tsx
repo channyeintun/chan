@@ -623,11 +623,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     uiState.pendingModelSelection !== null ||
     uiState.pendingRewindSelection !== null ||
     uiState.pendingResumeSelection !== null;
-  const keepPromptVisibleWithOverlay =
-    uiState.pendingResumeSelection !== null ||
-    uiState.pendingAskUserQuestion !== null ||
-    uiState.pendingModelSelection !== null ||
-    uiState.pendingRewindSelection !== null;
   const showPromptArea =
     uiState.pendingPermission === null &&
     uiState.pendingAskUserQuestion === null &&
@@ -744,6 +739,41 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     },
     [engine],
   );
+
+  const modalContent = uiState.pendingResumeSelection ? (
+    <ResumeSelectionPrompt
+      selection={uiState.pendingResumeSelection}
+      onSelect={handleResumeSelection}
+      onCancel={() => handleResumeSelection()}
+    />
+  ) : uiState.pendingAskUserQuestion ? (
+    <AskUserQuestionPrompt
+      request={uiState.pendingAskUserQuestion}
+      onSubmit={handleAskUserQuestion}
+    />
+  ) : uiState.pendingRewindSelection ? (
+    <RewindSelectionPrompt
+      selection={uiState.pendingRewindSelection}
+      onSelect={handleRewindSelection}
+      onCancel={() => handleRewindSelection()}
+    />
+  ) : uiState.pendingModelSelection ? (
+    <ModelSelectionPrompt
+      selection={uiState.pendingModelSelection}
+      onSelect={handleModelSelection}
+      onCancel={() => handleModelSelection()}
+    />
+  ) : showBackgroundTasks ? (
+    <BackgroundTasksDialog
+      commands={uiState.backgroundCommands}
+      agents={uiState.backgroundAgents}
+      details={backgroundTaskDetails}
+      swarmDashboard={swarmDashboardSnapshot}
+      onClose={handleBackgroundTasksClose}
+      onInspectTask={handleBackgroundTaskInspect}
+      onStopTask={handleBackgroundTaskStop}
+    />
+  ) : null;
 
   return (
     <Screen>
@@ -899,6 +929,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
               onRespond={handleArtifactReviewResponse}
             />
           </Box>
+        ) : modalContent ? (
+          <ModalDialogHost>{modalContent}</ModalDialogHost>
         ) : showPromptArea ? (
           <Box
             flexDirection="column"
@@ -908,7 +940,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
             overflow="scroll"
           >
             <SafeToastContainer toasts={toasts} />
-            {transcriptSearchActive && !keepPromptVisibleWithOverlay ? (
+            {transcriptSearchActive ? (
               <TranscriptSearchPrompt
                 query={transcriptSearchQuery}
                 matchCount={transcriptSearchMatchCount}
@@ -959,50 +991,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
           </Box>
         ) : null}
 
-        {uiState.pendingResumeSelection ? (
-          <CenteredViewportOverlay>
-            <ResumeSelectionPrompt
-              selection={uiState.pendingResumeSelection}
-              onSelect={handleResumeSelection}
-              onCancel={() => handleResumeSelection()}
-            />
-          </CenteredViewportOverlay>
-        ) : uiState.pendingAskUserQuestion ? (
-          <CenteredViewportOverlay>
-            <AskUserQuestionPrompt
-              request={uiState.pendingAskUserQuestion}
-              onSubmit={handleAskUserQuestion}
-            />
-          </CenteredViewportOverlay>
-        ) : uiState.pendingRewindSelection ? (
-          <CenteredViewportOverlay>
-            <RewindSelectionPrompt
-              selection={uiState.pendingRewindSelection}
-              onSelect={handleRewindSelection}
-              onCancel={() => handleRewindSelection()}
-            />
-          </CenteredViewportOverlay>
-        ) : uiState.pendingModelSelection ? (
-          <CenteredViewportOverlay>
-            <ModelSelectionPrompt
-              selection={uiState.pendingModelSelection}
-              onSelect={handleModelSelection}
-              onCancel={() => handleModelSelection()}
-            />
-          </CenteredViewportOverlay>
-        ) : showBackgroundTasks ? (
-          <CenteredViewportOverlay>
-            <BackgroundTasksDialog
-              commands={uiState.backgroundCommands}
-              agents={uiState.backgroundAgents}
-              details={backgroundTaskDetails}
-              swarmDashboard={swarmDashboardSnapshot}
-              onClose={handleBackgroundTasksClose}
-              onInspectTask={handleBackgroundTaskInspect}
-              onStopTask={handleBackgroundTaskStop}
-            />
-          </CenteredViewportOverlay>
-        ) : null}
       </Box>
     </Screen>
   );
@@ -1133,17 +1121,15 @@ function escapeTaskNotificationText(value: string): string {
     .replaceAll(">", "&gt;");
 }
 
-function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
+function ModalDialogHost({ children }: { children: React.ReactNode }) {
   return (
     <Box
-      position="absolute"
-      left={1}
-      right={1}
-      top={1}
-      bottom={1}
-      justifyContent="center"
+      flexDirection="column"
       alignItems="center"
-      overflow="hidden"
+      height="85%"
+      flexShrink={1}
+      minHeight={0}
+      marginTop={1}
       userSelect="none"
     >
       <Box
@@ -1151,7 +1137,6 @@ function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
         width="100%"
         maxWidth={96}
         height="100%"
-        maxHeight="85%"
         flexShrink={1}
         minWidth={0}
         minHeight={0}

@@ -126,6 +126,7 @@ export interface UIModelSelectionOption {
   label: string;
   model: string | null;
   provider: string | null;
+  displayProvider: string | null;
   description: string | null;
   isCustom: boolean;
   active: boolean;
@@ -2195,11 +2196,17 @@ function normalizeModelSelectionOptions(
         typeof option.provider === "string" && option.provider.trim().length > 0
           ? option.provider.trim()
           : null;
+      const displayProvider =
+        typeof option.display_provider === "string" &&
+        option.display_provider.trim().length > 0
+          ? option.display_provider.trim()
+          : null;
 
       return {
         label: option.label.trim(),
         model,
         provider,
+        displayProvider,
         description:
           typeof option.description === "string" &&
           option.description.trim().length > 0
@@ -2212,7 +2219,7 @@ function normalizeModelSelectionOptions(
     .filter((option) => {
       const key = option.isCustom
         ? "custom"
-        : `${option.provider ?? ""}/${option.model ?? option.label}`.toLowerCase();
+        : `${option.provider ?? ""}/${option.displayProvider ?? ""}/${option.model ?? option.label}`.toLowerCase();
       if (seen.has(key)) {
         return false;
       }

@@ -156,19 +156,17 @@ func BuildModelSelectionOptions(snapshot ProviderSnapshot, currentSelection stri
 			if !match(status) {
 				continue
 			}
-			if !providerOwnsDefaultModel(status.ID, status.DefaultModel) {
-				continue
-			}
 			ref := providerModelRef(status.ID, status.DefaultModel)
 			if _, exists := seen[ref]; exists {
 				continue
 			}
 			options = append(options, ipc.ModelSelectionOptionPayload{
-				Label:       fmt.Sprintf("%s (%s Default) · %s", status.DefaultModel, status.Label, ProviderStateLabel(status)),
-				Model:       status.DefaultModel,
-				Provider:    status.ID,
-				Description: formatModelSelectionDescription(status),
-				Active:      strings.EqualFold(ref, currentRef),
+				Label:           fmt.Sprintf("%s (%s Default) · %s", status.DefaultModel, status.Label, ProviderStateLabel(status)),
+				Model:           status.DefaultModel,
+				Provider:        status.ID,
+				DisplayProvider: modelDisplayProvider(status.ID, status.DefaultModel),
+				Description:     formatModelSelectionDescription(status),
+				Active:          strings.EqualFold(ref, currentRef),
 			})
 		}
 	}
@@ -179,9 +177,12 @@ func BuildModelSelectionOptions(snapshot ProviderSnapshot, currentSelection stri
 	return options
 }
 
-func providerOwnsDefaultModel(providerID string, model string) bool {
+func modelDisplayProvider(providerID string, model string) string {
 	owner := InferProviderFromModel(model)
-	return owner == "" || owner == normalizeProviderID(providerID)
+	if owner != "" {
+		return owner
+	}
+	return normalizeProviderID(providerID)
 }
 
 func ResolveActiveSelection(cfg config.Config) (provider, model string) {

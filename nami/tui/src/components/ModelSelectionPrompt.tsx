@@ -538,7 +538,8 @@ function formatSelectionLine(
   }
 
   const model = displayModelName(option.model ?? option.label);
-  const provider = option.provider ? ` ${providerDisplayName(option.provider)}` : "";
+  const displayProvider = option.displayProvider ?? option.provider;
+  const provider = displayProvider ? ` ${providerDisplayName(displayProvider)}` : "";
   return `${prefix} ${model}${provider}`;
 }
 
@@ -566,7 +567,9 @@ function sectionForOption(
   if (option.active) {
     return "Recent";
   }
-  return option.provider ? providerDisplayName(option.provider) : "Models";
+  return option.displayProvider || option.provider
+    ? providerDisplayName(option.displayProvider ?? option.provider ?? "")
+    : "Models";
 }
 
 function isPopularProvider(provider: string | null): boolean {
@@ -637,6 +640,7 @@ function filterModelSelectionOptions(
       option.label,
       option.model,
       option.provider,
+      option.displayProvider,
       option.description,
       option.isCustom ? "custom model" : null,
     ]

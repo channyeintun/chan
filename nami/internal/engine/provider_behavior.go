@@ -85,7 +85,7 @@ func (gitHubCopilotProviderBehavior) NewClient(provider, model string, cfg confi
 }
 
 func (gitHubCopilotProviderBehavior) ResolveSelection(input, fallbackProvider string) (string, string) {
-	return standardProviderBehavior{}.ResolveSelection(input, fallbackProvider)
+	return resolveSelectionRetainingCompatibleProvider(input, fallbackProvider)
 }
 
 func (gitHubCopilotProviderBehavior) DefaultSubagentModel(cfg config.Config, activeModelID string) string {
@@ -141,7 +141,7 @@ func (codexProviderBehavior) NewClient(provider, model string, cfg config.Config
 }
 
 func (codexProviderBehavior) ResolveSelection(input, fallbackProvider string) (string, string) {
-	return standardProviderBehavior{}.ResolveSelection(input, fallbackProvider)
+	return resolveSelectionRetainingCompatibleProvider(input, fallbackProvider)
 }
 
 func (codexProviderBehavior) DefaultSubagentModel(cfg config.Config, activeModelID string) string {
@@ -154,6 +154,17 @@ func (codexProviderBehavior) PolicyModels(cfg config.Config) []string {
 
 func (codexProviderBehavior) RetainsSelectionProvider() bool {
 	return false
+}
+
+func resolveSelectionRetainingCompatibleProvider(input string, fallbackProvider string) (string, string) {
+	selection := config.ParseModelSelection(input, "")
+	if selection.ProviderID != "" {
+		return normalizeProvider(selection.ProviderID), selection.ModelID
+	}
+	if fallback := normalizeProvider(fallbackProvider); fallback != "" && isModelCompatibleWithProvider(selection.ModelID, fallback) {
+		return fallback, selection.ModelID
+	}
+	return standardProviderBehavior{}.ResolveSelection(input, fallbackProvider)
 }
 
 func defaultSubagentFallback(cfg config.Config, activeModelID string) string {

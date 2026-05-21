@@ -226,6 +226,7 @@ export interface ModelSelectionOptionPayload {
   label: string;
   model?: string;
   provider?: string;
+  display_provider?: string;
   description?: string;
   is_custom?: boolean;
   active?: boolean;

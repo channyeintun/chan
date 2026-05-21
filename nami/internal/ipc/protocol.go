@@ -298,12 +298,13 @@ type RewindSelectionRequestedPayload struct {
 }
 
 type ModelSelectionOptionPayload struct {
-	Label       string `json:"label"`
-	Model       string `json:"model,omitempty"`
-	Provider    string `json:"provider,omitempty"`
-	Description string `json:"description,omitempty"`
-	IsCustom    bool   `json:"is_custom,omitempty"`
-	Active      bool   `json:"active,omitempty"`
+	Label           string `json:"label"`
+	Model           string `json:"model,omitempty"`
+	Provider        string `json:"provider,omitempty"`
+	DisplayProvider string `json:"display_provider,omitempty"`
+	Description     string `json:"description,omitempty"`
+	IsCustom        bool   `json:"is_custom,omitempty"`
+	Active          bool   `json:"active,omitempty"`
 }
 
 type ModelSelectionRequestedPayload struct {

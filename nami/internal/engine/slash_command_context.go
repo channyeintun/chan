@@ -73,9 +73,9 @@ func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayloa
 
 	appendMatchingPresets := func(match func(commandspkg.ProviderStatus) bool) {
 		for _, preset := range api.CuratedModelCatalog {
-			providerID := normalizeProvider(strings.TrimSpace(preset.ProviderID))
-			status, ok := snapshot.LookupProvider(providerID)
-			if !ok || !match(status) {
+			displayProvider := normalizeProvider(strings.TrimSpace(preset.ProviderID))
+			providerID, status, ok := curatedModelAccessProvider(snapshot, displayProvider, preset.ModelID, currentProvider, match)
+			if !ok {
 				continue
 			}
 
@@ -85,11 +85,12 @@ func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayloa
 			}
 
 			merged = append(merged, ipc.ModelSelectionOptionPayload{
-				Label:       fmt.Sprintf("%s via %s · %s", preset.Label, status.Label, commandspkg.ProviderStateLabel(status)),
-				Model:       strings.TrimSpace(preset.ModelID),
-				Provider:    providerID,
-				Description: formatCuratedModelSelectionDescription(preset.Description, status),
-				Active:      strings.EqualFold(ref, currentRef),
+				Label:           fmt.Sprintf("%s via %s · %s", preset.Label, status.Label, commandspkg.ProviderStateLabel(status)),
+				Model:           strings.TrimSpace(preset.ModelID),
+				Provider:        providerID,
+				DisplayProvider: displayProvider,
+				Description:     formatCuratedModelSelectionDescription(preset.Description, status),
+				Active:          strings.EqualFold(ref, currentRef),
 			})
 			seen[ref] = struct{}{}
 		}
@@ -109,6 +110,49 @@ func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayloa
 		seen[ref] = struct{}{}
 	}
 	return merged
+}
+
+func curatedModelAccessProvider(
+	snapshot commandspkg.ProviderSnapshot,
+	displayProvider string,
+	model string,
+	currentProvider string,
+	match func(commandspkg.ProviderStatus) bool,
+) (string, commandspkg.ProviderStatus, bool) {
+	candidates := make([]string, 0, len(snapshot.Providers)+2)
+	addCandidate := func(providerID string) {
+		providerID = normalizeProvider(strings.TrimSpace(providerID))
+		if providerID == "" {
+			return
+		}
+		for _, existing := range candidates {
+			if existing == providerID {
+				return
+			}
+		}
+		candidates = append(candidates, providerID)
+	}
+
+	addCandidate(displayProvider)
+	if isModelCompatibleWithProvider(model, currentProvider) {
+		addCandidate(currentProvider)
+	}
+	for _, status := range snapshot.Providers {
+		if isModelCompatibleWithProvider(model, status.ID) {
+			addCandidate(status.ID)
+		}
+	}
+
+	for _, providerID := range candidates {
+		status, ok := snapshot.LookupProvider(providerID)
+		if !ok || !match(status) {
+			continue
+		}
+		if providerID == displayProvider || isModelCompatibleWithProvider(model, providerID) {
+			return providerID, status, true
+		}
+	}
+	return "", commandspkg.ProviderStatus{}, false
 }
 
 func formatCuratedModelSelectionDescription(summary string, status commandspkg.ProviderStatus) string {
