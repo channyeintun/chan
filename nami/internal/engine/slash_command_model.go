@@ -331,26 +331,130 @@ func promptSelection(
 	}
 }
 
+func promptReasoningSelection(
+	cmd *slashCommandContext,
+	configuredEffort string,
+	currentModelID string,
+) (string, bool, error) {
+	requestID := fmt.Sprintf("reasoning-%d", time.Now().UnixNano())
+	currentSelection := strings.TrimSpace(configuredEffort)
+	if currentSelection == "" {
+		currentSelection = "default"
+	}
+
+	options := []ipc.ReasoningSelectionOptionPayload{
+		{
+			Value:       "default",
+			Label:       "Default",
+			Description: fmt.Sprintf("Use the model default for %s.", commandspkg.DescribeReasoningEffort("", currentModelID)),
+			Active:      currentSelection == "default",
+		},
+		{
+			Value:       api.ReasoningEffortLow,
+			Label:       "Low",
+			Description: "Lower latency and token use.",
+			Active:      currentSelection == api.ReasoningEffortLow,
+		},
+		{
+			Value:       api.ReasoningEffortMedium,
+			Label:       "Medium",
+			Description: "Balanced reasoning depth.",
+			Active:      currentSelection == api.ReasoningEffortMedium,
+		},
+		{
+			Value:       api.ReasoningEffortHigh,
+			Label:       "High",
+			Description: "More deliberate reasoning with higher cost.",
+			Active:      currentSelection == api.ReasoningEffortHigh,
+		},
+		{
+			Value:       api.ReasoningEffortXHigh,
+			Label:       "XHigh",
+			Description: "Maximum reasoning. Older models clamp this to high.",
+			Active:      currentSelection == api.ReasoningEffortXHigh,
+		},
+	}
+
+	if err := cmd.bridge.Emit(ipc.EventReasoningSelectionRequested, ipc.ReasoningSelectionRequestedPayload{
+		RequestID:     requestID,
+		CurrentEffort: currentSelection,
+		Title:         "Select Reasoning",
+		Description:   fmt.Sprintf("Current effective effort: %s", commandspkg.DescribeReasoningEffort(strings.TrimSpace(configuredEffort), currentModelID)),
+		Options:       options,
+	}); err != nil {
+		return "", false, err
+	}
+
+	deferred := make([]ipc.ClientMessage, 0, 4)
+	defer func() {
+		cmd.router.Requeue(deferred...)
+	}()
+
+	for {
+		msg, err := cmd.router.Next(cmd.ctx)
+		if err != nil {
+			return "", false, err
+		}
+
+		switch msg.Type {
+		case ipc.MsgReasoningSelectionResponse:
+			var payload ipc.ReasoningSelectionResponsePayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return "", false, fmt.Errorf("decode reasoning selection response: %w", err)
+			}
+			if payload.RequestID != requestID {
+				deferred = append(deferred, msg)
+				continue
+			}
+			if payload.Cancel {
+				return "", true, nil
+			}
+			effort, clearSetting, err := commandspkg.ParseReasoningArgs(payload.Effort)
+			if err != nil {
+				return "", false, err
+			}
+			if clearSetting {
+				return "", false, nil
+			}
+			return effort, false, nil
+		case ipc.MsgShutdown:
+			return "", false, context.Canceled
+		default:
+			deferred = append(deferred, msg)
+		}
+	}
+}
+
 func handleReasoningSlashCommand(cmd *slashCommandContext) error {
 	persisted := config.Load()
 	currentModelID := cmd.state.ActiveModelID
 	if cmd.client != nil && *cmd.client != nil {
 		currentModelID = strings.TrimSpace((*cmd.client).ModelID())
 	}
-	current := commandspkg.DescribeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
 	if strings.TrimSpace(cmd.args) == "" {
-		return emitTextResponse(cmd.bridge, fmt.Sprintf("Current reasoning effort: %s", current))
-	}
-
-	nextEffort, clearSetting, err := commandspkg.ParseReasoningArgs(cmd.args)
-	if err != nil {
-		return emitTextResponse(cmd.bridge, err.Error())
-	}
-
-	if clearSetting {
-		persisted.ReasoningEffort = ""
+		selected, cancelled, err := promptReasoningSelection(
+			cmd,
+			strings.TrimSpace(persisted.ReasoningEffort),
+			currentModelID,
+		)
+		if err != nil {
+			return err
+		}
+		if cancelled {
+			return emitTextResponse(cmd.bridge, "Reasoning selection cancelled.")
+		}
+		persisted.ReasoningEffort = selected
 	} else {
-		persisted.ReasoningEffort = nextEffort
+		nextEffort, clearSetting, err := commandspkg.ParseReasoningArgs(cmd.args)
+		if err != nil {
+			return emitTextResponse(cmd.bridge, err.Error())
+		}
+
+		if clearSetting {
+			persisted.ReasoningEffort = ""
+		} else {
+			persisted.ReasoningEffort = nextEffort
+		}
 	}
 	if err := config.Save(persisted); err != nil {
 		return emitTextResponse(cmd.bridge, fmt.Sprintf("save reasoning effort: %v", err))

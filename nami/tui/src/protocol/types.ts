@@ -12,6 +12,7 @@ export type EventType =
   | "ask_user_question_requested"
   | "conversation_hydrated"
   | "model_selection_requested"
+  | "reasoning_selection_requested"
   | "rewind_selection_requested"
   | "resume_selection_requested"
   | "mode_changed"
@@ -57,6 +58,7 @@ export type ClientMessageType =
   | "permission_response"
   | "ask_user_question_response"
   | "model_selection_response"
+  | "reasoning_selection_response"
   | "rewind_selection_response"
   | "resume_selection_response"
   | "cancel"
@@ -240,10 +242,31 @@ export interface ModelSelectionRequestedPayload {
   options: ModelSelectionOptionPayload[];
 }
 
+export interface ReasoningSelectionOptionPayload {
+  value: string;
+  label: string;
+  description?: string;
+  active?: boolean;
+}
+
+export interface ReasoningSelectionRequestedPayload {
+  request_id: string;
+  current_effort?: string;
+  title?: string;
+  description?: string;
+  options: ReasoningSelectionOptionPayload[];
+}
+
 export interface ModelSelectionResponsePayload {
   request_id: string;
   model?: string;
   provider?: string;
+  cancel?: boolean;
+}
+
+export interface ReasoningSelectionResponsePayload {
+  request_id: string;
+  effort?: string;
   cancel?: boolean;
 }
 

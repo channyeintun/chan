@@ -9,6 +9,7 @@ import type {
   BackgroundCommandStopPayload,
   ModelSelectionResponsePayload,
   PermissionResponseDecision,
+  ReasoningSelectionResponsePayload,
   RewindSelectionResponsePayload,
   ResumeSelectionResponsePayload,
   StreamEvent,
@@ -218,6 +219,12 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     [send],
   );
 
+  const sendReasoningSelectionResponse = useCallback(
+    (payload: ReasoningSelectionResponsePayload) =>
+      send(createMessage("reasoning_selection_response", payload)),
+    [send],
+  );
+
   const sendBackgroundCommandInspect = useCallback(
     (payload: BackgroundCommandInspectPayload) =>
       send(createMessage("background_command_inspect", payload)),
@@ -258,6 +265,7 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     sendAskUserQuestionResponse,
     sendArtifactReviewResponse,
     sendModelSelectionResponse,
+    sendReasoningSelectionResponse,
     sendRewindSelectionResponse,
     sendResumeSelectionResponse,
     sendBackgroundCommandInspect,

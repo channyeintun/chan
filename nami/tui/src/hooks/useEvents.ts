@@ -29,6 +29,8 @@ import type {
   ModelChangedPayload,
   PermissionRequestPayload,
   ProgressPayload,
+  ReasoningSelectionOptionPayload,
+  ReasoningSelectionRequestedPayload,
   RateLimitUpdatePayload,
   RewindSelectionRequestedPayload,
   RewindSelectionTurnPayload,
@@ -138,6 +140,21 @@ export interface UIModelSelection {
   title?: string;
   description?: string;
   options: UIModelSelectionOption[];
+}
+
+export interface UIReasoningSelectionOption {
+  value: string;
+  label: string;
+  description: string | null;
+  active: boolean;
+}
+
+export interface UIReasoningSelection {
+  requestId: string;
+  currentEffort: string | null;
+  title?: string;
+  description?: string;
+  options: UIReasoningSelectionOption[];
 }
 
 export type UIArtifactReviewDecision = "approve" | "revise" | "cancel";
@@ -329,6 +346,7 @@ export interface EngineUIState {
   focusedArtifactId: string | null;
   pendingArtifactReview: UIArtifactReview | null;
   pendingModelSelection: UIModelSelection | null;
+  pendingReasoningSelection: UIReasoningSelection | null;
   pendingRewindSelection: UIRewindSelection | null;
   pendingResumeSelection: UIResumeSelection | null;
   pendingAskUserQuestion: UIAskUserQuestionRequest | null;
@@ -389,6 +407,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   focusedArtifactId: null,
   pendingArtifactReview: null,
   pendingModelSelection: null,
+  pendingReasoningSelection: null,
   pendingRewindSelection: null,
   pendingResumeSelection: null,
   pendingAskUserQuestion: null,
@@ -976,6 +995,34 @@ export function useEvents(initialModel: string, initialMode: string) {
         }));
         break;
       }
+      case "reasoning_selection_requested": {
+        const p = event.payload as ReasoningSelectionRequestedPayload;
+        const title =
+          typeof p.title === "string" && p.title.trim().length > 0
+            ? p.title.trim()
+            : undefined;
+        const description =
+          typeof p.description === "string" && p.description.trim().length > 0
+            ? p.description.trim()
+            : undefined;
+        setUIState((s) => ({
+          ...s,
+          pendingReasoningSelection: {
+            requestId: p.request_id,
+            currentEffort:
+              typeof p.current_effort === "string" &&
+              p.current_effort.trim().length > 0
+                ? p.current_effort.trim()
+                : null,
+            title,
+            description,
+            options: normalizeReasoningSelectionOptions(p.options),
+          },
+          statusLine: title ?? "Select reasoning.",
+          error: null,
+        }));
+        break;
+      }
       case "rewind_selection_requested": {
         const p = event.payload as RewindSelectionRequestedPayload;
         setUIState((s) => ({
@@ -1378,6 +1425,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           focusedArtifactId: null,
           pendingArtifactReview: null,
           pendingModelSelection: null,
+          pendingReasoningSelection: null,
           pendingRewindSelection: null,
           pendingResumeSelection: null,
           pendingAskUserQuestion: null,
@@ -1405,6 +1453,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           focusedArtifactId: null,
           pendingArtifactReview: null,
           pendingModelSelection: null,
+          pendingReasoningSelection: null,
           pendingRewindSelection: null,
           pendingResumeSelection: null,
           pendingAskUserQuestion: null,
@@ -1437,6 +1486,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             s.pendingArtifactReview !== null ||
             s.pendingAskUserQuestion !== null ||
             s.pendingModelSelection !== null ||
+            s.pendingReasoningSelection !== null ||
             s.pendingRewindSelection !== null ||
             s.pendingPermission !== null ||
             s.isStreaming;
@@ -1469,6 +1519,7 @@ export function useEvents(initialModel: string, initialMode: string) {
               focusedArtifactId: null,
               pendingArtifactReview: null,
               pendingModelSelection: null,
+              pendingReasoningSelection: null,
               pendingRewindSelection: null,
               pendingResumeSelection: null,
               pendingAskUserQuestion: null,
@@ -1539,6 +1590,7 @@ export function useEvents(initialModel: string, initialMode: string) {
       isStreaming: false,
       compact: null,
       pendingModelSelection: null,
+      pendingReasoningSelection: null,
       pendingRewindSelection: null,
       pendingResumeSelection: null,
       pendingAskUserQuestion: null,
@@ -1716,6 +1768,21 @@ export function useEvents(initialModel: string, initialMode: string) {
     });
   }, []);
 
+  const submitReasoningSelection = useCallback((requestId: string) => {
+    setUIState((s) => {
+      if (s.pendingReasoningSelection?.requestId !== requestId) {
+        return s;
+      }
+
+      return {
+        ...s,
+        pendingReasoningSelection: null,
+        statusLine: null,
+        error: null,
+      };
+    });
+  }, []);
+
   return {
     uiState,
     handleEvent,
@@ -1727,9 +1794,36 @@ export function useEvents(initialModel: string, initialMode: string) {
     submitArtifactReview,
     submitAskUserQuestion,
     submitModelSelection,
+    submitReasoningSelection,
     submitRewindSelection,
     submitResumeSelection,
   };
+}
+
+function normalizeReasoningSelectionOptions(
+  payload: ReasoningSelectionOptionPayload[] | undefined,
+): UIReasoningSelectionOption[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+
+  return payload
+    .map((option) => ({
+      value: stringOrEmpty(option?.value).toLowerCase(),
+      label: stringOrEmpty(option?.label),
+      description: stringOrUndefined(option?.description) ?? null,
+      active: option?.active === true,
+    }))
+    .filter((option) => option.value.length > 0 && option.label.length > 0)
+    .filter((option) => {
+      if (seen.has(option.value)) {
+        return false;
+      }
+      seen.add(option.value);
+      return true;
+    });
 }
 
 function mergeAllowedPermissionFileTypes(

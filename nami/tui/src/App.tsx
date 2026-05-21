@@ -24,6 +24,7 @@ import BackgroundTasksDialog from "./components/BackgroundTasksDialog.js";
 import Input from "./components/Input.js";
 import ModelSelectionPrompt from "./components/ModelSelectionPrompt.js";
 import PromptFooter from "./components/PromptFooter.js";
+import ReasoningSelectionPrompt from "./components/ReasoningSelectionPrompt.js";
 import RewindSelectionPrompt from "./components/RewindSelectionPrompt.js";
 import ResumeSelectionPrompt from "./components/ResumeSelectionPrompt.js";
 import StreamOutput from "./components/StreamOutput.js";
@@ -131,6 +132,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     submitArtifactReview,
     submitAskUserQuestion,
     submitModelSelection,
+    submitReasoningSelection,
     submitRewindSelection,
     submitResumeSelection,
   } = useEvents(model, mode);
@@ -243,6 +245,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
       uiState.pendingResumeSelection ||
       uiState.pendingRewindSelection ||
       uiState.pendingModelSelection ||
+      uiState.pendingReasoningSelection ||
       showBackgroundTasks ||
       uiState.pendingArtifactReview
     ) {
@@ -253,6 +256,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     uiState.pendingArtifactReview,
     uiState.pendingAskUserQuestion,
     uiState.pendingModelSelection,
+    uiState.pendingReasoningSelection,
     uiState.pendingPermission,
     uiState.pendingRewindSelection,
     uiState.pendingResumeSelection,
@@ -350,6 +354,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     uiState.pendingArtifactReview,
     uiState.pendingAskUserQuestion,
     uiState.pendingModelSelection,
+    uiState.pendingReasoningSelection,
     uiState.pendingRewindSelection,
     uiState.pendingResumeSelection,
   ]);
@@ -382,6 +387,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     uiState.pendingArtifactReview,
     uiState.pendingAskUserQuestion,
     uiState.pendingModelSelection,
+    uiState.pendingReasoningSelection,
     uiState.pendingRewindSelection,
     uiState.pendingResumeSelection,
   ]);
@@ -467,6 +473,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
       uiState.pendingPermission ||
       uiState.pendingArtifactReview ||
       uiState.pendingModelSelection ||
+      uiState.pendingReasoningSelection ||
       uiState.pendingRewindSelection ||
       uiState.pendingResumeSelection ||
       pendingTaskNotifications.length > 0 ||
@@ -581,6 +588,19 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     });
   };
 
+  const handleReasoningSelection = (effort?: string) => {
+    if (!uiState.pendingReasoningSelection) {
+      return;
+    }
+
+    submitReasoningSelection(uiState.pendingReasoningSelection.requestId);
+    engine.sendReasoningSelectionResponse({
+      request_id: uiState.pendingReasoningSelection.requestId,
+      effort,
+      cancel: !effort,
+    });
+  };
+
   const handleRewindSelection = (messageIndex?: number) => {
     if (!uiState.pendingRewindSelection) {
       return;
@@ -621,6 +641,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     uiState.pendingAskUserQuestion !== null ||
     uiState.pendingArtifactReview !== null ||
     uiState.pendingModelSelection !== null ||
+    uiState.pendingReasoningSelection !== null ||
     uiState.pendingRewindSelection !== null ||
     uiState.pendingResumeSelection !== null;
   const showPromptArea =
@@ -634,6 +655,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     isStreaming: uiState.isStreaming,
     pendingAskUserQuestion: uiState.pendingAskUserQuestion !== null,
     pendingModelSelection: uiState.pendingModelSelection !== null,
+    pendingReasoningSelection: uiState.pendingReasoningSelection !== null,
     pendingRewindSelection: uiState.pendingRewindSelection !== null,
     pendingResumeSelection: uiState.pendingResumeSelection !== null,
     backgroundTasksOpen: showBackgroundTasks,
@@ -750,6 +772,18 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     <AskUserQuestionPrompt
       request={uiState.pendingAskUserQuestion}
       onSubmit={handleAskUserQuestion}
+    />
+  ) : uiState.pendingModelSelection ? (
+    <ModelSelectionPrompt
+      selection={uiState.pendingModelSelection}
+      onSelect={handleModelSelection}
+      onCancel={() => handleModelSelection()}
+    />
+  ) : uiState.pendingReasoningSelection ? (
+    <ReasoningSelectionPrompt
+      selection={uiState.pendingReasoningSelection}
+      onSelect={handleReasoningSelection}
+      onCancel={() => handleReasoningSelection()}
     />
   ) : uiState.pendingRewindSelection ? (
     <RewindSelectionPrompt
@@ -987,6 +1021,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
         {overlayDialogContent ? (
           <Box
             position="absolute"
+            top={0}
+            left={0}
             width="100%"
             height="100%"
             minWidth={0}
@@ -997,7 +1033,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
             overflow="hidden"
             userSelect="none"
           >
-            {overlayDialogContent}
+            <ModalDialogHost>{overlayDialogContent}</ModalDialogHost>
           </Box>
         ) : null}
 
@@ -1131,6 +1167,27 @@ function escapeTaskNotificationText(value: string): string {
     .replaceAll(">", "&gt;");
 }
 
+function ModalDialogHost({ children }: { children: React.ReactNode }) {
+  return (
+    <Box
+      flexDirection="column"
+      flexGrow={1}
+      flexShrink={1}
+      alignSelf="stretch"
+      minWidth={0}
+      minHeight={0}
+      alignItems="center"
+      justifyContent="center"
+      paddingX={1}
+      paddingY={1}
+    >
+      <Box flexShrink={1} minWidth={0} minHeight={0}>
+        {children}
+      </Box>
+    </Box>
+  );
+}
+
 function SafeToastItem({ toast }: { toast: ToastData }) {
   return (
     <Box
@@ -1189,6 +1246,7 @@ function isQueuedPromptDispatchBlocked(
     uiState.pendingAskUserQuestion !== null ||
     uiState.pendingArtifactReview !== null ||
     uiState.pendingModelSelection !== null ||
+    uiState.pendingReasoningSelection !== null ||
     uiState.pendingRewindSelection !== null ||
     uiState.pendingResumeSelection !== null
   );
@@ -1233,6 +1291,7 @@ function getPromptBlockedReason({
   backgroundTasksOpen,
   pendingAskUserQuestion,
   pendingModelSelection,
+  pendingReasoningSelection,
   pendingRewindSelection,
   pendingResumeSelection,
   transcriptSearchActive,
@@ -1243,6 +1302,7 @@ function getPromptBlockedReason({
   backgroundTasksOpen: boolean;
   pendingAskUserQuestion: boolean;
   pendingModelSelection: boolean;
+  pendingReasoningSelection: boolean;
   pendingRewindSelection: boolean;
   pendingResumeSelection: boolean;
   transcriptSearchActive: boolean;
@@ -1262,6 +1322,9 @@ function getPromptBlockedReason({
   }
   if (pendingModelSelection) {
     return "model selection open";
+  }
+  if (pendingReasoningSelection) {
+    return "reasoning selection open";
   }
   if (pendingRewindSelection) {
     return "rewind selection open";

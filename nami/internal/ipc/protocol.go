@@ -31,22 +31,23 @@ const (
 	EventAskUserQuestionRequested EventType = "ask_user_question_requested"
 
 	// Session state
-	EventModeChanged              EventType = "mode_changed"
-	EventModelChanged             EventType = "model_changed"
-	EventContextWindow            EventType = "context_window"
-	EventCostUpdate               EventType = "cost_update"
-	EventConversationHydrated     EventType = "conversation_hydrated"
-	EventModelSelectionRequested  EventType = "model_selection_requested"
-	EventRewindSelectionRequested EventType = "rewind_selection_requested"
-	EventResumeSelectionRequested EventType = "resume_selection_requested"
-	EventMemoryRecalled           EventType = "memory_recalled"
-	EventRetrievalUsed            EventType = "retrieval_used"
-	EventAttemptLogSurfaced       EventType = "attempt_log_surfaced"
-	EventAttemptRepeated          EventType = "attempt_repeated"
-	EventRateLimitUpdate          EventType = "rate_limit_update"
-	EventTurnTiming               EventType = "turn_timing"
-	EventCompactStart             EventType = "compact_start"
-	EventCompactEnd               EventType = "compact_end"
+	EventModeChanged                 EventType = "mode_changed"
+	EventModelChanged                EventType = "model_changed"
+	EventContextWindow               EventType = "context_window"
+	EventCostUpdate                  EventType = "cost_update"
+	EventConversationHydrated        EventType = "conversation_hydrated"
+	EventModelSelectionRequested     EventType = "model_selection_requested"
+	EventReasoningSelectionRequested EventType = "reasoning_selection_requested"
+	EventRewindSelectionRequested    EventType = "rewind_selection_requested"
+	EventResumeSelectionRequested    EventType = "resume_selection_requested"
+	EventMemoryRecalled              EventType = "memory_recalled"
+	EventRetrievalUsed               EventType = "retrieval_used"
+	EventAttemptLogSurfaced          EventType = "attempt_log_surfaced"
+	EventAttemptRepeated             EventType = "attempt_repeated"
+	EventRateLimitUpdate             EventType = "rate_limit_update"
+	EventTurnTiming                  EventType = "turn_timing"
+	EventCompactStart                EventType = "compact_start"
+	EventCompactEnd                  EventType = "compact_end"
 
 	// Artifacts
 	EventArtifactCreated          EventType = "artifact_created"
@@ -83,22 +84,23 @@ type StreamEvent struct {
 type ClientMessageType string
 
 const (
-	MsgUserInput                ClientMessageType = "user_input"
-	MsgSlashCommand             ClientMessageType = "slash_command"
-	MsgPermissionResponse       ClientMessageType = "permission_response"
-	MsgAskUserQuestionResponse  ClientMessageType = "ask_user_question_response"
-	MsgModelSelectionResponse   ClientMessageType = "model_selection_response"
-	MsgRewindSelectionResponse  ClientMessageType = "rewind_selection_response"
-	MsgResumeSelectionResponse  ClientMessageType = "resume_selection_response"
-	MsgCancel                   ClientMessageType = "cancel"
-	MsgModeToggle               ClientMessageType = "mode_toggle"
-	MsgShutdown                 ClientMessageType = "shutdown"
-	MsgArtifactReviewResponse   ClientMessageType = "artifact_review_response"
-	MsgBackgroundCommandInspect ClientMessageType = "background_command_inspect"
-	MsgBackgroundCommandStop    ClientMessageType = "background_command_stop"
-	MsgBackgroundAgentInspect   ClientMessageType = "background_agent_inspect"
-	MsgBackgroundAgentStop      ClientMessageType = "background_agent_stop"
-	MsgSwarmDashboardInspect    ClientMessageType = "swarm_dashboard_inspect"
+	MsgUserInput                  ClientMessageType = "user_input"
+	MsgSlashCommand               ClientMessageType = "slash_command"
+	MsgPermissionResponse         ClientMessageType = "permission_response"
+	MsgAskUserQuestionResponse    ClientMessageType = "ask_user_question_response"
+	MsgModelSelectionResponse     ClientMessageType = "model_selection_response"
+	MsgReasoningSelectionResponse ClientMessageType = "reasoning_selection_response"
+	MsgRewindSelectionResponse    ClientMessageType = "rewind_selection_response"
+	MsgResumeSelectionResponse    ClientMessageType = "resume_selection_response"
+	MsgCancel                     ClientMessageType = "cancel"
+	MsgModeToggle                 ClientMessageType = "mode_toggle"
+	MsgShutdown                   ClientMessageType = "shutdown"
+	MsgArtifactReviewResponse     ClientMessageType = "artifact_review_response"
+	MsgBackgroundCommandInspect   ClientMessageType = "background_command_inspect"
+	MsgBackgroundCommandStop      ClientMessageType = "background_command_stop"
+	MsgBackgroundAgentInspect     ClientMessageType = "background_agent_inspect"
+	MsgBackgroundAgentStop        ClientMessageType = "background_agent_stop"
+	MsgSwarmDashboardInspect      ClientMessageType = "swarm_dashboard_inspect"
 )
 
 // ClientMessage is one NDJSON line from Ink frontend → Go engine.
@@ -315,6 +317,21 @@ type ModelSelectionRequestedPayload struct {
 	Options      []ModelSelectionOptionPayload `json:"options"`
 }
 
+type ReasoningSelectionOptionPayload struct {
+	Value       string `json:"value"`
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+	Active      bool   `json:"active,omitempty"`
+}
+
+type ReasoningSelectionRequestedPayload struct {
+	RequestID     string                            `json:"request_id"`
+	CurrentEffort string                            `json:"current_effort,omitempty"`
+	Title         string                            `json:"title,omitempty"`
+	Description   string                            `json:"description,omitempty"`
+	Options       []ReasoningSelectionOptionPayload `json:"options"`
+}
+
 type MemoryRecallEntryPayload struct {
 	Title     string `json:"title"`
 	NoteType  string `json:"note_type,omitempty"`
@@ -503,6 +520,12 @@ type ModelSelectionResponsePayload struct {
 	RequestID string `json:"request_id"`
 	Model     string `json:"model,omitempty"`
 	Provider  string `json:"provider,omitempty"`
+	Cancel    bool   `json:"cancel,omitempty"`
+}
+
+type ReasoningSelectionResponsePayload struct {
+	RequestID string `json:"request_id"`
+	Effort    string `json:"effort,omitempty"`
 	Cancel    bool   `json:"cancel,omitempty"`
 }
 
