@@ -478,15 +478,14 @@ func EnableGitHubCopilotModels(ctx context.Context, accessToken, enterpriseDomai
 		}
 		unique[model] = struct{}{}
 
-		wg.Add(1)
-		go func(model string) {
-			defer wg.Done()
-			if err := EnableGitHubCopilotModel(ctx, accessToken, model, enterpriseDomain); err != nil {
+		modelID := model
+		wg.Go(func() {
+			if err := EnableGitHubCopilotModel(ctx, accessToken, modelID, enterpriseDomain); err != nil {
 				mu.Lock()
-				failures[model] = err
+				failures[modelID] = err
 				mu.Unlock()
 			}
-		}(model)
+		})
 	}
 
 	wg.Wait()

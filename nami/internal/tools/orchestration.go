@@ -83,15 +83,15 @@ func ExecuteBatch(ctx context.Context, batch Batch) []IndexedResult {
 	var wg sync.WaitGroup
 
 	for i, call := range batch.Calls {
-		wg.Add(1)
-		go func(idx int, c PendingCall) {
-			defer wg.Done()
+		idx := i
+		pendingCall := call
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			output, err := c.Tool.Execute(batchCtx, c.Input)
-			results[idx] = IndexedResult{Index: c.Index, Output: output, Err: err}
-		}(i, call)
+			output, err := pendingCall.Tool.Execute(batchCtx, pendingCall.Input)
+			results[idx] = IndexedResult{Index: pendingCall.Index, Output: output, Err: err}
+		})
 	}
 	wg.Wait()
 	return results
@@ -143,14 +143,14 @@ func ExecuteBatchWithOptions(ctx context.Context, batch Batch, options ExecuteOp
 	var wg sync.WaitGroup
 
 	for i, call := range batch.Calls {
-		wg.Add(1)
-		go func(idx int, c PendingCall) {
-			defer wg.Done()
+		idx := i
+		pendingCall := call
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			results[idx] = executePendingCall(batchCtx, c, options)
-		}(i, call)
+			results[idx] = executePendingCall(batchCtx, pendingCall, options)
+		})
 	}
 	wg.Wait()
 	return results

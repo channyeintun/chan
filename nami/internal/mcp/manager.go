@@ -137,14 +137,13 @@ func (m *Manager) StartWithCallback(ctx context.Context, callback StatusCallback
 		if !ok || !definition.Enabled {
 			continue
 		}
-		wg.Add(1)
-		go func(def ServerDefinition) {
-			defer wg.Done()
+		def := definition
+		wg.Go(func() {
 			status := m.startServer(ctx, def)
 			if callback != nil {
 				callback(status)
 			}
-		}(definition)
+		})
 	}
 	wg.Wait()
 }
