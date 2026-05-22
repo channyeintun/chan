@@ -377,7 +377,7 @@ func splitMarkdownSections(content string) map[string]string {
 		sections[current] = strings.TrimSpace(buffer.String())
 		buffer.Reset()
 	}
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "## ") {
 			flush()

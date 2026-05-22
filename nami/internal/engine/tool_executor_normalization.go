@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -133,9 +134,7 @@ func normalizeToolCall(call api.ToolCall) (api.ToolCall, error) {
 
 func cloneToolParams(params map[string]any) map[string]any {
 	cloned := make(map[string]any, len(params))
-	for key, value := range params {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, params)
 	return cloned
 }
 
@@ -160,8 +159,8 @@ func normalizeFileSearchPattern(query string) string {
 	if normalized == "" {
 		return trimmed
 	}
-	if strings.HasSuffix(normalized, "/") {
-		return "**/" + strings.TrimSuffix(normalized, "/") + "/**"
+	if before, ok := strings.CutSuffix(normalized, "/"); ok {
+		return "**/" + before + "/**"
 	}
 	if strings.Contains(normalized, "/") {
 		return "**/" + normalized + "*"

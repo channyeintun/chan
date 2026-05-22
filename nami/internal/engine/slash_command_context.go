@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -125,10 +126,8 @@ func curatedModelAccessProvider(
 		if providerID == "" {
 			return
 		}
-		for _, existing := range candidates {
-			if existing == providerID {
-				return
-			}
+		if slices.Contains(candidates, providerID) {
+			return
 		}
 		candidates = append(candidates, providerID)
 	}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -990,12 +991,7 @@ func subagentAllowsTool(subagentType string, permission toolpkg.PermissionLevel)
 
 func subagentAllowsToolName(subagentType string, toolName string) bool {
 	allowed := subagentToolNames(subagentType)
-	for _, name := range allowed {
-		if name == toolName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, toolName)
 }
 
 func normalizeSubagentFinalAnswer(content string) string {
