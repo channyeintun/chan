@@ -28,3 +28,4 @@
 ## Vulnerability Checks
 
 - Run `govulncheck` for dependency and code vulnerability scanning: `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`
+- Run `npm audit` in Node package directories to scan npm dependencies for known vulnerabilities.
