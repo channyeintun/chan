@@ -364,6 +364,18 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                     </td>
                   </tr>
                   <tr>
+                    <td class="p-4 border-t border-[#1a1a1a]">Qwen</td>
+                    <td class="p-4 border-t border-[#1a1a1a]">
+                      <code>DASHSCOPE_API_KEY</code>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="p-4 border-t border-[#1a1a1a]">GLM</td>
+                    <td class="p-4 border-t border-[#1a1a1a]">
+                      <code>GLM_API_KEY</code>
+                    </td>
+                  </tr>
+                  <tr>
                     <td class="p-4 border-t border-[#1a1a1a]">Groq</td>
                     <td class="p-4 border-t border-[#1a1a1a]">
                       <code>GROQ_API_KEY</code>
@@ -383,6 +395,20 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40 mb-8">
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                Provider Catalog
+              </p>
+              <p class="text-sm text-gray-300 leading-relaxed">
+                Provider and model listings are loaded from
+                <code>models.dev</code>, cached locally for 24 hours, and merged
+                with local config, environment keys, login state, Ollama, and
+                custom provider overrides. <code>/providers</code> shows local
+                usability, and <code>/model</code> lists catalog models, curated
+                shortcuts, and custom entries. Deprecated and alpha models are
+                hidden by default.
+              </p>
             </div>
             <div
               class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 font-mono overflow-x-auto relative group"
@@ -425,6 +451,8 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                 <li>&bull; Prints device code in transcript</li>
                 <li>&bull; Opens verification URL automatically</li>
                 <li>&bull; Authorizes v5.5 models</li>
+                <li>&bull; Stores tokens in <code>~/.config/nami/config.json</code> under <code>github_copilot</code></li>
+                <li>&bull; Clean with <code>/logout github-copilot</code> or remove that config section</li>
               </ul>
             </div>
           </section>
@@ -447,7 +475,9 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
               <ul class="space-y-3 text-xs text-gray-500">
                 <li>&bull; Default model is codex/gpt-5.5</li>
                 <li>&bull; Sends Codex requests to the ChatGPT Codex Responses endpoint</li>
-                <li>&bull; Keeps bare gpt-5.4 as the default OpenAI selection and bare gpt-5.5 as another OpenAI option unless Codex is explicit</li>
+                <li>&bull; Uses OpenAI catalog metadata for model capabilities while keeping Codex auth and runtime separate</li>
+                <li>&bull; Stores OAuth tokens in <code>~/.config/nami/config.json</code> under <code>codex</code></li>
+                <li>&bull; Clean with <code>/logout codex</code> or remove that config section</li>
               </ul>
             </div>
           </section>
@@ -991,6 +1021,14 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                   </tr>
                   <tr>
                     <td class="p-4 border-t border-[#1a1a1a]">
+                      <code>/providers</code>
+                    </td>
+                    <td class="p-4 border-t border-[#1a1a1a]">
+                      Show catalog-backed provider status and active selection
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="p-4 border-t border-[#1a1a1a]">
                       <code>/plan</code>
                     </td>
                     <td class="p-4 border-t border-[#1a1a1a]">
@@ -1010,7 +1048,8 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                       <code>/model [name]</code>
                     </td>
                     <td class="p-4 border-t border-[#1a1a1a]">
-                      Show or switch active model
+                      Show or switch active model from catalog, curated presets,
+                      or a custom entry
                     </td>
                   </tr>
                   <tr>
@@ -1579,6 +1618,30 @@ install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="c
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <div class="mb-12">
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                Provider Overrides
+              </p>
+              <p class="text-sm text-gray-400 mb-4 leading-relaxed">
+                Add entries under <code>providers</code> to override built-in
+                providers or add OpenAI-compatible config-backed providers to
+                the same catalog used by <code>/providers</code> and
+                <code>/model</code>.
+              </p>
+              <pre
+                class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto"
+              ><code>{
+  "provider": "openrouter",
+  "providers": {
+    "openrouter": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "default_model": "anthropic/claude-sonnet-4.5"
+    }
+  }
+}</code></pre>
             </div>
 
             <section id="mcp-config" class="mt-12">
