@@ -31,10 +31,20 @@
 - Updated `/providers` discovery to prefer the catalog-backed snapshot and fall back to the previous static path if catalog loading fails.
 - Verified the task with `gofmt -w internal/catalog/service.go internal/commands/providers.go` and `go build ./...`.
 
+### Phase 4: Replace Model Selection Source
+
+- Updated model selection option building to prefer catalog-backed provider/model entries.
+- `/model` and subagent model selection now enumerate real catalog models instead of only provider default models when the catalog is available.
+- Preserved the existing provider-default option builder as a fallback when catalog loading fails.
+- Kept curated presets prioritized ahead of the general catalog list.
+- Kept custom model entry support and preserved current selection visibility when the active model is outside the catalog.
+- Preserved explicit provider/model pairs in picker payloads for catalog-backed selections.
+- Verified the task with `gofmt -w internal/commands/providers.go internal/engine/slash_command_model.go` and `go build ./...`.
+
 ## Deferred
 
 - No tests were added because the current execution constraint says to never add tests.
 
 ## Next
 
-- Phase 4: replace model selection source so `/model` can use real catalog models instead of provider defaults only.
+- Phase 4.5: add a clearer catalog-to-runtime adapter layer for provider runtime wiring.

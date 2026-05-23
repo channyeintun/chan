@@ -180,6 +180,70 @@ func BuildModelSelectionOptions(snapshot ProviderSnapshot, currentSelection stri
 	return options
 }
 
+func BuildCatalogModelSelectionOptions(cfg config.Config, snapshot ProviderSnapshot, currentSelection string) []ipc.ModelSelectionOptionPayload {
+	service := catalog.NewService(modelsdev.NewClient())
+	catalogSnapshot, err := service.Snapshot(context.Background(), cfg)
+	if err != nil {
+		return BuildModelSelectionOptions(snapshot, currentSelection)
+	}
+
+	currentProvider, currentModel := ResolveModelSelection(currentSelection)
+	currentRef := providerModelRef(currentProvider, currentModel)
+	capacity := 1
+	for _, provider := range catalogSnapshot.Providers {
+		capacity += len(provider.Models)
+	}
+
+	options := make([]ipc.ModelSelectionOptionPayload, 0, capacity)
+	seen := make(map[string]struct{}, capacity)
+
+	if currentModel != "" && !catalogSnapshotHasModel(catalogSnapshot, currentProvider, currentModel) {
+		label := "Current selection"
+		description := "Current session model"
+		if status, ok := snapshot.LookupProvider(currentProvider); ok {
+			label = fmt.Sprintf("Current: %s (%s) · %s", currentModel, status.Label, ProviderStateLabel(status))
+			description = formatModelSelectionDescription(status)
+		}
+		options = append(options, ipc.ModelSelectionOptionPayload{
+			Label:       label,
+			Model:       currentModel,
+			Provider:    currentProvider,
+			Description: description,
+			Active:      true,
+		})
+		seen[currentRef] = struct{}{}
+	}
+
+	appendProviderModels := func(match func(ProviderStatus) bool) {
+		for _, provider := range catalogSnapshot.Providers {
+			status, ok := snapshot.LookupProvider(provider.ID)
+			if !ok || !match(status) {
+				continue
+			}
+			for _, model := range provider.Models {
+				ref := providerModelRef(provider.ID, model.ID)
+				if _, exists := seen[ref]; exists {
+					continue
+				}
+				options = append(options, ipc.ModelSelectionOptionPayload{
+					Label:           formatCatalogModelSelectionLabel(provider, model, status),
+					Model:           model.ID,
+					Provider:        provider.ID,
+					DisplayProvider: modelDisplayProvider(provider.ID, model.ID),
+					Description:     formatCatalogModelSelectionDescription(provider, model, status),
+					Active:          strings.EqualFold(ref, currentRef),
+				})
+				seen[ref] = struct{}{}
+			}
+		}
+	}
+
+	appendProviderModels(func(status ProviderStatus) bool { return status.Usable })
+	appendProviderModels(func(status ProviderStatus) bool { return !status.Usable })
+
+	return options
+}
+
 func modelDisplayProvider(providerID string, model string) string {
 	owner := InferProviderFromModel(model)
 	if owner != "" {
@@ -330,6 +394,48 @@ func catalogProviderHasModel(provider catalog.Provider, modelID string) bool {
 		}
 	}
 	return false
+}
+
+func catalogSnapshotHasModel(snapshot catalog.Snapshot, providerID string, modelID string) bool {
+	providerID = normalizeProviderID(providerID)
+	modelID = strings.TrimSpace(modelID)
+	if providerID == "" || modelID == "" {
+		return false
+	}
+	for _, provider := range snapshot.Providers {
+		if provider.ID != providerID {
+			continue
+		}
+		return catalogProviderHasModel(provider, modelID)
+	}
+	return false
+}
+
+func formatCatalogModelSelectionLabel(provider catalog.Provider, model catalog.Model, status ProviderStatus) string {
+	if strings.EqualFold(model.ID, provider.DefaultModel) {
+		return fmt.Sprintf("%s (%s Default) · %s", model.Name, status.Label, ProviderStateLabel(status))
+	}
+	return fmt.Sprintf("%s (%s) · %s", model.Name, status.Label, ProviderStateLabel(status))
+}
+
+func formatCatalogModelSelectionDescription(provider catalog.Provider, model catalog.Model, status ProviderStatus) string {
+	parts := make([]string, 0, 4)
+	if model.ID != "" && !strings.EqualFold(model.ID, model.Name) {
+		parts = append(parts, model.ID)
+	}
+	if family := strings.TrimSpace(model.Family); family != "" {
+		parts = append(parts, family)
+	}
+	if status.AuthSource != "" && status.AuthSource != "none" {
+		parts = append(parts, status.AuthSource)
+	}
+	if !status.Usable && status.SetupHint != "" {
+		parts = append(parts, status.SetupHint)
+	}
+	if len(parts) == 0 {
+		parts = append(parts, provider.Name)
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (snapshot ProviderSnapshot) FirstUsable() (ProviderStatus, bool) {

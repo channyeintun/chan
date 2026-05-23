@@ -257,7 +257,7 @@ func promptModelSelection(cmd *slashCommandContext, currentSelection string) (mo
 	selectionCfg := config.LoadForWorkingDir(cmd.state.CWD)
 	selectionCfg.Model = currentSelection
 	snapshot := commandspkg.DiscoverProviderSnapshot(selectionCfg)
-	options := commandspkg.BuildModelSelectionOptions(snapshot, currentSelection)
+	options := commandspkg.BuildCatalogModelSelectionOptions(selectionCfg, snapshot, currentSelection)
 	options = appendCuratedModelSelectionOptions(options, snapshot, currentSelection)
 	options = append(options, ipc.ModelSelectionOptionPayload{
 		Label:       "Custom model",
