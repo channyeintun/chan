@@ -24,3 +24,7 @@
 
 - Split logic into small, focused functions grouped into packages.
 - Build for reuse: tools should be composable into other tools, APIs, or larger systems.
+
+## Vulnerability Checks
+
+- Run `govulncheck` for dependency and code vulnerability scanning: `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`
