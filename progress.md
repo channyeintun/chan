@@ -41,10 +41,18 @@
 - Preserved explicit provider/model pairs in picker payloads for catalog-backed selections.
 - Verified the task with `gofmt -w internal/commands/providers.go internal/engine/slash_command_model.go` and `go build ./...`.
 
+### Phase 4.5: Add Auth and Runtime Adapter Layer
+
+- Added `catalog.Service.Route` to resolve catalog-backed runtime routes.
+- Updated standard provider runtime initialization to prefer catalog-derived protocol, base URL, default model, and capabilities before falling back to the older static path.
+- Updated Codex runtime initialization to use the same catalog-backed route resolution while preserving existing token refresh and account wiring.
+- Kept provider-specific auth/login behavior separate from the base catalog normalization layer.
+- Verified the task with `gofmt -w internal/catalog/service.go internal/engine/provider_behavior.go` and `go build ./...`.
+
 ## Deferred
 
 - No tests were added because the current execution constraint says to never add tests.
 
 ## Next
 
-- Phase 4.5: add a clearer catalog-to-runtime adapter layer for provider runtime wiring.
+- Phase 5: move capability resolution to catalog-backed metadata in client initialization paths.

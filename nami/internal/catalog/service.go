@@ -186,6 +186,34 @@ func (s *Service) Model(ctx context.Context, cfg config.Config, providerID strin
 	return Model{}, false, nil
 }
 
+func (s *Service) Route(ctx context.Context, cfg config.Config, providerID string, modelID string) (api.ProviderRoute, error) {
+	provider, ok, err := s.Provider(ctx, cfg, providerID)
+	if err != nil {
+		return api.ProviderRoute{}, err
+	}
+	if !ok {
+		return api.ProviderRoute{}, fmt.Errorf("provider %q not found in catalog", providerID)
+	}
+
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		modelID = provider.DefaultModel
+	}
+
+	model, ok := modelForProvider(provider, modelID)
+	if !ok {
+		model = fallbackModel(provider.ID, modelID)
+	}
+
+	return api.ProviderRoute{
+		ProviderID:   provider.ID,
+		ModelID:      model.ID,
+		Protocol:     provider.Protocol,
+		BaseURL:      provider.BaseURL,
+		Capabilities: model.Capabilities,
+	}, nil
+}
+
 func buildProvider(base modelsdev.Snapshot, cfg config.Config, runtime runtimeProvider) Provider {
 	provider := Provider{
 		ID:       runtime.CatalogID,
@@ -305,6 +333,16 @@ func fallbackModel(providerID string, modelID string) Model {
 			OutputTokens:  capabilities.MaxOutputTokens,
 		},
 	}
+}
+
+func modelForProvider(provider Provider, modelID string) (Model, bool) {
+	modelID = strings.TrimSpace(modelID)
+	for _, model := range provider.Models {
+		if model.ID == modelID {
+			return model, true
+		}
+	}
+	return Model{}, false
 }
 
 func ensureModel(models []Model, modelID string, fallback Model) []Model {

@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/channyeintun/nami/internal/api"
+	"github.com/channyeintun/nami/internal/catalog"
 	commandspkg "github.com/channyeintun/nami/internal/commands"
 	"github.com/channyeintun/nami/internal/config"
+	"github.com/channyeintun/nami/internal/modelsdev"
 	"github.com/channyeintun/nami/internal/modelselection"
 )
 
@@ -39,7 +41,12 @@ func providerBehaviorFor(provider string) providerBehavior {
 
 func (standardProviderBehavior) NewClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
 	cfg = cfg.ApplyProviderOverride(provider)
-	return api.NewClientForProvider(provider, model, cfg.APIKey, cfg.BaseURL)
+	route, err := resolveCatalogProviderRoute(cfg, provider, model)
+	if err != nil {
+		return api.NewClientForProvider(provider, model, cfg.APIKey, cfg.BaseURL)
+	}
+	route.APIKey = cfg.APIKey
+	return api.NewClientForRoute(route)
 }
 
 func (standardProviderBehavior) ResolveSelection(input, fallbackProvider string) (string, string) {
@@ -127,7 +134,22 @@ func (codexProviderBehavior) NewClient(provider, model string, cfg config.Config
 	if err != nil {
 		return nil, err
 	}
-	client, err := api.NewClientForProvider(provider, model, resolved.APIKey, resolved.BaseURL)
+	route, err := resolveCatalogProviderRoute(resolved, provider, model)
+	if err != nil {
+		client, fallbackErr := api.NewClientForProvider(provider, model, resolved.APIKey, resolved.BaseURL)
+		if fallbackErr != nil {
+			return nil, fallbackErr
+		}
+		api.SetCodexAccountID(client, resolved.Codex.AccountID)
+		if strings.TrimSpace(resolved.Codex.RefreshToken) != "" {
+			refresher := newCodexTokenRefresher(resolved.Codex)
+			api.SetAPIKeyFunc(client, refresher.resolve)
+			api.SetCodexAccountIDFunc(client, refresher.currentAccountID)
+		}
+		return client, nil
+	}
+	route.APIKey = resolved.APIKey
+	client, err := api.NewClientForRoute(route)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +160,11 @@ func (codexProviderBehavior) NewClient(provider, model string, cfg config.Config
 		api.SetCodexAccountIDFunc(client, refresher.currentAccountID)
 	}
 	return client, nil
+}
+
+func resolveCatalogProviderRoute(cfg config.Config, provider string, model string) (api.ProviderRoute, error) {
+	service := catalog.NewService(modelsdev.NewClient())
+	return service.Route(context.Background(), cfg, provider, model)
 }
 
 func (codexProviderBehavior) ResolveSelection(input, fallbackProvider string) (string, string) {
