@@ -85,6 +85,8 @@ func (gitHubCopilotProviderBehavior) NewClient(provider, model string, cfg confi
 	}
 	if capabilities, ok := resolveGitHubCopilotCapabilities(resolved, model); ok {
 		client = api.WithCapabilities(client, capabilities)
+	} else if capabilities, ok := resolveCatalogModelCapabilities(resolved, provider, model); ok {
+		client = api.WithCapabilities(client, capabilities)
 	}
 	api.SetGitHubCopilotEnterpriseDomain(client, resolved.GitHubCopilot.EnterpriseDomain)
 	api.SetAPIKeyFunc(client, newCopilotTokenRefresher(resolved.GitHubCopilot).resolve)
@@ -165,6 +167,14 @@ func (codexProviderBehavior) NewClient(provider, model string, cfg config.Config
 func resolveCatalogProviderRoute(cfg config.Config, provider string, model string) (api.ProviderRoute, error) {
 	service := catalog.NewService(modelsdev.NewClient())
 	return service.Route(context.Background(), cfg, provider, model)
+}
+
+func resolveCatalogModelCapabilities(cfg config.Config, provider string, model string) (api.ModelCapabilities, bool) {
+	route, err := resolveCatalogProviderRoute(cfg, provider, model)
+	if err != nil || route.Capabilities == (api.ModelCapabilities{}) {
+		return api.ModelCapabilities{}, false
+	}
+	return route.Capabilities, true
 }
 
 func (codexProviderBehavior) ResolveSelection(input, fallbackProvider string) (string, string) {

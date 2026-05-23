@@ -49,10 +49,18 @@
 - Kept provider-specific auth/login behavior separate from the base catalog normalization layer.
 - Verified the task with `gofmt -w internal/catalog/service.go internal/engine/provider_behavior.go` and `go build ./...`.
 
+### Phase 5: Move Capability Resolution to Catalog
+
+- Standard provider runtime initialization now inherits capabilities from catalog-backed routes.
+- Codex runtime initialization now inherits capabilities from the same catalog-backed route path.
+- GitHub Copilot runtime initialization now falls back to catalog-derived capabilities when runtime policy metadata is not available.
+- Custom or unknown models still keep the existing static capability fallback through catalog fallback model entries.
+- Verified the task with `gofmt -w internal/engine/provider_behavior.go` and `go build ./...`.
+
 ## Deferred
 
 - No tests were added because the current execution constraint says to never add tests.
 
 ## Next
 
-- Phase 5: move capability resolution to catalog-backed metadata in client initialization paths.
+- Phase 6: reduce remaining static catalog usage and move provider/model lookup fully to catalog-first behavior.
