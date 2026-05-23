@@ -60,5 +60,5 @@ Options:
   }
 }
 
-// Launch the TUI
-await import("../dist/index.js");
+// Launch the packed TUI entrypoint.
+await import("../dist/index.mjs");

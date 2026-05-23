@@ -509,13 +509,13 @@ The launcher shim, `nami.js`, and `nami-engine` should live in the same director
 
 ## Building from Source
 
-Requires: Go 1.26.3, Bun 1.0+ for local builds
+Requires: Go 1.26.3 and Vite+ `vp` for local builds
 
 ```bash
 cd nami/tui
-bun install --frozen-lockfile
-bun run setup
-bun run start
+vp install
+vp run setup
+vp run start
 
 make release-local
 make release

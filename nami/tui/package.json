@@ -3,15 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.13.0",
   "bin": {
     "nami": "bin/nami.js"
   },
   "scripts": {
-    "build": "bunx tsc",
-    "start": "bun bin/nami.js",
-    "dev": "bunx tsc --watch",
+    "build": "vp pack",
+    "typecheck": "tsgo --noEmit",
+    "start": "node bin/nami.js",
+    "dev": "vp pack --watch",
     "install-engine": "cd .. && go build -o tui/engine/nami-engine ./cmd/nami-engine/",
-    "setup": "bun run build && bun run install-engine"
+    "setup": "vp run build && vp run install-engine"
   },
   "dependencies": {
     "cli-highlight": "^2.1.11",
@@ -24,8 +26,9 @@
     "@chenglou/pretext": "0.0.7"
   },
   "devDependencies": {
+    "@typescript/native-preview": "7.0.0-dev.20260522.1",
     "@types/node": "^24.7.2",
     "@types/react": "^19.2.14",
-    "typescript": "^6.0.2"
+    "vite-plus": "^0.1.22"
   }
 }

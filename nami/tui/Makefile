@@ -39,10 +39,10 @@ release-local: clean build-portable-launcher-bundle
 
 build-portable-launcher-bundle:
 	@mkdir -p $(BUILD_DIR)
-	bun run build
-	bun build --target=node --format=esm --outfile=$(BUILD_DIR)/$(LAUNCHER_JS_NAME).raw \
+	vp pack
+	vp dlx rolldown --platform=node --format=esm --no-code-splitting --file=$(BUILD_DIR)/$(LAUNCHER_JS_NAME).raw \
 		bin/nami.js
-	bun $(LAUNCHER_NORMALIZER) \
+	node $(LAUNCHER_NORMALIZER) \
 		$(BUILD_DIR)/$(LAUNCHER_JS_NAME).raw \
 		$(BUILD_DIR)/$(LAUNCHER_JS_NAME)
 	rm -f $(BUILD_DIR)/$(LAUNCHER_JS_NAME).raw

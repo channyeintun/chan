@@ -16,7 +16,7 @@ It is not a general Silvery tutorial. It is a practical note for working on `nam
 ### Package source
 
 - `nami/tui` depends on the registry `silvery` package with version `^0.19.2`.
-- `nami/tui/bun.lock` resolves `silvery`, `@silvery/color`, and `@silvery/commander` from the registry at compatible `0.19.2` versions.
+- `nami/tui/package-lock.json` resolves `silvery`, `@silvery/color`, and `@silvery/commander` from the registry at compatible `0.19.2` versions.
 - The old local wrapper package has been removed.
 
 ## What Works Well
