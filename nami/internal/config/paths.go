@@ -51,3 +51,22 @@ func MemoryDir() string {
 func ProjectsDir() string {
 	return filepath.Join(ConfigDir(), "projects")
 }
+
+func CacheDir() string {
+	if dir, err := os.UserCacheDir(); err == nil {
+		dir = strings.TrimSpace(dir)
+		if dir != "" {
+			return filepath.Join(dir, appConfigDirName)
+		}
+	}
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		home = strings.TrimSpace(home)
+		if home != "" {
+			return filepath.Join(home, ".cache", appConfigDirName)
+		}
+	}
+
+	return filepath.Join(".", "."+appConfigDirName, "cache")
+}
