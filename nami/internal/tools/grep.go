@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -104,9 +105,7 @@ func (t *GrepTool) Concurrency(input ToolInput) ConcurrencyDecision {
 
 func (t *GrepTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
 	normalizedParams := map[string]any{}
-	for key, value := range input.Params {
-		normalizedParams[key] = value
-	}
+	maps.Copy(normalizedParams, input.Params)
 	if pattern, ok := stringParam(normalizedParams, "pattern"); !ok || strings.TrimSpace(pattern) == "" {
 		if query, ok := stringParam(normalizedParams, "query"); ok && strings.TrimSpace(query) != "" {
 			isRegexp, hasRegexpFlag := normalizedParams["isRegexp"].(bool)
@@ -334,12 +333,12 @@ func appendGlobArgs(args *[]string, params map[string]any) {
 
 func splitGlobPatterns(glob string) []string {
 	var patterns []string
-	for _, raw := range strings.Fields(glob) {
+	for raw := range strings.FieldsSeq(glob) {
 		if strings.Contains(raw, "{") && strings.Contains(raw, "}") {
 			patterns = append(patterns, raw)
 			continue
 		}
-		for _, part := range strings.Split(raw, ",") {
+		for part := range strings.SplitSeq(raw, ",") {
 			part = strings.TrimSpace(part)
 			if part != "" {
 				patterns = append(patterns, part)

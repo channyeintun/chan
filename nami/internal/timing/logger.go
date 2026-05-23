@@ -3,6 +3,7 @@ package timing
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -77,9 +78,7 @@ func (r *CheckpointRecorder) Snapshot() Snapshot {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	checkpoints := make(map[string]time.Time, len(r.checkpoints))
-	for name, at := range r.checkpoints {
-		checkpoints[name] = at
-	}
+	maps.Copy(checkpoints, r.checkpoints)
 	return Snapshot{
 		StartedAt:   r.startedAt,
 		Checkpoints: checkpoints,

@@ -89,17 +89,14 @@ type openAIResponsesUsage struct {
 	TotalTokens        int `json:"total_tokens,omitempty"`
 	InputTokensDetails struct {
 		CachedTokens int `json:"cached_tokens,omitempty"`
-	} `json:"input_tokens_details,omitempty"`
+	} `json:"input_tokens_details"`
 }
 
 func (u openAIResponsesUsage) toUsage() *Usage {
 	if u.InputTokens == 0 && u.OutputTokens == 0 && u.TotalTokens == 0 && u.InputTokensDetails.CachedTokens == 0 {
 		return nil
 	}
-	inputTokens := u.InputTokens - u.InputTokensDetails.CachedTokens
-	if inputTokens < 0 {
-		inputTokens = 0
-	}
+	inputTokens := max(u.InputTokens-u.InputTokensDetails.CachedTokens, 0)
 	return &Usage{
 		InputTokens:     inputTokens,
 		OutputTokens:    u.OutputTokens,
@@ -112,10 +109,10 @@ type openAIResponsesFailedEvent struct {
 		Error struct {
 			Code    string `json:"code,omitempty"`
 			Message string `json:"message,omitempty"`
-		} `json:"error,omitempty"`
+		} `json:"error"`
 		IncompleteDetails struct {
 			Reason string `json:"reason,omitempty"`
-		} `json:"incomplete_details,omitempty"`
+		} `json:"incomplete_details"`
 	} `json:"response"`
 }
 

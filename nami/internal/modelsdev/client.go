@@ -61,10 +61,10 @@ type Model struct {
 	Temperature      bool           `json:"temperature,omitempty"`
 	StructuredOutput bool           `json:"structured_output,omitempty"`
 	OpenWeights      bool           `json:"open_weights,omitempty"`
-	Modalities       Modalities     `json:"modalities,omitempty"`
-	Limit            Limit          `json:"limit,omitempty"`
-	Cost             Cost           `json:"cost,omitempty"`
-	Experimental     Experimental   `json:"experimental,omitempty"`
+	Modalities       Modalities     `json:"modalities"`
+	Limit            Limit          `json:"limit"`
+	Cost             Cost           `json:"cost"`
+	Experimental     Experimental   `json:"experimental"`
 	Extra            map[string]any `json:"-"`
 }
 
@@ -103,7 +103,7 @@ type Experimental struct {
 }
 
 type ExperimentalMode struct {
-	Cost     Cost           `json:"cost,omitempty"`
+	Cost     Cost           `json:"cost"`
 	Provider map[string]any `json:"provider,omitempty"`
 	Extra    map[string]any `json:"-"`
 }

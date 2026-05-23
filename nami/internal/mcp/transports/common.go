@@ -2,6 +2,7 @@ package transports
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -92,9 +93,7 @@ func mergeEnv(overrides map[string]string) []string {
 			envMap[key] = value
 		}
 	}
-	for key, value := range overrides {
-		envMap[key] = value
-	}
+	maps.Copy(envMap, overrides)
 	merged := make([]string, 0, len(envMap))
 	for key, value := range envMap {
 		merged = append(merged, key+"="+value)

@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -35,9 +36,7 @@ func (c *AnthropicClient) buildRequest(req ModelRequest) (anthropicRequest, map[
 	var extraHeaders map[string]string
 	if c.provider == "github-copilot" {
 		extraHeaders = GitHubCopilotStaticHeaders()
-		for key, value := range BuildGitHubCopilotDynamicHeaders(req.Messages) {
-			extraHeaders[key] = value
-		}
+		maps.Copy(extraHeaders, BuildGitHubCopilotDynamicHeaders(req.Messages))
 	}
 
 	if req.ThinkingBudget > 0 {
@@ -215,9 +214,7 @@ func normalizeAnthropicToolSchema(schema any, flattenTopLevelCombinators bool) a
 	}
 
 	clone := make(map[string]any, len(root))
-	for key, value := range root {
-		clone[key] = value
-	}
+	maps.Copy(clone, root)
 	delete(clone, "oneOf")
 	delete(clone, "anyOf")
 	delete(clone, "allOf")

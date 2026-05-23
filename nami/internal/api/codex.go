@@ -55,7 +55,7 @@ type CodexIDTokenClaims struct {
 	} `json:"organizations,omitempty"`
 	OpenAIAuth struct {
 		ChatGPTAccountID string `json:"chatgpt_account_id,omitempty"`
-	} `json:"https://api.openai.com/auth,omitempty"`
+	} `json:"https://api.openai.com/auth"`
 }
 
 func CodexStaticHeaders(accountID string) map[string]string {

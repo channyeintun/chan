@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -343,9 +344,7 @@ func cloneMetadata(metadata map[string]any) map[string]any {
 		return nil
 	}
 	cloned := make(map[string]any, len(metadata))
-	for key, value := range metadata {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, metadata)
 	return cloned
 }
 
@@ -354,9 +353,7 @@ func mergeMetadata(base map[string]any, overrides map[string]any) map[string]any
 	if merged == nil {
 		merged = make(map[string]any, len(overrides))
 	}
-	for key, value := range overrides {
-		merged[key] = value
-	}
+	maps.Copy(merged, overrides)
 	return merged
 }
 

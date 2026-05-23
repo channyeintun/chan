@@ -382,7 +382,7 @@ type ollamaChatRequest struct {
 	Model    string                 `json:"model"`
 	Messages []ollamaMessage        `json:"messages"`
 	Tools    []ollamaToolDefinition `json:"tools,omitempty"`
-	Options  ollamaOptions          `json:"options,omitempty"`
+	Options  ollamaOptions          `json:"options"`
 	Stream   bool                   `json:"stream"`
 }
 

@@ -19,8 +19,8 @@ type backgroundCommandSummary struct {
 	Running         bool      `json:"Running"`
 	Error           string    `json:"Error,omitempty"`
 	ExitCode        *int      `json:"ExitCode,omitempty"`
-	StartedAt       time.Time `json:"StartedAt,omitempty"`
-	UpdatedAt       time.Time `json:"UpdatedAt,omitempty"`
+	StartedAt       time.Time `json:"StartedAt"`
+	UpdatedAt       time.Time `json:"UpdatedAt"`
 	HasUnreadOutput bool      `json:"HasUnreadOutput,omitempty"`
 	UnreadBytes     int       `json:"UnreadBytes,omitempty"`
 	UnreadPreview   string    `json:"UnreadPreview,omitempty"`

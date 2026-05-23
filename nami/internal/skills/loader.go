@@ -177,10 +177,7 @@ func SelectRelevant(available []Skill, userPrompt string) []Skill {
 		return scored[i].score > scored[j].score
 	})
 
-	limit := maxAutoSelectedSkills
-	if len(scored) < limit {
-		limit = len(scored)
-	}
+	limit := min(len(scored), maxAutoSelectedSkills)
 	selected := make([]Skill, 0, limit)
 	for i := 0; i < limit; i++ {
 		selected = append(selected, scored[i].skill)

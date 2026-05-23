@@ -122,10 +122,7 @@ func truncateAgentDisplayText(value string, maxRunes int) string {
 	if len(note) >= maxRunes {
 		return string(runes[:maxRunes])
 	}
-	keep := maxRunes - len(note)
-	if keep < 0 {
-		keep = 0
-	}
+	keep := max(maxRunes-len(note), 0)
 	return string(runes[:keep]) + agentDisplayTruncationNote
 }
 

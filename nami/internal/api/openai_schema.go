@@ -1,5 +1,7 @@
 package api
 
+import "maps"
+
 // sanitizeOpenAIToolSchema normalizes tool schemas to the subset accepted by
 // OpenAI-style function calling endpoints, which require a top-level object
 // schema and reject root combinators such as anyOf/allOf/oneOf/not/enum.
@@ -14,9 +16,7 @@ func sanitizeOpenAIToolSchema(schema any) any {
 	}
 
 	result := make(map[string]any, len(schemaMap))
-	for key, value := range schemaMap {
-		result[key] = value
-	}
+	maps.Copy(result, schemaMap)
 
 	delete(result, "oneOf")
 	delete(result, "anyOf")

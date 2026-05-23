@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 )
 
@@ -29,9 +30,7 @@ func (c *OpenAICompatClient) buildRequest(req ModelRequest) (openAICompatRequest
 	var extraHeaders map[string]string
 	if c.provider == "github-copilot" {
 		extraHeaders = GitHubCopilotStaticHeaders()
-		for key, value := range BuildGitHubCopilotDynamicHeaders(req.Messages) {
-			extraHeaders[key] = value
-		}
+		maps.Copy(extraHeaders, BuildGitHubCopilotDynamicHeaders(req.Messages))
 	}
 
 	return payload, extraHeaders, nil

@@ -327,7 +327,7 @@ func invokeModelWithRecovery(
 	yield func(ipc.StreamEvent, error) bool,
 ) (modelTurn, error) {
 	toolUseRetryUsed := false
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		turn, err := streamModelTurn(ctx, state, deps, yield)
 		if err == nil {
 			turn.stopReason = normalizeStopReason(turn.stopReason)

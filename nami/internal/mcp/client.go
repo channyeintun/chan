@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -365,9 +366,7 @@ func mapOrNil(meta sdkmcp.Meta) map[string]any {
 		return nil
 	}
 	cloned := make(map[string]any, len(meta))
-	for key, value := range meta {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, meta)
 	return cloned
 }
 

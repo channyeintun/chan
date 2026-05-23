@@ -221,7 +221,7 @@ func GetGitHubCopilotBaseURL(token, enterpriseDomain string) string {
 }
 
 func gitHubCopilotProxyHost(token string) string {
-	for _, part := range strings.Split(token, ";") {
+	for part := range strings.SplitSeq(token, ";") {
 		part = strings.TrimSpace(part)
 		if !strings.HasPrefix(part, "proxy-ep=") {
 			continue

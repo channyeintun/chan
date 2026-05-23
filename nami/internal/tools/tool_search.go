@@ -148,7 +148,7 @@ func scoreToolDefinition(def api.ToolDefinition, lowerQuery string) int {
 	if strings.Contains(description, lowerQuery) {
 		score += 10
 	}
-	for _, token := range strings.Fields(lowerQuery) {
+	for token := range strings.FieldsSeq(lowerQuery) {
 		if token == "" {
 			continue
 		}

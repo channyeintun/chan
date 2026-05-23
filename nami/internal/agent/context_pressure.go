@@ -103,10 +103,7 @@ func EvaluateContextPressure(messages []api.Message, contextWindow, maxOutputTok
 		decision.ShouldCompact = true
 	}
 
-	recallThreshold := warningThreshold - memoryRecallPressureBufferTokens
-	if recallThreshold < 0 {
-		recallThreshold = 0
-	}
+	recallThreshold := max(warningThreshold-memoryRecallPressureBufferTokens, 0)
 	if freshSessionMemory {
 		recallThreshold -= freshSessionRecallBufferTokens
 		if recallThreshold < 0 {

@@ -23,7 +23,7 @@ func SnapshotGoroutines() string {
 
 	// Filter to goroutines that contain nami frames.
 	var filtered []string
-	for _, block := range strings.Split(full, "\n\n") {
+	for block := range strings.SplitSeq(full, "\n\n") {
 		if strings.Contains(block, "nami") {
 			filtered = append(filtered, block)
 		}

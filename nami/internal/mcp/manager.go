@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -126,9 +128,7 @@ func (m *Manager) StartWithCallback(ctx context.Context, callback StatusCallback
 	m.mu.RLock()
 	order := append([]string(nil), m.order...)
 	definitions := make(map[string]ServerDefinition, len(m.definitions))
-	for name, definition := range m.definitions {
-		definitions[name] = definition
-	}
+	maps.Copy(definitions, m.definitions)
 	m.mu.RUnlock()
 
 	var wg sync.WaitGroup
@@ -416,10 +416,8 @@ func (m *Manager) updateStatus(name string, update func(*ServerStatus)) {
 }
 
 func (m *Manager) appendOrder(name string) {
-	for _, existing := range m.order {
-		if existing == name {
-			return
-		}
+	if slices.Contains(m.order, name) {
+		return
 	}
 	m.order = append(m.order, name)
 }
@@ -502,8 +500,8 @@ func rootURI(path string) string {
 	if strings.HasPrefix(uri, "file:///") {
 		return uri
 	}
-	if strings.HasPrefix(uri, "file://") {
-		return "file:///" + strings.TrimPrefix(uri, "file://")
+	if after, ok := strings.CutPrefix(uri, "file://"); ok {
+		return "file:///" + after
 	}
 	return uri
 }
@@ -513,8 +511,6 @@ func cloneStringMap(source map[string]string) map[string]string {
 		return nil
 	}
 	cloned := make(map[string]string, len(source))
-	for key, value := range source {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, source)
 	return cloned
 }

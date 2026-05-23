@@ -18,7 +18,7 @@ type Config struct {
 	SubagentProvider string    `json:"subagent_provider,omitempty"`
 	SubagentModel    string    `json:"subagent_model,omitempty"`
 	ReasoningEffort  string    `json:"reasoning_effort,omitempty"`
-	MCP              MCPConfig `json:"mcp,omitempty"`
+	MCP              MCPConfig `json:"mcp"`
 	ModelSource      string    `json:"-"`
 
 	// Provider-level overrides
@@ -41,8 +41,8 @@ type Config struct {
 	SkillDir string `json:"skill_dir,omitempty"`
 
 	// Provider auth
-	GitHubCopilot GitHubCopilotAuth `json:"github_copilot,omitempty"`
-	Codex         CodexAuth         `json:"codex,omitempty"`
+	GitHubCopilot GitHubCopilotAuth `json:"github_copilot"`
+	Codex         CodexAuth         `json:"codex"`
 }
 
 type GitHubCopilotAuth struct {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -105,9 +106,7 @@ func (c *OpenAIResponsesClient) Warmup(ctx context.Context) error {
 			headers[strings.ToLower(key)] = value
 		}
 	} else if c.provider == "codex" {
-		for key, value := range CodexStaticHeaders(c.resolveCodexAccountID()) {
-			headers[key] = value
-		}
+		maps.Copy(headers, CodexStaticHeaders(c.resolveCodexAccountID()))
 	}
 	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, baseURL+"/models", headers)
 }

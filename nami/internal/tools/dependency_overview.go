@@ -290,7 +290,7 @@ func sortDependencyEcosystems(manifestCounts, dependencyCounts map[string]int) [
 func parseGoModDependencies(content string) map[string][]string {
 	sections := map[string][]string{}
 	inRequireBlock := false
-	for _, rawLine := range strings.Split(content, "\n") {
+	for rawLine := range strings.SplitSeq(content, "\n") {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "//") {
 			continue
@@ -303,8 +303,8 @@ func parseGoModDependencies(content string) map[string][]string {
 			inRequireBlock = false
 			continue
 		}
-		if strings.HasPrefix(line, "require ") {
-			module := parseGoModRequireLine(strings.TrimSpace(strings.TrimPrefix(line, "require ")))
+		if after, ok := strings.CutPrefix(line, "require "); ok {
+			module := parseGoModRequireLine(strings.TrimSpace(after))
 			if module != "" {
 				section := "require"
 				if strings.Contains(line, "// indirect") {
@@ -360,7 +360,7 @@ func parsePyProjectDependencies(content string) map[string][]string {
 	currentSection := ""
 	pendingKey := ""
 	var pendingValues []string
-	for _, rawLine := range strings.Split(content, "\n") {
+	for rawLine := range strings.SplitSeq(content, "\n") {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -417,7 +417,7 @@ func pyProjectSectionKey(section, key string) string {
 
 func parseRequirementsDependencies(content string) map[string][]string {
 	deps := make([]string, 0)
-	for _, rawLine := range strings.Split(content, "\n") {
+	for rawLine := range strings.SplitSeq(content, "\n") {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") {
 			continue
@@ -433,7 +433,7 @@ func parseRequirementsDependencies(content string) map[string][]string {
 func parseCargoDependencies(content string) map[string][]string {
 	sections := map[string][]string{}
 	currentSection := ""
-	for _, rawLine := range strings.Split(content, "\n") {
+	for rawLine := range strings.SplitSeq(content, "\n") {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -459,7 +459,7 @@ func parseCargoDependencies(content string) map[string][]string {
 
 func parseGemfileDependencies(content string) map[string][]string {
 	deps := make([]string, 0)
-	for _, rawLine := range strings.Split(content, "\n") {
+	for rawLine := range strings.SplitSeq(content, "\n") {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue

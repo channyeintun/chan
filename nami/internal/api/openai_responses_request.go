@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 )
 
@@ -39,9 +40,7 @@ func (c *OpenAIResponsesClient) buildRequest(req ModelRequest) (openAIResponsesR
 	var extraHeaders map[string]string
 	if c.provider == "github-copilot" {
 		extraHeaders = GitHubCopilotStaticHeaders()
-		for key, value := range BuildGitHubCopilotDynamicHeaders(req.Messages) {
-			extraHeaders[key] = value
-		}
+		maps.Copy(extraHeaders, BuildGitHubCopilotDynamicHeaders(req.Messages))
 	} else if c.provider == "codex" {
 		extraHeaders = CodexStaticHeaders(c.resolveCodexAccountID())
 	}

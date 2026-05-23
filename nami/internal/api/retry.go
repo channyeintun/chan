@@ -69,10 +69,7 @@ func ShouldRetry(err error) bool {
 
 // BackoffDelay calculates exponential backoff delay for attempt n (0-indexed).
 func BackoffDelay(policy RetryPolicy, attempt int) time.Duration {
-	delay := time.Duration(float64(policy.BaseDelay) * math.Pow(2, float64(attempt)))
-	if delay > policy.MaxDelay {
-		delay = policy.MaxDelay
-	}
+	delay := min(time.Duration(float64(policy.BaseDelay)*math.Pow(2, float64(attempt))), policy.MaxDelay)
 	return delay
 }
 

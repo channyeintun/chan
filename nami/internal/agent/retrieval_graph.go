@@ -530,7 +530,7 @@ var goTestFuncPattern = regexp.MustCompile(`^func\s+(Test\w+)\s*\(`)
 
 func (g *RetrievalGraph) parseGoFile(path, content string) {
 	symCount := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 
 		if m := goTestFuncPattern.FindStringSubmatch(trimmed); len(m) >= 2 {
@@ -604,7 +604,7 @@ var tsImportPattern = regexp.MustCompile(`(?:import|require)\s*(?:\(?\s*['"]([^'
 
 func (g *RetrievalGraph) parseTSFile(path, content string) {
 	symCount := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 
 		if m := tsExportClassPattern.FindStringSubmatch(trimmed); len(m) >= 2 {
@@ -635,7 +635,7 @@ func (g *RetrievalGraph) parseTSFile(path, content string) {
 func (g *RetrievalGraph) parseTSImportEdges(filePath, content string) {
 	dir := filepath.Dir(filePath)
 	added := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if added >= graphMaxImportsPerFile {
 			break
 		}
@@ -681,7 +681,7 @@ var pyImportPattern = regexp.MustCompile(`^import\s+(\.\S+)`)
 
 func (g *RetrievalGraph) parsePythonFile(path, content string) {
 	symCount := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 
 		if m := pyClassPattern.FindStringSubmatch(trimmed); len(m) >= 2 {
@@ -712,7 +712,7 @@ func (g *RetrievalGraph) parsePythonFile(path, content string) {
 func (g *RetrievalGraph) parsePythonImportEdges(filePath, content string) {
 	dir := filepath.Dir(filePath)
 	added := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if added >= graphMaxImportsPerFile {
 			break
 		}
@@ -774,7 +774,7 @@ var rustTestAttr = regexp.MustCompile(`#\[(?:tokio::)?test`)
 func (g *RetrievalGraph) parseRustFile(path, content string) {
 	symCount := 0
 	nextIsTest := false
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 
 		if rustTestAttr.MatchString(trimmed) {
@@ -819,7 +819,7 @@ func (g *RetrievalGraph) parseRustFile(path, content string) {
 func (g *RetrievalGraph) parseRustUseEdges(filePath, content string) {
 	dir := filepath.Dir(filePath)
 	added := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if added >= graphMaxImportsPerFile {
 			break
 		}
@@ -855,7 +855,7 @@ var rubyRequirePattern = regexp.MustCompile(`require(?:_relative)?\s+['"]([^'"]+
 
 func (g *RetrievalGraph) parseRubyFile(path, content string) {
 	symCount := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 
 		if m := rubyClassPattern.FindStringSubmatch(trimmed); len(m) >= 2 {
@@ -881,7 +881,7 @@ func (g *RetrievalGraph) parseRubyFile(path, content string) {
 func (g *RetrievalGraph) parseRubyRequireEdges(filePath, content string) {
 	dir := filepath.Dir(filePath)
 	added := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if added >= graphMaxImportsPerFile {
 			break
 		}
@@ -912,7 +912,7 @@ var javaMethodPattern = regexp.MustCompile(`^\s+(?:public|protected|private|stat
 
 func (g *RetrievalGraph) parseJavaFile(path, content string) {
 	symCount := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 
 		if m := javaClassPattern.FindStringSubmatch(trimmed); len(m) >= 2 {
@@ -942,7 +942,7 @@ var cIncludeLocalPattern = regexp.MustCompile(`^#include\s+"([^"]+)"`)
 
 func (g *RetrievalGraph) parseCFile(path, content string) {
 	symCount := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 
 		if m := cFuncPattern.FindStringSubmatch(trimmed); len(m) >= 2 {
@@ -968,7 +968,7 @@ func (g *RetrievalGraph) parseCFile(path, content string) {
 func (g *RetrievalGraph) parseCIncludeEdges(filePath, content string) {
 	dir := filepath.Dir(filePath)
 	added := 0
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if added >= graphMaxImportsPerFile {
 			break
 		}

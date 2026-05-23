@@ -13,17 +13,17 @@ func ParseFrontmatter(content string) (map[string]string, string) {
 
 	// Find closing ---
 	rest := content[3:]
-	idx := strings.Index(rest, "\n---")
-	if idx < 0 {
+	before, after, ok := strings.Cut(rest, "\n---")
+	if !ok {
 		return fm, content
 	}
 
-	fmBlock := rest[:idx]
-	body := rest[idx+4:] // skip \n---
+	fmBlock := before
+	body := after // skip \n---
 	body = strings.TrimPrefix(body, "\n")
 
 	// Parse simple key: value pairs
-	for _, line := range strings.Split(fmBlock, "\n") {
+	for line := range strings.SplitSeq(fmBlock, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

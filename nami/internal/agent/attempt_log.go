@@ -77,7 +77,7 @@ func (l *AttemptLog) Load() ([]AttemptEntry, error) {
 	}
 
 	var entries []AttemptEntry
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

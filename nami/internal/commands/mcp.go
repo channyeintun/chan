@@ -277,7 +277,7 @@ func buildMCPServerConfig(transport mcppkg.TransportKind, commandOrURL string, e
 		server.Trust = &trusted
 	}
 	if options.StartupMS > 0 {
-		server.StartupTimeoutMS = intPtr(options.StartupMS)
+		server.StartupTimeoutMS = new(options.StartupMS)
 	}
 
 	switch transport {
@@ -289,7 +289,7 @@ func buildMCPServerConfig(transport mcppkg.TransportKind, commandOrURL string, e
 		if err != nil {
 			return configpkg.MCPServerConfig{}, "", "", err
 		}
-		server.Command = stringPtr(commandOrURL)
+		server.Command = new(commandOrURL)
 		if len(extraArgs) > 0 {
 			server.Args = append([]string(nil), extraArgs...)
 		}
@@ -310,7 +310,7 @@ func buildMCPServerConfig(transport mcppkg.TransportKind, commandOrURL string, e
 		if err != nil {
 			return configpkg.MCPServerConfig{}, "", "", err
 		}
-		server.URL = stringPtr(commandOrURL)
+		server.URL = new(commandOrURL)
 		server.Headers = headers
 		return server, "", commandOrURL, nil
 	default:
@@ -567,10 +567,12 @@ func formatSortedKeyValue(values map[string]string, format string) []string {
 	return lines
 }
 
+//go:fix inline
 func stringPtr(value string) *string {
-	return &value
+	return new(value)
 }
 
+//go:fix inline
 func intPtr(value int) *int {
-	return &value
+	return new(value)
 }

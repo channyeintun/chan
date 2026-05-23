@@ -25,10 +25,7 @@ const (
 // EffectiveContextWindow reserves room for model output before applying any
 // warning or compaction thresholds.
 func EffectiveContextWindow(contextWindow, maxOutputTokens int) int {
-	reserved := maxOutputTokens
-	if reserved < 0 {
-		reserved = 0
-	}
+	reserved := max(maxOutputTokens, 0)
 	if reserved > MaxReservedOutputTokens {
 		reserved = MaxReservedOutputTokens
 	}

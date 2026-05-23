@@ -44,8 +44,8 @@ type BackgroundCommandResult struct {
 	Command   string    `json:"Command,omitempty"`
 	Cwd       string    `json:"Cwd,omitempty"`
 	Running   bool      `json:"Running"`
-	StartedAt time.Time `json:"StartedAt,omitempty"`
-	UpdatedAt time.Time `json:"UpdatedAt,omitempty"`
+	StartedAt time.Time `json:"StartedAt"`
+	UpdatedAt time.Time `json:"UpdatedAt"`
 	Output    string    `json:"Output,omitempty"`
 	Error     string    `json:"Error,omitempty"`
 	ExitCode  *int      `json:"ExitCode,omitempty"`
@@ -305,7 +305,7 @@ func streamBackgroundOutput(ctx context.Context, bg *backgroundCommand, buffer *
 		if errors.Is(err, io.EOF) || errors.Is(err, syscall.EIO) {
 			return
 		}
-		_, _ = buffer.Write([]byte(fmt.Sprintf("\n[Background PTY stream closed: %v]\n", err)))
+		_, _ = buffer.Write(fmt.Appendf(nil, "\n[Background PTY stream closed: %v]\n", err))
 		return
 	}
 }

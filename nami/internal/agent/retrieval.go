@@ -264,7 +264,7 @@ func extractFilePathMatches(text string) []string {
 
 func gitStatusPaths(gitStatusText, cwd string) []string {
 	var paths []string
-	for _, line := range strings.Split(gitStatusText, "\n") {
+	for line := range strings.SplitSeq(gitStatusText, "\n") {
 		line = strings.TrimSpace(line)
 		if len(line) < 3 {
 			continue
@@ -524,7 +524,7 @@ func expandGoImports(filePath, modulePath, moduleRoot string, scores map[string]
 func parseGoImports(content string) []string {
 	var imports []string
 	inBlock := false
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "import (") {
 			inBlock = true
@@ -557,7 +557,7 @@ func findGoModule(startDir string) (string, string) {
 		modFile := filepath.Join(dir, "go.mod")
 		data, err := os.ReadFile(modFile)
 		if err == nil {
-			for _, line := range strings.Split(string(data), "\n") {
+			for line := range strings.SplitSeq(string(data), "\n") {
 				line = strings.TrimSpace(line)
 				if strings.HasPrefix(line, "module ") {
 					return strings.TrimSpace(strings.TrimPrefix(line, "module")), dir

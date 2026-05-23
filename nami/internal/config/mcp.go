@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,13 +148,13 @@ func mergeMCPServerConfig(base, override MCPServerConfig) MCPServerConfig {
 	merged := cloneMCPServerConfig(base)
 
 	if override.Transport != nil {
-		merged.Transport = stringPtr(*override.Transport)
+		merged.Transport = new(*override.Transport)
 	}
 	if override.Enabled != nil {
-		merged.Enabled = boolPtr(*override.Enabled)
+		merged.Enabled = new(*override.Enabled)
 	}
 	if override.Trust != nil {
-		merged.Trust = boolPtr(*override.Trust)
+		merged.Trust = new(*override.Trust)
 	}
 	if override.ExcludeTools != nil {
 		merged.ExcludeTools = append([]string(nil), override.ExcludeTools...)
@@ -165,7 +166,7 @@ func mergeMCPServerConfig(base, override MCPServerConfig) MCPServerConfig {
 		merged.ToolPermissions = clonePermissionMap(override.ToolPermissions)
 	}
 	if override.Command != nil {
-		merged.Command = stringPtr(*override.Command)
+		merged.Command = new(*override.Command)
 	}
 	if override.Args != nil {
 		merged.Args = append([]string(nil), override.Args...)
@@ -174,10 +175,10 @@ func mergeMCPServerConfig(base, override MCPServerConfig) MCPServerConfig {
 		merged.Env = cloneStringMap(override.Env)
 	}
 	if override.StartupTimeoutMS != nil {
-		merged.StartupTimeoutMS = intPtr(*override.StartupTimeoutMS)
+		merged.StartupTimeoutMS = new(*override.StartupTimeoutMS)
 	}
 	if override.URL != nil {
-		merged.URL = stringPtr(*override.URL)
+		merged.URL = new(*override.URL)
 	}
 	if override.Headers != nil {
 		merged.Headers = cloneStringMap(override.Headers)
@@ -189,13 +190,13 @@ func mergeMCPServerConfig(base, override MCPServerConfig) MCPServerConfig {
 func cloneMCPServerConfig(server MCPServerConfig) MCPServerConfig {
 	cloned := MCPServerConfig{}
 	if server.Transport != nil {
-		cloned.Transport = stringPtr(*server.Transport)
+		cloned.Transport = new(*server.Transport)
 	}
 	if server.Enabled != nil {
-		cloned.Enabled = boolPtr(*server.Enabled)
+		cloned.Enabled = new(*server.Enabled)
 	}
 	if server.Trust != nil {
-		cloned.Trust = boolPtr(*server.Trust)
+		cloned.Trust = new(*server.Trust)
 	}
 	if server.ExcludeTools != nil {
 		cloned.ExcludeTools = append([]string(nil), server.ExcludeTools...)
@@ -207,7 +208,7 @@ func cloneMCPServerConfig(server MCPServerConfig) MCPServerConfig {
 		cloned.ToolPermissions = clonePermissionMap(server.ToolPermissions)
 	}
 	if server.Command != nil {
-		cloned.Command = stringPtr(*server.Command)
+		cloned.Command = new(*server.Command)
 	}
 	if server.Args != nil {
 		cloned.Args = append([]string(nil), server.Args...)
@@ -216,10 +217,10 @@ func cloneMCPServerConfig(server MCPServerConfig) MCPServerConfig {
 		cloned.Env = cloneStringMap(server.Env)
 	}
 	if server.StartupTimeoutMS != nil {
-		cloned.StartupTimeoutMS = intPtr(*server.StartupTimeoutMS)
+		cloned.StartupTimeoutMS = new(*server.StartupTimeoutMS)
 	}
 	if server.URL != nil {
-		cloned.URL = stringPtr(*server.URL)
+		cloned.URL = new(*server.URL)
 	}
 	if server.Headers != nil {
 		cloned.Headers = cloneStringMap(server.Headers)
@@ -232,9 +233,7 @@ func clonePermissionMap(src map[string]MCPPermission) map[string]MCPPermission {
 		return nil
 	}
 	dst := make(map[string]MCPPermission, len(src))
-	for key, value := range src {
-		dst[key] = value
-	}
+	maps.Copy(dst, src)
 	return dst
 }
 
@@ -243,9 +242,7 @@ func cloneStringMap(src map[string]string) map[string]string {
 		return nil
 	}
 	dst := make(map[string]string, len(src))
-	for key, value := range src {
-		dst[key] = value
-	}
+	maps.Copy(dst, src)
 	return dst
 }
 
@@ -266,14 +263,17 @@ func walkUpDirs(start string) []string {
 	return dirs
 }
 
+//go:fix inline
 func stringPtr(value string) *string {
-	return &value
+	return new(value)
 }
 
+//go:fix inline
 func boolPtr(value bool) *bool {
-	return &value
+	return new(value)
 }
 
+//go:fix inline
 func intPtr(value int) *int {
-	return &value
+	return new(value)
 }

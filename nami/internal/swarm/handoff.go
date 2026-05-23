@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -127,13 +128,7 @@ func ValidateHandoffAgainstSpec(spec ResolvedSpec, handoff Handoff) error {
 		return fmt.Errorf("swarm target role %q is not defined in %s", handoff.TargetRole, spec.Path)
 	}
 	if len(sourceRole.Handoff.Targets) > 0 {
-		allowed := false
-		for _, target := range sourceRole.Handoff.Targets {
-			if target == handoff.TargetRole {
-				allowed = true
-				break
-			}
-		}
+		allowed := slices.Contains(sourceRole.Handoff.Targets, handoff.TargetRole)
 		if !allowed {
 			return fmt.Errorf("swarm role %q may only hand off to: %s", handoff.SourceRole, strings.Join(sourceRole.Handoff.Targets, ", "))
 		}

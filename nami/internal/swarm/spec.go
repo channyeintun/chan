@@ -66,8 +66,8 @@ type RoleSpec struct {
 	Permission   string       `json:"permission_profile,omitempty"`
 	AllowTools   []string     `json:"allow_tools,omitempty"`
 	DenyTools    []string     `json:"deny_tools,omitempty"`
-	Handoff      HandoffSpec  `json:"handoff,omitempty"`
-	Metadata     RoleMetadata `json:"metadata,omitempty"`
+	Handoff      HandoffSpec  `json:"handoff"`
+	Metadata     RoleMetadata `json:"metadata"`
 }
 
 type RoleMetadata struct {
