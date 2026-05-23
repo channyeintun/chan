@@ -1,10 +1,14 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/channyeintun/nami/internal/api"
+	"github.com/channyeintun/nami/internal/catalog"
+	"github.com/channyeintun/nami/internal/config"
+	"github.com/channyeintun/nami/internal/modelsdev"
 )
 
 const connectUsage = "/connect [provider|status|help]"
@@ -67,8 +71,12 @@ func ParseConnectArgs(args string) (ConnectRequest, error) {
 }
 
 func ConnectProviderCatalog() []ConnectProviderSpec {
+	if providers, err := connectProviderCatalogFromCatalog(context.Background(), config.Load()); err == nil {
+		return providers
+	}
+
 	providers := make([]ConnectProviderSpec, 0, len(api.ProviderSpecs))
-	for _, providerID := range orderedProviderIDs() {
+	for _, providerID := range api.OrderedProviderIDs() {
 		spec, ok := api.ProviderSpecFor(providerID)
 		if !ok {
 			continue
@@ -81,6 +89,29 @@ func ConnectProviderCatalog() []ConnectProviderSpec {
 		})
 	}
 	return providers
+}
+
+func connectProviderCatalogFromCatalog(ctx context.Context, cfg config.Config) ([]ConnectProviderSpec, error) {
+	service := catalog.NewService(modelsdev.NewClient())
+	snapshot, err := service.Snapshot(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	providers := make([]ConnectProviderSpec, 0, len(snapshot.Providers))
+	for _, provider := range snapshot.Providers {
+		envKey := ""
+		if len(provider.EnvKeys) > 0 {
+			envKey = strings.TrimSpace(provider.EnvKeys[0])
+		}
+		providers = append(providers, ConnectProviderSpec{
+			ID:           provider.ID,
+			Label:        provider.Name,
+			DefaultModel: provider.DefaultModel,
+			Methods:      connectMethodsForProvider(provider.ID, envKey),
+		})
+	}
+	return providers, nil
 }
 
 func LookupConnectProvider(providerID string) (ConnectProviderSpec, bool) {

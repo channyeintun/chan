@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -361,7 +360,7 @@ func discoverStaticProviderSnapshot(cfg config.Config) ProviderSnapshot {
 		Providers: make([]ProviderStatus, 0, len(api.Presets)),
 	}
 
-	for _, providerID := range orderedProviderIDs() {
+	for _, providerID := range api.OrderedProviderIDs() {
 		preset := api.Presets[providerID]
 		defaultModel := cfg.ProviderDefaultModel(providerID, preset.DefaultModel)
 		envKey := cfg.ProviderAPIKeyEnv(providerID, preset.EnvKeyVar)
@@ -474,42 +473,6 @@ func ResolveModelSelectionValue(selection string, source string) config.ModelSel
 
 func InferProviderFromModel(model string) string {
 	return modelselection.InferProviderFromModel(model)
-}
-
-func orderedProviderIDs() []string {
-	preferred := []string{
-		"github-copilot",
-		"codex",
-		"openai",
-		"anthropic",
-		"gemini",
-		"deepseek",
-		"mistral",
-		"groq",
-		"qwen",
-		"glm",
-		"ollama",
-	}
-	ordered := make([]string, 0, len(api.ProviderSpecs))
-	seen := make(map[string]struct{}, len(api.ProviderSpecs))
-	for _, providerID := range preferred {
-		if _, ok := api.ProviderSpecs[providerID]; !ok {
-			continue
-		}
-		ordered = append(ordered, providerID)
-		seen[providerID] = struct{}{}
-	}
-
-	extra := make([]string, 0, len(api.ProviderSpecs)-len(ordered))
-	for providerID := range api.ProviderSpecs {
-		if _, ok := seen[providerID]; ok {
-			continue
-		}
-		extra = append(extra, providerID)
-	}
-	sort.Strings(extra)
-	ordered = append(ordered, extra...)
-	return ordered
 }
 
 func populateProviderStatus(status *ProviderStatus, cfg config.Config, activeProvider string, preset api.ProviderPreset) {

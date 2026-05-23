@@ -57,10 +57,19 @@
 - Custom or unknown models still keep the existing static capability fallback through catalog fallback model entries.
 - Verified the task with `gofmt -w internal/engine/provider_behavior.go` and `go build ./...`.
 
+### Phase 6: Cleanup Static Catalog Usage
+
+- Updated remaining command listing paths to prefer catalog-backed provider data.
+- `/connect` provider discovery now loads provider names, defaults, and environment hints from the catalog when available, with a static fallback retained for offline or catalog-load failure cases.
+- Replaced the hard-coded provider ordering helper with `api.OrderedProviderIDs()` so the static registry acts as ordered runtime metadata instead of a bespoke listing path.
+- Removed the unused static provider/model support matrix and its dead helper.
+- Static provider and model tables now remain as runtime and fallback metadata rather than the primary listing source.
+- Verified the task with `gofmt -w internal/api/provider_config.go internal/commands/connect.go internal/commands/providers.go` and `go build ./...`.
+
 ## Deferred
 
 - No tests were added because the current execution constraint says to never add tests.
 
 ## Next
 
-- Phase 6: reduce remaining static catalog usage and move provider/model lookup fully to catalog-first behavior.
+- Plan complete.

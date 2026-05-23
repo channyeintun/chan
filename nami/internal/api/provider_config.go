@@ -1,6 +1,10 @@
 package api
 
-import "strings"
+import (
+	"cmp"
+	"slices"
+	"strings"
+)
 
 // ProviderPreset keeps backward-compatible provider defaults for existing callers.
 type ProviderPreset struct {
@@ -27,12 +31,6 @@ type ModelSpec struct {
 	DisplayName  string
 	Family       string
 	Capabilities ModelCapabilities
-}
-
-type ProviderModelSupport struct {
-	ProviderID string
-	ModelID    string
-	Protocol   ClientType
 }
 
 var ProviderSpecs = map[string]ProviderSpec{
@@ -250,22 +248,8 @@ var ModelCatalog = map[string]ModelSpec{
 	},
 }
 
-var ProviderModelSupportMatrix = buildProviderModelSupportMatrix()
-
 // Presets defines built-in provider configurations for existing code paths.
 var Presets = buildProviderPresets()
-
-func buildProviderModelSupportMatrix() []ProviderModelSupport {
-	support := make([]ProviderModelSupport, 0, len(ProviderSpecs))
-	for providerID, spec := range ProviderSpecs {
-		support = append(support, ProviderModelSupport{
-			ProviderID: providerID,
-			ModelID:    spec.DefaultModel,
-			Protocol:   spec.Protocol,
-		})
-	}
-	return support
-}
 
 func buildProviderPresets() map[string]ProviderPreset {
 	presets := make(map[string]ProviderPreset, len(ProviderSpecs))
@@ -286,6 +270,19 @@ func buildProviderPresets() map[string]ProviderPreset {
 func ProviderSpecFor(providerID string) (ProviderSpec, bool) {
 	spec, ok := ProviderSpecs[providerID]
 	return spec, ok
+}
+
+func OrderedProviderIDs() []string {
+	providerIDs := make([]string, 0, len(ProviderSpecs))
+	for providerID := range ProviderSpecs {
+		providerIDs = append(providerIDs, providerID)
+	}
+	slices.SortFunc(providerIDs, func(a, b string) int {
+		aSpec, _ := ProviderSpecFor(a)
+		bSpec, _ := ProviderSpecFor(b)
+		return cmp.Or(aSpec.Priority-bSpec.Priority, strings.Compare(a, b))
+	})
+	return providerIDs
 }
 
 func ModelSpecFor(modelID string) (ModelSpec, bool) {
@@ -344,13 +341,4 @@ func familyCapabilities(modelID string) (ModelCapabilities, bool) {
 		}
 	}
 	return ModelCapabilities{}, false
-}
-
-func ProviderSupportsModel(providerID, modelID string) bool {
-	for _, support := range ProviderModelSupportMatrix {
-		if support.ProviderID == providerID && support.ModelID == modelID {
-			return true
-		}
-	}
-	return false
 }
