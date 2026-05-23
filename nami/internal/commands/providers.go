@@ -343,8 +343,54 @@ func discoverCatalogProviderSnapshot(ctx context.Context, cfg config.Config) (Pr
 		}
 		snapshot.Providers = append(snapshot.Providers, status)
 	}
+	if shouldIncludeCodexRuntimeStatus(cfg, activeProvider) && !providerSnapshotHasProvider(snapshot, "codex") {
+		status := staticProviderStatus(cfg, activeProvider, "codex")
+		if status.ID != "" {
+			if status.ID == activeProvider {
+				snapshot.Selection.ProviderUsable = status.Usable
+				snapshot.Selection.ModelSupported = activeModel == "" || modelselection.IsModelCompatibleWithProvider(activeModel, activeProvider) || strings.EqualFold(activeModel, status.DefaultModel)
+			}
+			snapshot.Providers = append(snapshot.Providers, status)
+		}
+	}
 
 	return snapshot, nil
+}
+
+func shouldIncludeCodexRuntimeStatus(cfg config.Config, activeProvider string) bool {
+	if normalizeProviderID(activeProvider) == "codex" || normalizeProviderID(cfg.Provider) == "codex" {
+		return true
+	}
+	if strings.TrimSpace(cfg.Codex.AccessToken) != "" || strings.TrimSpace(cfg.Codex.RefreshToken) != "" {
+		return true
+	}
+	return false
+}
+
+func providerSnapshotHasProvider(snapshot ProviderSnapshot, providerID string) bool {
+	_, ok := snapshot.LookupProvider(providerID)
+	return ok
+}
+
+func staticProviderStatus(cfg config.Config, activeProvider string, providerID string) ProviderStatus {
+	preset, ok := api.Presets[providerID]
+	if !ok {
+		return ProviderStatus{}
+	}
+	defaultModel := cfg.ProviderDefaultModel(providerID, preset.DefaultModel)
+	envKey := cfg.ProviderAPIKeyEnv(providerID, preset.EnvKeyVar)
+	status := ProviderStatus{
+		ID:           providerID,
+		Label:        providerDisplayLabel(providerID),
+		DefaultModel: defaultModel,
+		AuthSource:   "none",
+		SetupHint:    providerSetupHint(providerID, envKey),
+		Current:      providerID == activeProvider,
+	}
+	preset.EnvKeyVar = envKey
+	preset.DefaultModel = defaultModel
+	populateProviderStatus(&status, cfg, activeProvider, preset)
+	return status
 }
 
 func discoverStaticProviderSnapshot(cfg config.Config) ProviderSnapshot {
@@ -361,20 +407,10 @@ func discoverStaticProviderSnapshot(cfg config.Config) ProviderSnapshot {
 	}
 
 	for _, providerID := range api.OrderedProviderIDs() {
-		preset := api.Presets[providerID]
-		defaultModel := cfg.ProviderDefaultModel(providerID, preset.DefaultModel)
-		envKey := cfg.ProviderAPIKeyEnv(providerID, preset.EnvKeyVar)
-		status := ProviderStatus{
-			ID:           providerID,
-			Label:        providerDisplayLabel(providerID),
-			DefaultModel: defaultModel,
-			AuthSource:   "none",
-			SetupHint:    providerSetupHint(providerID, envKey),
-			Current:      providerID == activeProvider,
+		status := staticProviderStatus(cfg, activeProvider, providerID)
+		if status.ID == "" {
+			continue
 		}
-		preset.EnvKeyVar = envKey
-		preset.DefaultModel = defaultModel
-		populateProviderStatus(&status, cfg, activeProvider, preset)
 		if providerID == activeProvider {
 			snapshot.Selection.ProviderUsable = status.Usable
 			snapshot.Selection.ModelSupported = activeModel == "" || modelselection.IsModelCompatibleWithProvider(activeModel, activeProvider) || strings.EqualFold(activeModel, status.DefaultModel)

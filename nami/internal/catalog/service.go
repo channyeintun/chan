@@ -105,7 +105,6 @@ type runtimeProvider struct {
 
 var runtimeProviders = []runtimeProvider{
 	{CatalogID: "github-copilot", SourceID: "github-copilot", Source: ProviderSourceModelsDev, Spec: mustProviderSpec("github-copilot")},
-	{CatalogID: "codex", SourceID: "openai", Source: ProviderSourceConfig, Spec: mustProviderSpec("codex")},
 	{CatalogID: "openai", SourceID: "openai", Source: ProviderSourceModelsDev, Spec: mustProviderSpec("openai")},
 	{CatalogID: "anthropic", SourceID: "anthropic", Source: ProviderSourceModelsDev, Spec: mustProviderSpec("anthropic")},
 	{CatalogID: "gemini", SourceID: "google", Source: ProviderSourceModelsDev, Spec: mustProviderSpec("gemini")},
@@ -134,6 +133,20 @@ func (s *Service) Snapshot(ctx context.Context, cfg config.Config) (Snapshot, er
 	providers := make(map[string]Provider, len(runtimeProviders))
 	for _, runtime := range runtimeProviders {
 		provider := buildProvider(base, cfg, runtime)
+		if provider.ID == "" {
+			continue
+		}
+		providers[provider.ID] = provider
+	}
+	for providerID, override := range cfg.Providers {
+		providerID = normalizeProviderID(providerID)
+		if providerID == "" {
+			continue
+		}
+		if _, exists := providers[providerID]; exists {
+			continue
+		}
+		provider := buildConfigProvider(cfg, providerID, override)
 		if provider.ID == "" {
 			continue
 		}
@@ -187,6 +200,10 @@ func (s *Service) Model(ctx context.Context, cfg config.Config, providerID strin
 }
 
 func (s *Service) Route(ctx context.Context, cfg config.Config, providerID string, modelID string) (api.ProviderRoute, error) {
+	if normalizeProviderID(providerID) == "codex" {
+		return s.codexRoute(ctx, cfg, modelID)
+	}
+
 	provider, ok, err := s.Provider(ctx, cfg, providerID)
 	if err != nil {
 		return api.ProviderRoute{}, err
@@ -214,6 +231,42 @@ func (s *Service) Route(ctx context.Context, cfg config.Config, providerID strin
 	}, nil
 }
 
+func (s *Service) codexRoute(ctx context.Context, cfg config.Config, modelID string) (api.ProviderRoute, error) {
+	snapshot, err := s.Snapshot(ctx, cfg)
+	if err != nil {
+		return api.ProviderRoute{}, err
+	}
+
+	provider, ok := providerForSnapshot(snapshot, "openai")
+	if !ok {
+		return api.ProviderRoute{}, fmt.Errorf("provider %q not found in catalog", "openai")
+	}
+
+	spec, ok := api.ProviderSpecFor("codex")
+	if !ok {
+		return api.ProviderRoute{}, fmt.Errorf("provider %q not found in runtime registry", "codex")
+	}
+
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		modelID = spec.DefaultModel
+	}
+
+	model, ok := modelForProvider(provider, modelID)
+	if !ok {
+		model = fallbackModel("openai", modelID)
+	}
+
+	baseURL := providerBaseURL(cfg, "codex", spec.BaseURL)
+	return api.ProviderRoute{
+		ProviderID:   "codex",
+		ModelID:      model.ID,
+		Protocol:     spec.Protocol,
+		BaseURL:      baseURL,
+		Capabilities: model.Capabilities,
+	}, nil
+}
+
 func buildProvider(base modelsdev.Snapshot, cfg config.Config, runtime runtimeProvider) Provider {
 	provider := Provider{
 		ID:       runtime.CatalogID,
@@ -231,10 +284,7 @@ func buildProvider(base modelsdev.Snapshot, cfg config.Config, runtime runtimePr
 		provider.Source = ProviderSourceModelsDev
 	}
 
-	provider.BaseURL = strings.TrimSpace(cfg.ApplyProviderOverride(runtime.CatalogID).BaseURL)
-	if provider.BaseURL == "" {
-		provider.BaseURL = runtime.Spec.BaseURL
-	}
+	provider.BaseURL = providerBaseURL(cfg, runtime.CatalogID, provider.BaseURL)
 
 	if envKey := strings.TrimSpace(cfg.ProviderAPIKeyEnv(runtime.CatalogID, runtime.Spec.EnvKeyVar)); envKey != "" {
 		provider.EnvKeys = appendUnique(provider.EnvKeys, envKey)
@@ -260,10 +310,47 @@ func buildProvider(base modelsdev.Snapshot, cfg config.Config, runtime runtimePr
 	return provider
 }
 
+func buildConfigProvider(cfg config.Config, providerID string, override config.ProviderOverride) Provider {
+	providerID = normalizeProviderID(providerID)
+	if providerID == "" || providerID == "codex" {
+		return Provider{}
+	}
+
+	baseURL := strings.TrimSpace(override.BaseURL)
+	envKey := strings.TrimSpace(override.APIKeyEnv)
+	defaultModel := strings.TrimSpace(override.DefaultModel)
+	if normalizeProviderID(cfg.Provider) == providerID && strings.TrimSpace(cfg.Model) != "" {
+		defaultModel = strings.TrimSpace(cfg.Model)
+	}
+	if baseURL == "" && envKey == "" && defaultModel == "" {
+		return Provider{}
+	}
+
+	models := []Model(nil)
+	if defaultModel != "" {
+		models = ensureModel(models, defaultModel, fallbackModel(providerID, defaultModel))
+	}
+
+	provider := Provider{
+		ID:           providerID,
+		Name:         providerID,
+		BaseURL:      providerBaseURL(cfg, providerID, baseURL),
+		Protocol:     api.OpenAICompatAPI,
+		Source:       ProviderSourceConfig,
+		DefaultModel: defaultModel,
+		Models:       models,
+	}
+	if envKey != "" {
+		provider.EnvKeys = []string{envKey}
+	}
+	provider.Auth = resolveAuthStatus(cfg, provider, envKey)
+	return provider
+}
+
 func buildModels(providerID string, source map[string]modelsdev.Model) []Model {
 	models := make([]Model, 0, len(source))
 	for modelID, sourceModel := range source {
-		if strings.EqualFold(strings.TrimSpace(sourceModel.Status), "deprecated") {
+		if !includeModelStatus(sourceModel.Status) {
 			continue
 		}
 		models = append(models, normalizeModel(providerID, modelID, sourceModel))
@@ -273,6 +360,15 @@ func buildModels(providerID string, source map[string]modelsdev.Model) []Model {
 		return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.ID, b.ID))
 	})
 	return models
+}
+
+func includeModelStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "deprecated", "alpha":
+		return false
+	default:
+		return true
+	}
 }
 
 func normalizeModel(providerID string, modelID string, source modelsdev.Model) Model {
@@ -343,6 +439,31 @@ func modelForProvider(provider Provider, modelID string) (Model, bool) {
 		}
 	}
 	return Model{}, false
+}
+
+func providerForSnapshot(snapshot Snapshot, providerID string) (Provider, bool) {
+	providerID = normalizeProviderID(providerID)
+	for _, provider := range snapshot.Providers {
+		if provider.ID == providerID {
+			return provider, true
+		}
+	}
+	return Provider{}, false
+}
+
+func providerBaseURL(cfg config.Config, providerID string, fallback string) string {
+	providerID = normalizeProviderID(providerID)
+	if providerID != "" && cfg.Providers != nil {
+		if baseURL := strings.TrimSpace(cfg.Providers[providerID].BaseURL); baseURL != "" {
+			return baseURL
+		}
+	}
+	if normalizeProviderID(cfg.Provider) == providerID {
+		if baseURL := strings.TrimSpace(cfg.BaseURL); baseURL != "" {
+			return baseURL
+		}
+	}
+	return strings.TrimSpace(fallback)
 }
 
 func ensureModel(models []Model, modelID string, fallback Model) []Model {

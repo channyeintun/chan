@@ -46,6 +46,7 @@
 - Added `catalog.Service.Route` to resolve catalog-backed runtime routes.
 - Updated standard provider runtime initialization to prefer catalog-derived protocol, base URL, default model, and capabilities before falling back to the older static path.
 - Updated Codex runtime initialization to use the same catalog-backed route resolution while preserving existing token refresh and account wiring.
+- Removed Codex from the base catalog provider list and resolved Codex runtime routes through OpenAI catalog model metadata while preserving Codex auth/runtime behavior.
 - Kept provider-specific auth/login behavior separate from the base catalog normalization layer.
 - Verified the task with `gofmt -w internal/catalog/service.go internal/engine/provider_behavior.go` and `go build ./...`.
 
@@ -64,11 +65,14 @@
 - Replaced the hard-coded provider ordering helper with `api.OrderedProviderIDs()` so the static registry acts as ordered runtime metadata instead of a bespoke listing path.
 - Removed the unused static provider/model support matrix and its dead helper.
 - Static provider and model tables now remain as runtime and fallback metadata rather than the primary listing source.
+- Preserved `models.dev` provider base URLs unless a local provider override or active-provider base URL override is configured.
+- Added config-backed providers from `cfg.Providers` as normal catalog entries when they are not already known runtime providers.
+- Hid alpha models by default in addition to deprecated models.
 - Verified the task with `gofmt -w internal/api/provider_config.go internal/commands/connect.go internal/commands/providers.go` and `go build ./...`.
 
 ## Deferred
 
-- No tests were added because the current execution constraint says to never add tests.
+- No tests were added per the latest request.
 
 ## Next
 

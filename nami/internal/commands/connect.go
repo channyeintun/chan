@@ -72,6 +72,7 @@ func ParseConnectArgs(args string) (ConnectRequest, error) {
 
 func ConnectProviderCatalog() []ConnectProviderSpec {
 	if providers, err := connectProviderCatalogFromCatalog(context.Background(), config.Load()); err == nil {
+		providers = ensureConnectProviderSpec(providers, "codex")
 		return providers
 	}
 
@@ -89,6 +90,25 @@ func ConnectProviderCatalog() []ConnectProviderSpec {
 		})
 	}
 	return providers
+}
+
+func ensureConnectProviderSpec(providers []ConnectProviderSpec, providerID string) []ConnectProviderSpec {
+	providerID = normalizeProviderID(providerID)
+	for _, provider := range providers {
+		if provider.ID == providerID {
+			return providers
+		}
+	}
+	spec, ok := api.ProviderSpecFor(providerID)
+	if !ok {
+		return providers
+	}
+	return append(providers, ConnectProviderSpec{
+		ID:           providerID,
+		Label:        spec.DisplayName,
+		DefaultModel: spec.DefaultModel,
+		Methods:      connectMethodsForProvider(providerID, spec.EnvKeyVar),
+	})
 }
 
 func connectProviderCatalogFromCatalog(ctx context.Context, cfg config.Config) ([]ConnectProviderSpec, error) {
