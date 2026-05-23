@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -8,8 +9,10 @@ import (
 	"time"
 
 	"github.com/channyeintun/nami/internal/api"
+	"github.com/channyeintun/nami/internal/catalog"
 	"github.com/channyeintun/nami/internal/config"
 	"github.com/channyeintun/nami/internal/ipc"
+	"github.com/channyeintun/nami/internal/modelsdev"
 	"github.com/channyeintun/nami/internal/modelselection"
 )
 
@@ -224,6 +227,64 @@ func ResolveSubagentModelSelection(cfg config.Config) config.ModelSelection {
 }
 
 func DiscoverProviderSnapshot(cfg config.Config) ProviderSnapshot {
+	if snapshot, err := discoverCatalogProviderSnapshot(context.Background(), cfg); err == nil {
+		return snapshot
+	}
+	return discoverStaticProviderSnapshot(cfg)
+}
+
+func discoverCatalogProviderSnapshot(ctx context.Context, cfg config.Config) (ProviderSnapshot, error) {
+	service := catalog.NewService(modelsdev.NewClient())
+	catalogSnapshot, err := service.Snapshot(ctx, cfg)
+	if err != nil {
+		return ProviderSnapshot{}, err
+	}
+
+	requested := ResolveActiveModelSelection(cfg)
+	activeProvider := strings.TrimSpace(catalogSnapshot.Active.ProviderID)
+	activeModel := strings.TrimSpace(catalogSnapshot.Active.ModelID)
+	if activeProvider == "" {
+		activeProvider = strings.TrimSpace(requested.ProviderID)
+	}
+	if activeModel == "" {
+		activeModel = strings.TrimSpace(requested.ModelID)
+	}
+	resolved := config.NewModelSelection(activeProvider, activeModel, requested.Source, requested.ExplicitProvider)
+
+	snapshot := ProviderSnapshot{
+		ActiveProvider: activeProvider,
+		ActiveModel:    activeModel,
+		Selection: SelectionStatus{
+			Requested: requested,
+			Resolved:  resolved,
+			Reason:    "catalog-backed selection",
+		},
+		Providers: make([]ProviderStatus, 0, len(catalogSnapshot.Providers)),
+	}
+
+	for _, provider := range catalogSnapshot.Providers {
+		status := ProviderStatus{
+			ID:           provider.ID,
+			Label:        strings.TrimSpace(provider.Name),
+			DefaultModel: provider.DefaultModel,
+			AuthSource:   provider.Auth.Source,
+			Configured:   provider.Auth.Configured,
+			Usable:       provider.Auth.Usable,
+			SetupHint:    provider.Auth.SetupHint,
+			LastError:    provider.Auth.LastError,
+			Current:      provider.ID == activeProvider,
+		}
+		if provider.ID == activeProvider {
+			snapshot.Selection.ProviderUsable = status.Usable
+			snapshot.Selection.ModelSupported = activeModel == "" || catalogProviderHasModel(provider, activeModel) || strings.EqualFold(activeModel, status.DefaultModel) || modelselection.IsModelCompatibleWithProvider(activeModel, activeProvider)
+		}
+		snapshot.Providers = append(snapshot.Providers, status)
+	}
+
+	return snapshot, nil
+}
+
+func discoverStaticProviderSnapshot(cfg config.Config) ProviderSnapshot {
 	activeProvider, activeModel := ResolveActiveSelection(cfg)
 	snapshot := ProviderSnapshot{
 		ActiveProvider: activeProvider,
@@ -259,6 +320,16 @@ func DiscoverProviderSnapshot(cfg config.Config) ProviderSnapshot {
 	}
 
 	return snapshot
+}
+
+func catalogProviderHasModel(provider catalog.Provider, modelID string) bool {
+	modelID = strings.TrimSpace(modelID)
+	for _, model := range provider.Models {
+		if strings.EqualFold(model.ID, modelID) {
+			return true
+		}
+	}
+	return false
 }
 
 func (snapshot ProviderSnapshot) FirstUsable() (ProviderStatus, bool) {

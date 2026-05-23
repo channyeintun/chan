@@ -23,10 +23,18 @@
 - Ensured provider defaults remain deterministic and can include config-selected local/custom models as fallback catalog entries.
 - Verified the task with `gofmt -w internal/catalog/service.go` and `go build ./...`.
 
+### Phase 3: Merge Config and Auth State
+
+- Extended catalog providers with merged auth/config usability state.
+- Merged environment-based API key availability, stored GitHub Copilot credentials, stored Codex credentials, `NAMI_API_KEY` active-provider overrides, and Ollama local usability into catalog provider status.
+- Kept provider setup guidance and expired-token handling in the catalog snapshot so commands can consume a single source of truth.
+- Updated `/providers` discovery to prefer the catalog-backed snapshot and fall back to the previous static path if catalog loading fails.
+- Verified the task with `gofmt -w internal/catalog/service.go internal/commands/providers.go` and `go build ./...`.
+
 ## Deferred
 
 - No tests were added because the current execution constraint says to never add tests.
 
 ## Next
 
-- Phase 3: merge config and auth state into the catalog-backed provider view.
+- Phase 4: replace model selection source so `/model` can use real catalog models instead of provider defaults only.

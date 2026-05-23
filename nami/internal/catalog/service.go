@@ -3,8 +3,11 @@ package catalog
 import (
 	"cmp"
 	"context"
+	"fmt"
+	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/channyeintun/nami/internal/api"
 	"github.com/channyeintun/nami/internal/config"
@@ -33,8 +36,17 @@ type Provider struct {
 	EnvKeys      []string
 	Protocol     api.ClientType
 	Source       ProviderSource
+	Auth         AuthStatus
 	DefaultModel string
 	Models       []Model
+}
+
+type AuthStatus struct {
+	Source     string
+	Configured bool
+	Usable     bool
+	SetupHint  string
+	LastError  string
 }
 
 type ProviderSource string
@@ -211,6 +223,7 @@ func buildProvider(base modelsdev.Snapshot, cfg config.Config, runtime runtimePr
 	if provider.DefaultModel == "" {
 		provider.DefaultModel = chooseDefaultModel(provider.Models, "")
 	}
+	provider.Auth = resolveAuthStatus(cfg, provider, runtime.Spec.EnvKeyVar)
 
 	if provider.Name == "" || (len(provider.Models) == 0 && provider.DefaultModel == "") {
 		return Provider{}
@@ -401,4 +414,154 @@ func mustProviderSpec(providerID string) api.ProviderSpec {
 		panic("missing provider spec: " + providerID)
 	}
 	return spec
+}
+
+func resolveAuthStatus(cfg config.Config, provider Provider, defaultEnvKey string) AuthStatus {
+	status := AuthStatus{
+		Source:    "none",
+		SetupHint: providerSetupHint(provider.ID, cfg.ProviderAPIKeyEnv(provider.ID, defaultEnvKey)),
+	}
+
+	switch provider.ID {
+	case "github-copilot":
+		return resolveGitHubCopilotAuthStatus(cfg, provider.ID, status)
+	case "codex":
+		return resolveCodexAuthStatus(cfg, provider.ID, cfg.ProviderAPIKeyEnv(provider.ID, defaultEnvKey), status)
+	case "ollama":
+		return resolveOllamaAuthStatus(cfg, provider.ID)
+	default:
+		return resolveAPIKeyAuthStatus(cfg, provider.ID, cfg.ProviderAPIKeyEnv(provider.ID, defaultEnvKey), status)
+	}
+}
+
+func resolveCodexAuthStatus(cfg config.Config, providerID string, envKey string, status AuthStatus) AuthStatus {
+	if hasActiveOverrideAPIKey(cfg, providerID) {
+		status.Source = "env:NAMI_API_KEY"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return status
+	}
+
+	if envKey != "" && strings.TrimSpace(os.Getenv(envKey)) != "" {
+		status.Source = "env:" + envKey
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return status
+	}
+
+	creds := cfg.Codex
+	if strings.TrimSpace(creds.RefreshToken) != "" {
+		status.Source = "stored OAuth"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return status
+	}
+
+	if strings.TrimSpace(creds.AccessToken) == "" {
+		return status
+	}
+
+	status.Source = "stored access token"
+	status.Configured = true
+	if creds.ExpiresAtUnixMS > 0 && time.Now().UnixMilli() > creds.ExpiresAtUnixMS {
+		status.LastError = "saved access token expired"
+		status.SetupHint = "Run /connect codex to refresh credentials."
+		return status
+	}
+	status.Usable = true
+	status.SetupHint = ""
+	return status
+}
+
+func resolveGitHubCopilotAuthStatus(cfg config.Config, providerID string, status AuthStatus) AuthStatus {
+	if hasActiveOverrideAPIKey(cfg, providerID) {
+		status.Source = "env:NAMI_API_KEY"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return status
+	}
+
+	creds := cfg.GitHubCopilot
+	if strings.TrimSpace(creds.GitHubToken) != "" {
+		status.Source = "stored device auth"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return status
+	}
+
+	if strings.TrimSpace(creds.AccessToken) == "" {
+		return status
+	}
+
+	status.Source = "stored access token"
+	status.Configured = true
+	if creds.ExpiresAtUnixMS > 0 && time.Now().UnixMilli() > creds.ExpiresAtUnixMS {
+		status.LastError = "saved access token expired"
+		status.SetupHint = "Run /connect github-copilot to refresh credentials."
+		return status
+	}
+	status.Usable = true
+	status.SetupHint = ""
+	return status
+}
+
+func resolveAPIKeyAuthStatus(cfg config.Config, providerID string, envKey string, status AuthStatus) AuthStatus {
+	if hasActiveOverrideAPIKey(cfg, providerID) {
+		status.Source = "env:NAMI_API_KEY"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return status
+	}
+
+	if envKey != "" && strings.TrimSpace(os.Getenv(envKey)) != "" {
+		status.Source = "env:" + envKey
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+	}
+	return status
+}
+
+func resolveOllamaAuthStatus(cfg config.Config, providerID string) AuthStatus {
+	status := AuthStatus{
+		Configured: true,
+		Usable:     true,
+		SetupHint:  "Ensure Ollama is running on http://localhost:11434.",
+	}
+	if hasActiveOverrideAPIKey(cfg, providerID) {
+		status.Source = "env:NAMI_API_KEY"
+		return status
+	}
+	if strings.TrimSpace(os.Getenv("OLLAMA_API_KEY")) != "" {
+		status.Source = "env:OLLAMA_API_KEY"
+		return status
+	}
+	status.Source = "local"
+	return status
+}
+
+func hasActiveOverrideAPIKey(cfg config.Config, providerID string) bool {
+	return normalizeProviderID(cfg.Provider) == providerID && strings.TrimSpace(cfg.APIKey) != ""
+}
+
+func providerSetupHint(providerID string, envKey string) string {
+	switch providerID {
+	case "github-copilot":
+		return "Run /connect github-copilot."
+	case "codex":
+		return "Run /connect codex or set CODEX_ACCESS_TOKEN."
+	case "ollama":
+		return "Ensure Ollama is running on http://localhost:11434."
+	default:
+		if envKey == "" {
+			return "Provider setup is required."
+		}
+		return fmt.Sprintf("Set %s.", envKey)
+	}
 }
