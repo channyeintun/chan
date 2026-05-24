@@ -398,7 +398,7 @@ Example user config:
 
 ```json
 {
-  "model": "anthropic/claude-sonnet-4-20250514",
+  "model": "anthropic/claude-sonnet-4-6",
   "default_mode": "plan",
   "mcp": {
     "servers": {
