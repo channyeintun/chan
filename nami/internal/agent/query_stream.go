@@ -196,7 +196,12 @@ func QueryStream(ctx context.Context, req QueryRequest, deps QueryDeps) iter.Seq
 		// max-turn limit or continuation budget), emit turn_complete so the TUI
 		// transitions out of the "Working" state instead of spinning forever.
 		if !state.StopRequested {
-			yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "stop"}), nil)
+			event, err := newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "stop"})
+			if err != nil {
+				yield(ipc.StreamEvent{}, err)
+				return
+			}
+			yield(event, nil)
 		}
 	}
 }

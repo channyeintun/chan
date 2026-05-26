@@ -93,11 +93,11 @@ func recordTurnOutput(state *QueryState, turn modelTurn) {
 }
 
 func retryWithoutToolUse(state *QueryState, yield func(ipc.StreamEvent, error) bool) error {
-	if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
+	if err := yieldEvent(yield, ipc.EventError, ipc.ErrorPayload{
 		Message:     "Model asked a routine clarification for a concrete implementation task; retrying with a stronger directive.",
 		Recoverable: true,
-	}), nil) {
-		return context.Canceled
+	}); err != nil {
+		return err
 	}
 	state.NoToolRetryUsed = true
 	state.Messages = append(state.Messages, api.Message{
@@ -129,9 +129,16 @@ func handleToolCallsTurn(
 	}
 	collectTouchedFiles(state, turn.toolCalls, results)
 	invalidateGraphFiles(state, turn.toolCalls, results)
-	repeated := recordFailedAttempts(deps.AttemptLog, turn.toolCalls, results)
+	repeated, err := recordFailedAttempts(deps.AttemptLog, turn.toolCalls, results)
+	if err != nil {
+		if telemetryErr := emitNoticeTelemetry(deps.EmitTelemetry, fmt.Sprintf("session attempt log update unavailable: %v", err)); telemetryErr != nil {
+			return telemetryErr
+		}
+	}
 	if repeated > 0 {
-		_ = emitAttemptRepeatedTelemetry(deps.EmitTelemetry, repeated)
+		if err := emitAttemptRepeatedTelemetry(deps.EmitTelemetry, repeated); err != nil {
+			return err
+		}
 		if nudge := buildEditRetryNudge(turn.toolCalls, results); nudge != "" {
 			state.Messages = append(state.Messages, api.Message{
 				Role:    api.RoleUser,
@@ -141,8 +148,8 @@ func handleToolCallsTurn(
 	}
 	if pauseForPlanReview != nil {
 		state.StopRequested = true
-		if !yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "plan_review_required"}), nil) {
-			return context.Canceled
+		if err := yieldEvent(yield, ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "plan_review_required"}); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -181,8 +188,8 @@ func finalizeAssistantTurn(
 	}
 
 	state.StopRequested = true
-	if !yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: normalizedStopReason}), nil) {
-		return context.Canceled
+	if err := yieldEvent(yield, ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: normalizedStopReason}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -223,8 +230,8 @@ func handlePendingStopRequest(
 	}
 
 	state.StopRequested = true
-	if !yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: stopReason}), nil) {
-		return true, context.Canceled
+	if err := yieldEvent(yield, ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: stopReason}); err != nil {
+		return true, err
 	}
 	return true, nil
 }
@@ -276,7 +283,11 @@ func emitNoticeTelemetry(emit func(ipc.StreamEvent) error, message string) error
 	if emit == nil || strings.TrimSpace(message) == "" {
 		return nil
 	}
-	return emit(newEvent(ipc.EventNotice, ipc.NoticePayload{Message: message}))
+	event, err := newEvent(ipc.EventNotice, ipc.NoticePayload{Message: message})
+	if err != nil {
+		return err
+	}
+	return emit(event)
 }
 
 func emitMemoryRecallTelemetry(
@@ -317,7 +328,11 @@ func emitMemoryRecallTelemetry(
 		})
 	}
 
-	return emit(newEvent(ipc.EventMemoryRecalled, payload))
+	event, err := newEvent(ipc.EventMemoryRecalled, payload)
+	if err != nil {
+		return err
+	}
+	return emit(event)
 }
 
 func invokeModelWithRecovery(
@@ -327,7 +342,8 @@ func invokeModelWithRecovery(
 	yield func(ipc.StreamEvent, error) bool,
 ) (modelTurn, error) {
 	toolUseRetryUsed := false
-	for attempt := range 3 {
+	const maxAttempts = 3
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		turn, err := streamModelTurn(ctx, state, deps, yield)
 		if err == nil {
 			turn.stopReason = normalizeStopReason(turn.stopReason)
@@ -341,21 +357,27 @@ func invokeModelWithRecovery(
 		if ok && state.Capabilities.SupportsToolUse && !toolUseRetryUsed && isToolUseUnavailable(apiErr) {
 			state.Capabilities.SupportsToolUse = false
 			toolUseRetryUsed = true
-			if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
+			if attempt+1 >= maxAttempts {
+				return modelTurn{}, fmt.Errorf("model invocation failed after %d attempts: %w", maxAttempts, err)
+			}
+			if err := yieldEvent(yield, ipc.EventError, ipc.ErrorPayload{
 				Message:     "Current model endpoint does not support tool use; retrying without tools.",
 				Recoverable: true,
-			}), nil) {
-				return modelTurn{}, context.Canceled
+			}); err != nil {
+				return modelTurn{}, err
 			}
 			continue
 		}
 
 		if ok && apiErr.Type == api.ErrOverloaded {
-			if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
-				Message:     fmt.Sprintf("Model error (attempt %d/3): %s — retrying...", attempt+1, apiErr.Message),
+			if attempt+1 >= maxAttempts {
+				return modelTurn{}, fmt.Errorf("model invocation failed after %d attempts: %w", maxAttempts, err)
+			}
+			if err := yieldEvent(yield, ipc.EventError, ipc.ErrorPayload{
+				Message:     fmt.Sprintf("Model error (attempt %d/%d): %s — retrying...", attempt+1, maxAttempts, apiErr.Message),
 				Recoverable: true,
-			}), nil) {
-				return modelTurn{}, context.Canceled
+			}); err != nil {
+				return modelTurn{}, err
 			}
 			continue
 		}
@@ -363,14 +385,17 @@ func invokeModelWithRecovery(
 		if !ok || apiErr.Type != api.ErrPromptTooLong || deps.CompactMessages == nil {
 			return modelTurn{}, err
 		}
+		if attempt+1 >= maxAttempts {
+			return modelTurn{}, fmt.Errorf("model invocation failed after %d attempts: %w", maxAttempts, err)
+		}
 
 		before := compact.EstimateConversationTokens(state.Messages)
-		if !yield(newEvent(ipc.EventCompactStart, ipc.CompactStartPayload{
+		if err := yieldEvent(yield, ipc.EventCompactStart, ipc.CompactStartPayload{
 			Strategy:         string(CompactAuto),
 			TokensBefore:     before,
 			HasSessionMemory: strings.TrimSpace(state.SessionMemory.Content) != "",
-		}), nil) {
-			return modelTurn{}, context.Canceled
+		}); err != nil {
+			return modelTurn{}, err
 		}
 
 		compacted, compactErr := deps.CompactMessages(ctx, state.Messages, CompactAuto)
@@ -380,7 +405,7 @@ func invokeModelWithRecovery(
 		state.Messages = compacted.Messages
 		state.AutoCompactFailures = 0
 
-		if !yield(newEvent(ipc.EventCompactEnd, ipc.CompactEndPayload{
+		if err := yieldEvent(yield, ipc.EventCompactEnd, ipc.CompactEndPayload{
 			Strategy:                string(compacted.Strategy),
 			TokensBefore:            compacted.TokensBefore,
 			TokensAfter:             compacted.TokensAfter,
@@ -388,12 +413,12 @@ func invokeModelWithRecovery(
 			MicrocompactApplied:     compacted.MicrocompactApplied,
 			MicrocompactTokensSaved: compacted.MicrocompactTokensSaved,
 			HasSessionMemory:        strings.TrimSpace(state.SessionMemory.Content) != "",
-		}), nil) {
-			return modelTurn{}, context.Canceled
+		}); err != nil {
+			return modelTurn{}, err
 		}
 	}
 
-	return modelTurn{}, fmt.Errorf("model invocation failed after compaction retry")
+	return modelTurn{}, fmt.Errorf("model invocation failed after %d attempts", maxAttempts)
 }
 
 func isToolUseUnavailable(err *api.APIError) bool {
@@ -428,13 +453,13 @@ func streamModelTurn(
 		switch event.Type {
 		case api.ModelEventToken:
 			turn.assistantText += event.Text
-			if !yield(newEvent(ipc.EventTokenDelta, ipc.TokenDeltaPayload{Text: event.Text}), nil) {
-				return modelTurn{}, context.Canceled
+			if err := yieldEvent(yield, ipc.EventTokenDelta, ipc.TokenDeltaPayload{Text: event.Text}); err != nil {
+				return modelTurn{}, err
 			}
 		case api.ModelEventThinking:
 			turn.assistantReasoning += event.Text
-			if !yield(newEvent(ipc.EventThinkingDelta, ipc.TokenDeltaPayload{Text: event.Text}), nil) {
-				return modelTurn{}, context.Canceled
+			if err := yieldEvent(yield, ipc.EventThinkingDelta, ipc.TokenDeltaPayload{Text: event.Text}); err != nil {
+				return modelTurn{}, err
 			}
 		case api.ModelEventToolCall:
 			if event.ToolCall != nil {
@@ -539,11 +564,11 @@ func warnUnsupportedThinking(
 	if !requestsExtendedThinking(userPrompt) || capabilities.SupportsExtendedThinking {
 		return nil
 	}
-	if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
+	if err := yieldEvent(yield, ipc.EventError, ipc.ErrorPayload{
 		Message:     "Current model does not support extended thinking; ignoring ultrathink and continuing with standard reasoning.",
 		Recoverable: true,
-	}), nil) {
-		return context.Canceled
+	}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -638,22 +663,23 @@ func runProactiveCompaction(
 		return nil
 	}
 
-	if !yield(newEvent(ipc.EventCompactStart, ipc.CompactStartPayload{
+	if err := yieldEvent(yield, ipc.EventCompactStart, ipc.CompactStartPayload{
 		Strategy:         string(CompactAuto),
 		TokensBefore:     tokensBefore,
 		HasSessionMemory: hasSessionMemory,
-	}), nil) {
-		return context.Canceled
+	}); err != nil {
+		return err
 	}
 
 	compacted, err := deps.CompactMessages(ctx, state.Messages, CompactAuto)
 	if err != nil {
 		state.AutoCompactFailures++
-		if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
-			Message:     fmt.Sprintf("auto compact failed: %v", err),
+		message := fmt.Sprintf("auto compact failed: %v", err)
+		if err := yieldEvent(yield, ipc.EventError, ipc.ErrorPayload{
+			Message:     message,
 			Recoverable: true,
-		}), nil) {
-			return context.Canceled
+		}); err != nil {
+			return err
 		}
 		return nil
 	}
@@ -661,7 +687,7 @@ func runProactiveCompaction(
 	state.AutoCompactFailures = 0
 	state.Messages = compacted.Messages
 
-	if !yield(newEvent(ipc.EventCompactEnd, ipc.CompactEndPayload{
+	if err := yieldEvent(yield, ipc.EventCompactEnd, ipc.CompactEndPayload{
 		Strategy:                string(compacted.Strategy),
 		TokensBefore:            compacted.TokensBefore,
 		TokensAfter:             compacted.TokensAfter,
@@ -669,8 +695,8 @@ func runProactiveCompaction(
 		MicrocompactApplied:     compacted.MicrocompactApplied,
 		MicrocompactTokensSaved: compacted.MicrocompactTokensSaved,
 		HasSessionMemory:        hasSessionMemory,
-	}), nil) {
-		return context.Canceled
+	}); err != nil {
+		return err
 	}
 
 	return nil
@@ -701,18 +727,30 @@ func latestAssistantMessage(messages []api.Message) api.Message {
 	return api.Message{Role: api.RoleAssistant}
 }
 
-func newEvent(eventType ipc.EventType, payload any) ipc.StreamEvent {
+func yieldEvent(yield func(ipc.StreamEvent, error) bool, eventType ipc.EventType, payload any) error {
+	event, err := newEvent(eventType, payload)
+	if err != nil {
+		return err
+	}
+	if !yield(event, nil) {
+		return context.Canceled
+	}
+	return nil
+}
+
+func newEvent(eventType ipc.EventType, payload any) (ipc.StreamEvent, error) {
 	var raw json.RawMessage
 	if payload != nil {
 		data, err := json.Marshal(payload)
-		if err == nil {
-			raw = data
+		if err != nil {
+			return ipc.StreamEvent{}, fmt.Errorf("marshal %s event payload: %w", eventType, err)
 		}
+		raw = data
 	}
 	return ipc.StreamEvent{
 		Type:    eventType,
 		Payload: raw,
-	}
+	}, nil
 }
 
 // retrievalMeta holds metadata about a completed live retrieval pass.
@@ -758,13 +796,17 @@ func emitRetrievalTelemetry(emit func(ipc.StreamEvent) error, meta retrievalMeta
 	if emit == nil {
 		return nil
 	}
-	return emit(newEvent(ipc.EventRetrievalUsed, ipc.RetrievalUsedPayload{
+	event, err := newEvent(ipc.EventRetrievalUsed, ipc.RetrievalUsedPayload{
 		SnippetCount:  meta.SnippetCount,
 		TokensUsed:    meta.TokensUsed,
 		AnchorCount:   meta.AnchorCount,
 		EdgesExpanded: meta.EdgesExpanded,
 		Skipped:       meta.Skipped,
-	}))
+	})
+	if err != nil {
+		return err
+	}
+	return emit(event)
 }
 
 // emitAttemptLogTelemetry emits the EventAttemptLogSurfaced event when attempt
@@ -773,11 +815,15 @@ func emitAttemptLogTelemetry(emit func(ipc.StreamEvent) error, entries []Attempt
 	if emit == nil {
 		return nil
 	}
-	return emit(newEvent(ipc.EventAttemptLogSurfaced, ipc.AttemptLogSurfacedPayload{
+	event, err := newEvent(ipc.EventAttemptLogSurfaced, ipc.AttemptLogSurfacedPayload{
 		EntryCount: len(entries),
 		TokensUsed: len(section) / 4,
 		Injected:   section != "",
-	}))
+	})
+	if err != nil {
+		return err
+	}
+	return emit(event)
 }
 
 // emitAttemptRepeatedTelemetry emits the EventAttemptRepeated event when a new
@@ -786,9 +832,13 @@ func emitAttemptRepeatedTelemetry(emit func(ipc.StreamEvent) error, repeatedCoun
 	if emit == nil || repeatedCount <= 0 {
 		return nil
 	}
-	return emit(newEvent(ipc.EventAttemptRepeated, ipc.AttemptRepeatedPayload{
+	event, err := newEvent(ipc.EventAttemptRepeated, ipc.AttemptRepeatedPayload{
 		RepeatedCount: repeatedCount,
-	}))
+	})
+	if err != nil {
+		return err
+	}
+	return emit(event)
 }
 
 // buildEditRetryNudge constructs a corrective user-role message when repeated
@@ -939,14 +989,27 @@ func extractFilePathsFromToolCall(call api.ToolCall) []string {
 }
 
 // recordFailedAttempts inspects tool results for errors and records them to the attempt log.
-// Returns the number of repeated failures (matching previously logged signatures).
-func recordFailedAttempts(log *AttemptLog, calls []api.ToolCall, results []api.ToolResult) int {
+// It returns the number of repeated failures matching previously logged signatures.
+func recordFailedAttempts(log *AttemptLog, calls []api.ToolCall, results []api.ToolResult) (int, error) {
 	if log == nil || len(results) == 0 {
-		return 0
+		return 0, nil
+	}
+	hasErrorResult := false
+	for _, result := range results {
+		if result.IsError {
+			hasErrorResult = true
+			break
+		}
+	}
+	if !hasErrorResult {
+		return 0, nil
 	}
 
 	// Load existing entries to detect repeats.
-	existing, _ := log.Load()
+	existing, err := log.Load()
+	if err != nil {
+		return 0, err
+	}
 	existingSigs := make(map[string]struct{}, len(existing))
 	for _, entry := range existing {
 		if entry.ErrorSignature != "" {
@@ -975,9 +1038,11 @@ func recordFailedAttempts(log *AttemptLog, calls []api.ToolCall, results []api.T
 			Command:        call.Name,
 			ErrorSignature: sig,
 		}
-		_ = log.Record(entry)
+		if err := log.Record(entry); err != nil {
+			return repeated, err
+		}
 	}
-	return repeated
+	return repeated, nil
 }
 
 // errorSignatureFromOutput extracts a compact error signature from tool output.
